@@ -1,0 +1,29 @@
+x-nblocks-angular-volume: &nblocks-angular-volume
+  type: bind
+  source: ../nblocks-angular
+  target: /home/appuser/nblocks-plugins/nblocks-angular
+
+services:
+  nblocks-nextjs:
+    container_name: nblocks-nextjs
+    image: nblocks-nextjs:dev
+    build:
+      target: dev
+      context: ./
+      dockerfile: ./Dockerfile
+    volumes:
+      - ./:/home/appuser/         
+    restart: unless-stopped    
+    stdin_open: true
+    tty: true
+    ports:
+      - "3000:3000"
+    networks:
+      - bridge
+
+networks:
+  bridge:
+    driver: bridge
+
+
+

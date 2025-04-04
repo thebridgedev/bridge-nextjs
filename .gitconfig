@@ -1,0 +1,13 @@
+[user]
+	email = iman@nebulr.group
+	name = Iman Pouya
+[core]
+	excludesfile = /Users/imanpouya/.gitignore_global
+[difftool "sourcetree"]
+	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
+	path = 
+[mergetool "sourcetree"]
+	cmd = /Users/imanpouya/Applications/Sourcetree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+	trustExitCode = true
+[credential]
+	helper = "!f() { /home/appuser/.cursor-server/bin/1d623c4cc1d3bb6e0fe4f1d5434b47b958b05870/node /tmp/vscode-remote-containers-e66f6763-2b5a-4258-944d-80478b437da3.js git-credential-helper $*; }; f"
