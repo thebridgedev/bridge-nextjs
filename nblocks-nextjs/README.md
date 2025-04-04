@@ -1,6 +1,6 @@
-# nBlocks Next.js Integration
+# nBlocks Next.js
 
-This library provides a seamless integration between Next.js applications and the nBlocks platform, offering authentication, feature flags, and team management capabilities.
+A Next.js library for integrating with nBlocks authentication services.
 
 ## Installation
 
@@ -10,34 +10,14 @@ npm install nblocks-nextjs
 yarn add nblocks-nextjs
 ```
 
-## Quick Start
+## Client-Side Usage
 
-### 1. Set up the Provider
+### Configuration Provider
 
-Wrap your application with the `NblocksProvider` component:
+First, wrap your application with the `NblocksConfigProvider`:
 
 ```tsx
-// app/providers.tsx
-'use client';
-
-import { NblocksProvider } from 'nblocks-nextjs';
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <NblocksProvider
-      config={{
-        appId: process.env.NEXT_PUBLIC_NBLOCKS_APP_ID || '',
-        authBaseUrl: process.env.NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL,
-        callbackUrl: process.env.NEXT_PUBLIC_NBLOCKS_CALLBACK_URL,
-      }}
-    >
-      {children}
-    </NblocksProvider>
-  );
-}
-
-// app/layout.tsx
-import { Providers } from './providers';
+import { NblocksConfigProvider } from 'nblocks-nextjs';
 
 export default function RootLayout({
   children,
@@ -45,192 +25,133 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
-      </body>
-    </html>
+    <NblocksConfigProvider
+      config={{
+        appId: process.env.NEXT_PUBLIC_NBLOCKS_APP_ID!,
+        // Other options are optional and will use defaults
+      }}
+    >
+      {children}
+    </NblocksConfigProvider>
   );
 }
 ```
 
-### 2. Set up Authentication
-
-#### Login Component
+### Authentication Hook
 
 ```tsx
-// app/login/page.tsx
-'use client';
-
-import { Login } from 'nblocks-nextjs';
-
-export default function LoginPage() {
-  return (
-    <div>
-      <h1>Login</h1>
-      <Login>Login with nBlocks</Login>
-    </div>
-  );
-}
-```
-
-#### Callback Handler
-
-```tsx
-// app/auth/callback/page.tsx
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { handleCallbackFromUrl } from 'nblocks-nextjs';
-
-export default function CallbackPage() {
-  const router = useRouter();
-  
-  useEffect(() => {
-    const processCallback = async () => {
-      try {
-        await handleCallbackFromUrl();
-        router.push('/dashboard');
-      } catch (error) {
-        console.error('Authentication error:', error);
-        router.push('/login');
-      }
-    };
-    
-    processCallback();
-  }, [router]);
-  
-  return <div>Processing authentication...</div>;
-}
-```
-
-### 3. Use Authentication Hooks
-
-```tsx
-'use client';
-
 import { useAuth } from 'nblocks-nextjs';
 
-export default function ProfilePage() {
-  const { isAuthenticated, isLoading, logout } = useAuth();
-  
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-  
+export default function MyComponent() {
+  const { isAuthenticated, login, logout } = useAuth();
+
   return (
     <div>
-      <h1>Profile</h1>
       {isAuthenticated ? (
-        <div>
-          <p>You are logged in</p>
-          <button onClick={logout}>Logout</button>
-        </div>
+        <button onClick={logout}>Logout</button>
       ) : (
-        <p>You are not logged in</p>
+        <button onClick={login}>Login</button>
       )}
     </div>
   );
 }
 ```
 
-### 4. Set up Middleware
+### Login Component
+
+```tsx
+import { Login } from 'nblocks-nextjs';
+
+export default function MyComponent() {
+  return (
+    <div>
+      <Login />
+    </div>
+  );
+}
+```
+
+## Server-Side Usage
+
+### OAuth Callback Route
+
+Create a file at `app/auth/callback/route.ts` in your Next.js app:
+
+```tsx
+import { createCallbackRoute } from 'nblocks-nextjs';
+
+export const GET = createCallbackRoute({
+  redirectPath: '/dashboard', // Optional: redirect to a different path after login
+  errorRedirectPath: '/login?error=auth_failed' // Optional: custom error redirect
+});
+```
+
+This will handle the OAuth callback, exchange the authorization code for tokens, and redirect the user to the specified path.
+
+### Feature Flag Middleware
+
+The library provides middleware for protecting routes with feature flags. The middleware can automatically detect API routes and return appropriate responses.
+
+#### Basic Page Protection
+
+```tsx
+// app/protected-page/middleware.ts
+import { requireFeatureFlag } from 'nblocks-nextjs/server/middleware/feature-flag-middleware';
+
+export const middleware = requireFeatureFlag('my-feature-flag', '/fallback-page');
+```
+
+This will redirect users to `/fallback-page` if the feature flag is not enabled.
+
+#### API Route Protection
+
+```tsx
+// app/api/protected-endpoint/middleware.ts
+import { requireApiFeatureFlag } from 'nblocks-nextjs/server/middleware/feature-flag-middleware';
+
+export const middleware = requireApiFeatureFlag('my-api-feature', {
+  errorStatus: 403,
+  errorMessage: 'This API endpoint requires the my-api-feature flag to be enabled'
+});
+```
+
+This will return a 403 JSON response if the feature flag is not enabled.
+
+#### Advanced Configuration
+
+For more complex scenarios, you can use the `withFeatureFlags` function:
 
 ```tsx
 // middleware.ts
-import { withAuth } from 'nblocks-nextjs';
+import { withFeatureFlags } from 'nblocks-nextjs/server/middleware/feature-flag-middleware';
 
-export default withAuth({
-  config: {
-    appId: process.env.NBLOCKS_APP_ID || '',
-    authBaseUrl: process.env.NBLOCKS_AUTH_BASE_URL,
-    loginRoute: '/login'
+export const middleware = withFeatureFlags([
+  {
+    flag: 'premium-feature',
+    paths: ['/premium/*'],
+    redirectTo: '/upgrade',
+    responseType: 'redirect'
   },
-  publicPaths: ['/login', '/auth/callback', '/public']
-});
+  {
+    flag: 'beta-api',
+    paths: ['/api/beta/*'],
+    responseType: 'error',
+    errorStatus: 403,
+    errorMessage: 'This API is currently in beta'
+  }
+]);
 ```
 
-## Features
+This configuration protects multiple routes with different feature flags and response types.
 
-### Authentication
+## Environment Variables
 
-- OAuth2 login flow
-- Token management and auto-renewal
-- Protected routes via middleware
-- Login/logout functionality
+Add the following environment variables to your `.env.local` file:
 
-### Feature Flags (Coming Soon)
-
-- Client-side feature flag evaluation
-- Server-side feature flag evaluation
-- Feature gate components
-
-### Team Management (Coming Soon)
-
-- Team member management
-- Role-based access control
-- Team invites
-
-## API Reference
-
-### Components
-
-#### `NblocksProvider`
-
-Provider component that initializes the nBlocks configuration.
-
-```tsx
-<NblocksProvider config={config}>
-  {children}
-</NblocksProvider>
 ```
-
-#### `Login`
-
-Component for handling login.
-
-```tsx
-<Login config={config} redirectUri={redirectUri}>
-  Login with nBlocks
-</Login>
-```
-
-### Hooks
-
-#### `useAuth`
-
-Hook for authentication state and operations.
-
-```tsx
-const { isAuthenticated, isLoading, login, logout } = useAuth(config);
-```
-
-### Utilities
-
-#### `handleCallbackFromUrl`
-
-Utility for handling the OAuth callback.
-
-```tsx
-await handleCallbackFromUrl(config);
-```
-
-### Middleware
-
-#### `withAuth`
-
-Middleware for protecting routes at the Next.js middleware level.
-
-```tsx
-export default withAuth({
-  config: {
-    appId: process.env.NBLOCKS_APP_ID || '',
-    authBaseUrl: process.env.NBLOCKS_AUTH_BASE_URL,
-    loginRoute: '/login'
-  },
-  publicPaths: ['/login', '/auth/callback']
-});
+NEXT_PUBLIC_NBLOCKS_APP_ID=your_app_id
+NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL=https://auth.nblocks.cloud
+NEXT_PUBLIC_NBLOCKS_CALLBACK_URL=http://localhost:3000/auth/callback
 ```
 
 ## License
