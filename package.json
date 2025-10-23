@@ -2,6 +2,8 @@
   "name": "nblocks-nextjs-monorepo",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
+  "author": "Iman Pouya",
   "workspaces": [
     "nblocks-nextjs",
     "demo"

@@ -504,5 +504,5 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 Configuration provided through the `NblocksProvider` will override values from environment variables.
 
-For more advanced usage and examples, refer to the [main documentation](../README.md).
+
 
