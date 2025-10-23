@@ -57,3 +57,6 @@ nblocks-plugins/*
 nblocks-angular-reference/*
 .turbo
 .bash_history
+
+# Project descriptions
+project_descriptions/

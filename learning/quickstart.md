@@ -4,7 +4,7 @@
 Install the nblocks nextjs plugin
 
 ```bash
-npm install @nebulr/nblocks-nexts
+npm install @nebulr/nblocks-nextjs
 ```
 
 ## Configuration
