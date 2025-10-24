@@ -5,7 +5,7 @@ export default withNblocksAuth({
   rules: [
     { match: '/', public: true },
     { match: '/login', public: true },
-    { match: '/nblocks/auth/oauth-callback', public: true },
+    { match: '/auth/oauth-callback', public: true },
     // All other routes are protected by default
   ]
 });

@@ -44,7 +44,7 @@ export class AuthService {
     const origin = currentOrigin || (typeof window !== 'undefined' ? window.location.origin : '');
     const redirectUri = options.redirectUri || 
       this.config.callbackUrl || 
-      `${origin}/auth/callback`;
+      `${origin}/auth/oauth-callback`;
     
     const authBaseUrl = this.config.authBaseUrl;
     return `${authBaseUrl}/url/login/${this.config.appId}?cv_env=nblocks&redirect_uri=${encodeURIComponent(redirectUri)}`;
