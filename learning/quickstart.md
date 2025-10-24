@@ -57,7 +57,7 @@ export default withNblocksAuth({
   // rules: [
   //   { match: '/', public: true },              // Home page is public
   //   { match: '/login', public: true },          // Login page is public
-  //   { match: '/nblocks/auth/oauth-callback', public: true }, // OAuth callback
+  //   { match: '/auth/oauth-callback', public: true }, // OAuth callback
   //   // All other routes are protected by default
   // ]
 });

@@ -10,7 +10,7 @@ export interface WithAuthOptions {
 
 export function withAuth(options: WithAuthOptions = {}) {
   const {
-    publicPaths = ['/login', '/nblocks/auth/oauth-callback'],
+    publicPaths = ['/login', '/auth/oauth-callback'],
     config: configOverrides
   } = options;
   

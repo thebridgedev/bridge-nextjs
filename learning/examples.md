@@ -70,7 +70,7 @@ export default withNblocksAuth({
     { match: '/', public: true },
     { match: '/login', public: true },
     { match: '/about', public: true },
-    { match: '/nblocks/auth/oauth-callback', public: true },
+    { match: '/auth/oauth-callback', public: true },
     // All other routes are protected by default
   ]
 });
@@ -178,12 +178,12 @@ After setting up your middleware, you need to configure the OAuth callback URL i
 1. Go to the [nBlocks Control Center](https://admin.nblocks.cloud)
 2. Navigate to: **Authentication → Authentication → Security**
 3. Set the callback URL to match your application:
-   - **Production**: `https://your-app.com/nblocks/auth/oauth-callback`
-   - **Local Development**: `http://localhost:3000/nblocks/auth/oauth-callback`
+   - **Production**: `https://your-app.com/auth/oauth-callback`
+   - **Local Development**: `http://localhost:3000/auth/oauth-callback`
 
 The callback route is automatically handled by the `withNblocksAuth` middleware - no additional setup needed!
 
-> **Note**: Make sure to include the `/nblocks/auth/oauth-callback` route as public in your middleware rules, or it will be protected and authentication won't work.
+> **Note**: Make sure to include the `/auth/oauth-callback` route as public in your middleware rules, or it will be protected and authentication won't work.
 
 ### Renewing User Tokens
 

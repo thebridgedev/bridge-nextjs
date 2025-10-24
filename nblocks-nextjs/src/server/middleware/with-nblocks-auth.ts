@@ -21,7 +21,7 @@ export interface WithNblocksAuthOptions {
    * Set to 'public' to allow access to unmatched routes without authentication
    */
   defaultAccess?: 'public' | 'protected';
-  /** Custom callback path (defaults to /nblocks/auth/oauth-callback) */
+  /** Custom callback path (defaults to /auth/oauth-callback) */
   callbackPath?: string;
   /** 
    * nBlocks App ID (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_APP_ID env var)
@@ -100,7 +100,7 @@ export function withNblocksAuth(options: WithNblocksAuthOptions = {}) {
   const {
     rules = [],
     defaultAccess = 'protected',
-    callbackPath = '/nblocks/auth/oauth-callback',
+    callbackPath = '/auth/oauth-callback',
     appId,
     authBaseUrl,
     callbackUrl,
