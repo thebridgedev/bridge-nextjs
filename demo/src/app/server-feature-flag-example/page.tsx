@@ -1,4 +1,4 @@
-import { ServerFeatureFlag } from 'nblocks-nextjs/server';
+import { ServerFeatureFlag } from '@nebulr-group/nblocks-nextjs/server';
 import '../page.css';
 
 export default async function ServerFeatureFlagExamplePage() {

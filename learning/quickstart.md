@@ -4,15 +4,15 @@
 Install the nblocks nextjs plugin
 
 ```bash
-npm install @nebulr/nblocks-nextjs
+npm install @nebulr-group/nblocks-nextjs
 ```
 
-## Step 2: Configuration
-Add the NblocksProvider directly to your app layout with your app ID:
+## Step 2: Add Client Provider
+Add the NblocksProvider to your app layout with your app ID:
 
 ```tsx
 // app/layout.tsx
-import { NblocksProvider } from '@nebulr/nblocks-nextjs/client';
+import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
 
 export default function RootLayout({
   children,
@@ -33,17 +33,52 @@ export default function RootLayout({
 
 > **Note:** You can find your app ID in the nBlocks Control Center by navigating to 'Keys' section.
 
-That's it! Your app is now protected with nBlocks authentication. All routes are protected by default, and users will be redirected to login when they try to access protected content.
+## Step 3: Add Route Protection (Middleware)
+
+Create a `middleware.ts` file in your `src` directory to protect your routes:
+
+```tsx
+// src/middleware.ts
+import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
+
+export default withNblocksAuth({
+  rules: [
+    { match: '/', public: true },              // Home page is public
+    { match: '/login', public: true },          // Login page is public
+    { match: '/nblocks/auth/oauth-callback', public: true }, // OAuth callback
+    // All other routes are protected by default
+  ]
+});
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ]
+};
+```
+
+That's it! Your app is now protected with nBlocks authentication. All routes (except those marked as `public`) are protected, and unauthenticated users will be redirected to the login page.
+
+## Step 4: Configure Callback URL
+
+1. Go to the nBlocks Control Center:
+   - Navigate to Authentication -> Authentication -> Security
+   - Change the callback URL to: `https://your-app.com/nblocks/auth/oauth-callback`
+   - For local development: `http://localhost:3000/nblocks/auth/oauth-callback`
+
+The callback is automatically handled by the plugin - no additional setup needed!
 
 ## Optional: Advanced Configuration
 
-### Adding Login Functionality
+### Adding a Login Button
 
 The simplest way to add login functionality to your app is to use the `useAuth` hook:
 
 ```tsx
 // app/components/LoginButton.tsx
-import { useAuth } from '@nebulr/nblocks-nextjs/client';
+'use client';
+
+import { useAuth } from '@nebulr-group/nblocks-nextjs/client';
 
 export default function LoginButton() {
   const { login } = useAuth();
@@ -54,38 +89,6 @@ export default function LoginButton() {
     </button>
   );
 }
-```
-
-### Configuring Callback URL
-
-1. Go to the nBlocks Control Center:
-   - Navigate to Authentication -> Authentication -> Security
-   - Change the callback URL to: `https://your-app.com/nblocks/auth/oauth-callback`
-   - For local development: `http://localhost:3000/nblocks/auth/oauth-callback`
-
-The callback is automatically handled by the plugin - no additional setup needed!
-
-### Server-Side Route Protection (Optional)
-
-For additional server-side protection, you can add middleware:
-
-```tsx
-// middleware.ts
-import { withNblocksAuth } from '@nebulr/nblocks-nextjs/server';
-
-export default withNblocksAuth({
-  rules: [
-    { match: '/', public: true },
-    { match: '/login', public: true },
-    // All other routes are protected by default
-  ]
-});
-
-export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ]
-};
 ```
 
 ### Environment Variables (Alternative)

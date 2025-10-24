@@ -1,4 +1,4 @@
-import { NblocksProvider } from 'nblocks-nextjs/client';
+import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from '../components/Navbar';

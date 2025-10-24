@@ -1,4 +1,4 @@
-import { createNblocksCallbackRoute } from 'nblocks-nextjs/server';
+import { createNblocksCallbackRoute } from '@nebulr-group/nblocks-nextjs/server';
 
 export const GET = createNblocksCallbackRoute({
   redirectPath: '/',

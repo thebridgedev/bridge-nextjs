@@ -1,6 +1,6 @@
 'use client';
 
-import { FeatureFlag, useNblocksConfig } from 'nblocks-nextjs/client';
+import { FeatureFlag, useNblocksConfig } from '@nebulr-group/nblocks-nextjs/client';
 import Link from 'next/link';
 import { Component, ReactNode } from 'react';
 import FeatureFlagAPIExample from '../components/FeatureFlagAPIExample';

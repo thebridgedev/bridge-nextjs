@@ -1,4 +1,4 @@
-import { withNblocksAuth } from 'nblocks-nextjs/server';
+import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
 
 // Export the middleware function using the new simplified approach
 export default withNblocksAuth({

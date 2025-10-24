@@ -12,7 +12,8 @@
     "dev": "concurrently \"turbo run build:dev --filter=nblocks-nextjs\" \"turbo run dev --filter=demo\"",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "package": "turbo run build --filter=nblocks-nextjs && cd nblocks-nextjs && npm pack"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

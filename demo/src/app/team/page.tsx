@@ -1,6 +1,6 @@
 'use client';
 
-import { Team } from 'nblocks-nextjs/client';
+import { Team } from '@nebulr-group/nblocks-nextjs/client';
 
 export default function TeamPage() {
   return (

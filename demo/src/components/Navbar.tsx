@@ -1,6 +1,6 @@
 'use client';
 
-import { Login, useAuth, useProfile } from 'nblocks-nextjs/client';
+import { Login, useAuth, useProfile } from '@nebulr-group/nblocks-nextjs/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import '../app/globals.css';
