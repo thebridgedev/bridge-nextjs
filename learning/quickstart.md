@@ -42,6 +42,7 @@ Create a `middleware.ts` file in your `src` directory to protect your routes:
 import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
 
 export default withNblocksAuth({
+  appId: 'YOUR_APP_ID', // Same app ID as above
   rules: [
     { match: '/', public: true },              // Home page is public
     { match: '/login', public: true },          // Login page is public
@@ -57,7 +58,10 @@ export const config = {
 };
 ```
 
-That's it! Your app is now protected with nBlocks authentication. All routes (except those marked as `public`) are protected, and unauthenticated users will be redirected to the login page.
+That's it! Your app is now protected with nBlocks authentication. All routes (except those marked as `public`) are protected, and unauthenticated users will be redirected to the nBlocks login page.
+
+> **Alternative - Using Environment Variables:**
+> If you prefer, you can set the `NEXT_PUBLIC_NBLOCKS_APP_ID` environment variable in a `.env.local` file and omit the `appId` parameter from both `NblocksProvider` and `withNblocksAuth`.
 
 ## Step 4: Configure Callback URL
 
@@ -91,22 +95,6 @@ export default function LoginButton() {
 }
 ```
 
-### Environment Variables (Alternative)
-
-Instead of passing `appId` as a prop, you can use environment variables:
-
-```bash
-# .env.local
-NEXT_PUBLIC_NBLOCKS_APP_ID=your_app_id_here
-```
-
-Then use the provider without the appId prop:
-
-```tsx
-<NblocksProvider>
-  {children}
-</NblocksProvider>
-```
 
 ## That's it!
 

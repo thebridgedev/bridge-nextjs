@@ -19,6 +19,14 @@ export interface WithNblocksAuthOptions {
   defaultAccess?: 'public' | 'protected';
   /** Custom callback path (defaults to /nblocks/auth/oauth-callback) */
   callbackPath?: string;
+  /** nBlocks App ID (can also be set via NEXT_PUBLIC_NBLOCKS_APP_ID env var) */
+  appId?: string;
+  /** Auth base URL (defaults to https://auth.nblocks.cloud) */
+  authBaseUrl?: string;
+  /** Callback URL (defaults to /auth/callback) */
+  callbackUrl?: string;
+  /** Enable debug logging */
+  debug?: boolean;
 }
 
 /**
@@ -30,6 +38,7 @@ export interface WithNblocksAuthOptions {
  * import { withNblocksAuth } from '@nebulr/nblocks-nextjs/server';
  * 
  * export default withNblocksAuth({
+ *   appId: 'YOUR_APP_ID', // Can also use NEXT_PUBLIC_NBLOCKS_APP_ID env var
  *   rules: [
  *     { match: '/', public: true },
  *     { match: '/login', public: true },
@@ -42,7 +51,11 @@ export function withNblocksAuth(options: WithNblocksAuthOptions = {}) {
   const {
     rules = [],
     defaultAccess = 'protected',
-    callbackPath = '/nblocks/auth/oauth-callback'
+    callbackPath = '/nblocks/auth/oauth-callback',
+    appId,
+    authBaseUrl,
+    callbackUrl,
+    debug
   } = options;
 
   // Extract public paths from rules
@@ -55,9 +68,18 @@ export function withNblocksAuth(options: WithNblocksAuthOptions = {}) {
     publicPaths.push(callbackPath);
   }
 
-  // Create the auth middleware with public paths
+  // Build config object from options
+  const configOverrides = {
+    ...(appId && { appId }),
+    ...(authBaseUrl && { authBaseUrl }),
+    ...(callbackUrl && { callbackUrl }),
+    ...(debug !== undefined && { debug })
+  };
+
+  // Create the auth middleware with public paths and config
   const authMiddleware = withAuth({
-    publicPaths
+    publicPaths,
+    config: Object.keys(configOverrides).length > 0 ? configOverrides : undefined
   });
 
   return async function middleware(request: NextRequest) {

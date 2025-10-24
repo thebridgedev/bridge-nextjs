@@ -30,18 +30,33 @@ export class AuthService {
     this.initialized = true;
   }
   
+  /**
+   * Creates the nBlocks login URL
+   * @param options Optional redirect URI
+   * @param currentOrigin Optional current origin (for server-side usage)
+   * @returns The complete login URL
+   */
+  createLoginUrl(options: { redirectUri?: string } = {}, currentOrigin?: string): string {
+    if (!this.initialized || !this.config) {
+      throw new Error('AuthService has not been properly initialized.');
+    }
+    
+    const origin = currentOrigin || (typeof window !== 'undefined' ? window.location.origin : '');
+    const redirectUri = options.redirectUri || 
+      this.config.callbackUrl || 
+      `${origin}/auth/callback`;
+    
+    const authBaseUrl = this.config.authBaseUrl;
+    return `${authBaseUrl}/url/login/${this.config.appId}?cv_env=nblocks&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  }
+  
   // Client-side methods
   async loginClient(options: { redirectUri?: string } = {}): Promise<void> {
     if (!this.initialized || !this.config) {
       throw new Error('AuthService has not been properly initialized.');
     }
     
-    const redirectUri = options.redirectUri || 
-      this.config.callbackUrl || 
-      `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`;
-    
-    const authBaseUrl = this.config.authBaseUrl 
-    const loginUrl = `${authBaseUrl}/url/login/${this.config.appId}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const loginUrl = this.createLoginUrl(options);
     
     if (typeof window !== 'undefined') {
       window.location.href = loginUrl;

@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { NblocksConfig } from '../../shared/types/config';
+import { getConfig } from '../utils/get-config';
 import { initServices } from '../utils/init-services';
 
 export interface WithAuthOptions {
   publicPaths?: string[];
+  config?: Partial<NblocksConfig>;
 }
 
 export function withAuth(options: WithAuthOptions = {}) {
   const {
-    publicPaths = ['/login', '/nblocks/auth/oauth-callback']
+    publicPaths = ['/login', '/nblocks/auth/oauth-callback'],
+    config: configOverrides
   } = options;
   
   return async function middleware(request: NextRequest) {
-    // Initialize services using initServices
-    const { tokenService, authService, config } = await initServices();
+    // Initialize services using initServices with config overrides
+    const mergedConfig = configOverrides ? getConfig(configOverrides) : undefined;
+    const { tokenService, authService, config } = await initServices(mergedConfig);
     
     const { pathname } = request.nextUrl;
     
@@ -35,8 +40,9 @@ export function withAuth(options: WithAuthOptions = {}) {
     const isAuthenticated = await tokenService.isAuthenticatedServer(request);
     
     if (!isAuthenticated) {
-      // Redirect to login if not authenticated
-      const loginUrl = new URL(config.loginRoute || '/login', request.url);
+      // Redirect to nBlocks login URL using AuthService
+      const currentOrigin = new URL(request.url).origin;
+      const loginUrl = authService.createLoginUrl({}, currentOrigin);
       return NextResponse.redirect(loginUrl);
     }
     
@@ -45,7 +51,9 @@ export function withAuth(options: WithAuthOptions = {}) {
     const accessToken = tokenService.getAccessTokenServer(cookieString);
     
     if (!accessToken) {
-      const loginUrl = new URL(config.loginRoute || '/login', request.url);
+      // Redirect to nBlocks login URL using AuthService
+      const currentOrigin = new URL(request.url).origin;
+      const loginUrl = authService.createLoginUrl({}, currentOrigin);
       return NextResponse.redirect(loginUrl);
     }
     
