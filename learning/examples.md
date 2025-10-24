@@ -2,10 +2,13 @@
 
 ## Table of Contents
 - [Authentication](#authentication)
+  - [Adding a Login Button](#adding-a-login-button)
   - [Renewing User Tokens](#renewing-user-tokens)
   - [Checking Authentication Status](#checking-if-a-user-is-logged-in)
   - [Getting User Profile Information](#getting-user-profile-information)
   - [Route Protection](#route-protection)
+  - [Advanced Route Configuration](#advanced-route-configuration)
+  - [Configuring OAuth Callback URL](#configuring-oauth-callback-url)
 - [Feature Flags](#feature-flags)
   - [Bulk Fetching vs Live Updates](#bulk-fetching-vs-live)
   - [Basic Feature Flag Usage](#a-basic-feature-flag)
@@ -21,32 +24,57 @@
 
 ## Authentication
 
+### Adding a Login Button
+
+The simplest way to add login functionality to your app is to use the `useAuth` hook:
+
+```tsx
+// app/components/LoginButton.tsx
+'use client';
+
+import { useAuth } from '@nebulr-group/nblocks-nextjs/client';
+
+export default function LoginButton() {
+  const { login, logout, isAuthenticated } = useAuth();
+  
+  return (
+    <div>
+      {isAuthenticated ? (
+        <button onClick={() => logout()}>
+          Sign Out
+        </button>
+      ) : (
+        <button onClick={() => login()}>
+          Sign In
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
 ### Route Protection
 
 nBlocks provides several ways to protect routes in your Next.js application:
 
 #### Middleware Protection (Recommended)
 
-The most comprehensive way to protect routes is using middleware:
+The most comprehensive way to protect routes is using the `withNblocksAuth` middleware:
 
 ```tsx
 // middleware.ts
-import { withAuth } from '@nebulr/nblocks-nextjs/server';
-import { NextRequest } from 'next/server';
+import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
 
-// Create the auth middleware
-const authMiddleware = withAuth({
-  // Public paths that don't require authentication
-  publicPaths: ['/', '/login', '/auth/oauth-callback'],
+export default withNblocksAuth({
+  rules: [
+    { match: '/', public: true },
+    { match: '/login', public: true },
+    { match: '/about', public: true },
+    { match: '/nblocks/auth/oauth-callback', public: true },
+    // All other routes are protected by default
+  ]
 });
 
-// Export the middleware function
-export async function middleware(request: NextRequest) {
-  // Let the auth middleware handle all path protection logic
-  return authMiddleware(request);
-}
-
-// Configure which paths the middleware should run on
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico).*)',
@@ -55,10 +83,11 @@ export const config = {
 ```
 
 This approach:
-- Protects all routes by default
-- Allows you to specify public paths that don't require authentication
+- Protects all routes by default (unless `defaultAccess: 'public'` is set)
+- Allows you to specify public routes that don't require authentication
 - Handles redirects automatically
 - Works with both client and server components
+- Automatically reads configuration from environment variables
 
 #### Component-Based Protection
 
@@ -99,6 +128,62 @@ export default function DashboardPage() {
   );
 }
 ```
+
+### Advanced Route Configuration
+
+#### Understanding defaultAccess
+
+By default, any route not specified in the `rules` array is **protected** (requires authentication). You can change this behavior with the `defaultAccess` parameter:
+
+```tsx
+// Option 1: Protect by default (default behavior)
+export default withNblocksAuth({
+  defaultAccess: 'protected', // This is the default
+  rules: [
+    { match: '/', public: true },
+    { match: '/login', public: true },
+    // All other routes require authentication
+  ]
+});
+
+// Option 2: Public by default, protect specific routes
+export default withNblocksAuth({
+  defaultAccess: 'public', // All unmatched routes are public
+  rules: [
+    { match: '/dashboard', public: false }, // Require auth for dashboard
+    { match: '/profile', public: false },    // Require auth for profile
+    // All other routes are public
+  ]
+});
+```
+
+#### Using Regular Expressions for Route Matching
+
+You can use regex patterns for more flexible route matching:
+
+```tsx
+export default withNblocksAuth({
+  rules: [
+    { match: new RegExp('^/public'), public: true },  // All /public/* routes
+    { match: new RegExp('^/api/public'), public: true }, // All public API routes
+    { match: new RegExp('^/docs($|/)'), public: true },  // /docs and /docs/* routes
+  ]
+});
+```
+
+### Configuring OAuth Callback URL
+
+After setting up your middleware, you need to configure the OAuth callback URL in the nBlocks Control Center:
+
+1. Go to the [nBlocks Control Center](https://admin.nblocks.cloud)
+2. Navigate to: **Authentication → Authentication → Security**
+3. Set the callback URL to match your application:
+   - **Production**: `https://your-app.com/nblocks/auth/oauth-callback`
+   - **Local Development**: `http://localhost:3000/nblocks/auth/oauth-callback`
+
+The callback route is automatically handled by the `withNblocksAuth` middleware - no additional setup needed!
+
+> **Note**: Make sure to include the `/nblocks/auth/oauth-callback` route as public in your middleware rules, or it will be protected and authentication won't work.
 
 ### Renewing User Tokens
 
@@ -456,53 +541,129 @@ function ConfigDisplay() {
 
 ### Environment Variables
 
-nBlocks configuration values are primarily set through environment variables in your `.env` file. Here are the available configuration variables:
+nBlocks configuration is primarily set through environment variables in your `.env.local` file. 
+
+#### Required Configuration
+
+| Variable Name | Description |
+|---------------|-------------|
+| `NEXT_PUBLIC_NBLOCKS_APP_ID` | Your nBlocks application ID (get this from the Control Center → Keys) |
+
+#### Optional Configuration
+
+All these settings have sensible defaults and are optional:
 
 | Variable Name | Description | Default Value |
 |---------------|-------------|---------------|
-| `NEXT_PUBLIC_NBLOCKS_APP_ID` | Your nBlocks application ID | (Required) |
-| `NEXT_PUBLIC_NBLOCKS_CALLBACK_URL` | URL for OAuth callback | (Optional) |
-| `NEXT_PUBLIC_NBLOCKS_DEFAULT_REDIRECT_ROUTE` | Default route after login | `/` |
+| `NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL` | Base URL for nBlocks auth services | `https://auth.nblocks.cloud` |
+| `NEXT_PUBLIC_NBLOCKS_CALLBACK_URL` | Custom OAuth callback URL | Auto-determined from origin |
+| `NEXT_PUBLIC_NBLOCKS_DEFAULT_REDIRECT_ROUTE` | Route to redirect to after login | `/` |
 | `NEXT_PUBLIC_NBLOCKS_LOGIN_ROUTE` | Route for login page | `/login` |
-| `NEXT_PUBLIC_NBLOCKS_DEBUG` | Enable debug mode | `false` |
+| `NEXT_PUBLIC_NBLOCKS_TEAM_MANAGEMENT_URL` | URL for team management portal | nBlocks default portal |
+| `NEXT_PUBLIC_NBLOCKS_DEBUG` | Enable debug logging | `false` |
 
-Example `.env` file:
+#### Example Configuration Files
 
+**Minimal `.env.local` (recommended):**
+```env
+# Only the app ID is required - everything else uses defaults
+NEXT_PUBLIC_NBLOCKS_APP_ID=your-app-id-here
+```
+
+**Full `.env.local` (with all optional settings):**
 ```env
 # Required
 NEXT_PUBLIC_NBLOCKS_APP_ID=your-app-id-here
 
-# Optional (will use defaults if not set)
+# Optional: Custom auth base URL
+NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL=https://auth.nblocks.cloud
+
+# Optional: Custom callback URL
 NEXT_PUBLIC_NBLOCKS_CALLBACK_URL=/auth/oauth-callback
+
+# Optional: Default redirect route after login
 NEXT_PUBLIC_NBLOCKS_DEFAULT_REDIRECT_ROUTE=/dashboard
-NEXT_PUBLIC_NBLOCKS_LOGIN_ROUTE=/login
-NEXT_PUBLIC_NBLOCKS_DEBUG=false
+
+# Optional: Login route for unauthenticated users
+NEXT_PUBLIC_NBLOCKS_LOGIN_ROUTE=/auth/login
+
+# Optional: Team management portal URL
+NEXT_PUBLIC_NBLOCKS_TEAM_MANAGEMENT_URL=https://backendless.nblocks.cloud/user-management-portal/users
+
+# Optional: Enable debug mode for detailed logging
+NEXT_PUBLIC_NBLOCKS_DEBUG=true
 ```
+
+> **Configuration Priority**: Environment variables take highest priority, followed by props passed to the provider, then default values.
 
 ### Additional Configs
 
-You can also provide configuration when initializing the NblocksProvider:
+You can also provide configuration directly through props (though environment variables are recommended):
+
+#### Passing appId as a Prop
 
 ```tsx
-// app/providers.tsx
-import { NblocksProvider } from '@nebulr/nblocks-nextjs';
+// app/layout.tsx
+import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <NblocksProvider
-      config={{        // Override default configuration        
-        callbackUrl: '/custom-callback',
-        defaultRedirectRoute: '/dashboard',
-        loginRoute: '/signin'
-      }}
-    >
-      {children}
-    </NblocksProvider>
+    <html lang="en">
+      <body>
+        <NblocksProvider appId={process.env.NEXT_PUBLIC_NBLOCKS_APP_ID!}>
+          {children}
+        </NblocksProvider>
+      </body>
+    </html>
   );
 }
 ```
 
-Configuration provided through the `NblocksProvider` will override values from environment variables.
+#### Passing Full Config Object
+
+```tsx
+// app/layout.tsx
+import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <NblocksProvider
+          config={{
+            appId: 'your-app-id',
+            callbackUrl: '/custom-callback',
+            defaultRedirectRoute: '/dashboard',
+            loginRoute: '/signin',
+            debug: true
+          }}
+        >
+          {children}
+        </NblocksProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+#### Middleware Configuration
+
+Similarly, you can pass configuration to the middleware:
+
+```tsx
+// middleware.ts
+import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
+
+export default withNblocksAuth({
+  appId: 'your-app-id', // Optional - reads from NEXT_PUBLIC_NBLOCKS_APP_ID by default
+  debug: true,          // Optional - enable debug logging
+  rules: [
+    { match: '/', public: true },
+  ]
+});
+```
+
+> **Note**: Environment variables take highest priority. If both an environment variable and a prop are provided, the environment variable will be used.
 
 
 
