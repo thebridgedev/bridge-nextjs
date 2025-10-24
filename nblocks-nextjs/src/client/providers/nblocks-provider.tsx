@@ -18,26 +18,35 @@ interface NblocksProviderProps {
  * Main provider for nBlocks functionality
  * This provider wraps all nBlocks related providers
  * 
+ * Configuration priority (highest to lowest):
+ * 1. Environment variables (NEXT_PUBLIC_NBLOCKS_APP_ID, etc.)
+ * 2. Props passed to this provider
+ * 3. Default values
+ * 
  * @example
- * // Simple usage with appId prop:
+ * // Recommended: Using environment variables
+ * // Set NEXT_PUBLIC_NBLOCKS_APP_ID in your .env.local
  * import { NblocksProvider } from 'nblocks-nextjs';
  * 
+ * <NblocksProvider>
+ *   <App />
+ * </NblocksProvider>
+ * 
+ * @example
+ * // Alternative: Using appId prop
  * <NblocksProvider appId="your-app-id">
  *   <App />
  * </NblocksProvider>
  * 
- * // Advanced usage with full config:
+ * @example
+ * // Advanced: Using full config object
  * <NblocksProvider config={{ appId: 'your-app-id', debug: true }}>
  *   <App />
  * </NblocksProvider>
  */
 export const NblocksProvider: FC<NblocksProviderProps> = ({ appId, config, children }) => {
-  // Runtime validation - ensure appId is provided
-  if (!appId && !config?.appId) {
-    throw new Error('NblocksProvider: appId is required. Please provide it via the appId prop or config.appId');
-  }
-
   // Merge appId prop with config if both are provided
+  // The actual validation and env var reading happens in NblocksConfigProvider
   const mergedConfig = appId ? { ...config, appId } : config;
   
   return (

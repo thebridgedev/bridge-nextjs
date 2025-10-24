@@ -19,7 +19,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <NblocksProvider appId={process.env.NEXT_PUBLIC_NBLOCKS_APP_ID!}>
+        {/* NblocksProvider automatically reads from NEXT_PUBLIC_NBLOCKS_APP_ID env var */}
+        <NblocksProvider>
           <Navbar />
           <main>{children}</main>
         </NblocksProvider>

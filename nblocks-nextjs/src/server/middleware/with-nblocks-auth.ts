@@ -19,32 +19,55 @@ export interface WithNblocksAuthOptions {
   defaultAccess?: 'public' | 'protected';
   /** Custom callback path (defaults to /nblocks/auth/oauth-callback) */
   callbackPath?: string;
-  /** nBlocks App ID (can also be set via NEXT_PUBLIC_NBLOCKS_APP_ID env var) */
+  /** 
+   * nBlocks App ID (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_APP_ID env var)
+   * Only provide this if you need to override the env var
+   */
   appId?: string;
-  /** Auth base URL (defaults to https://auth.nblocks.cloud) */
+  /** 
+   * Auth base URL (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL env var)
+   * Defaults to https://auth.nblocks.cloud
+   */
   authBaseUrl?: string;
-  /** Callback URL (defaults to /auth/callback) */
+  /** 
+   * Callback URL (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_CALLBACK_URL env var)
+   */
   callbackUrl?: string;
-  /** Enable debug logging */
+  /** 
+   * Enable debug logging (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_DEBUG env var)
+   * Defaults to false
+   */
   debug?: boolean;
 }
 
 /**
  * Enhanced middleware helper for nBlocks authentication
- * Provides bridge-svelte style route configuration
+ * Automatically reads configuration from environment variables (NEXT_PUBLIC_NBLOCKS_*)
+ * 
+ * Configuration priority (highest to lowest):
+ * 1. Environment variables (recommended)
+ * 2. Props passed to this function
+ * 3. Default values
  * 
  * @example
- * // middleware.ts
+ * // Recommended: Using environment variables only
+ * // Set NEXT_PUBLIC_NBLOCKS_APP_ID in your .env.local
  * import { withNblocksAuth } from '@nebulr/nblocks-nextjs/server';
  * 
  * export default withNblocksAuth({
- *   appId: 'YOUR_APP_ID', // Can also use NEXT_PUBLIC_NBLOCKS_APP_ID env var
  *   rules: [
  *     { match: '/', public: true },
  *     { match: '/login', public: true },
  *     { match: '/nblocks/auth/oauth-callback', public: true },
  *     // All other routes are protected by default
  *   ]
+ * });
+ * 
+ * @example
+ * // Alternative: Passing appId directly (still supported)
+ * export default withNblocksAuth({
+ *   appId: 'YOUR_APP_ID',
+ *   rules: [...]
  * });
  */
 export function withNblocksAuth(options: WithNblocksAuthOptions = {}) {

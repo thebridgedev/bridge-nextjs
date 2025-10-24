@@ -7,8 +7,34 @@ Install the nblocks nextjs plugin
 npm install @nebulr-group/nblocks-nextjs
 ```
 
-## Step 2: Add Client Provider
-Add the NblocksProvider to your app layout with your app ID:
+## Step 2: Configure Environment Variables
+Create a `.env.local` file in your project root and add your nBlocks app ID:
+
+```env
+NEXT_PUBLIC_NBLOCKS_APP_ID=your-app-id-here
+```
+
+> **Note:** You can find your app ID in the nBlocks Control Center by navigating to 'Keys' section.
+
+### Optional Environment Variables
+You can also configure these optional settings:
+
+```env
+# Optional: Custom auth base URL (defaults to https://auth.nblocks.cloud)
+NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL=https://auth.nblocks.cloud
+
+# Optional: Default redirect route after login (defaults to /)
+NEXT_PUBLIC_NBLOCKS_DEFAULT_REDIRECT_ROUTE=/dashboard
+
+# Optional: Login route for unauthenticated users (defaults to /login)
+NEXT_PUBLIC_NBLOCKS_LOGIN_ROUTE=/auth/login
+
+# Optional: Enable debug mode (defaults to false)
+NEXT_PUBLIC_NBLOCKS_DEBUG=true
+```
+
+## Step 3: Add Client Provider
+Add the NblocksProvider to your app layout. It will automatically read configuration from your environment variables:
 
 ```tsx
 // app/layout.tsx
@@ -22,7 +48,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <NblocksProvider appId="YOUR_APP_ID">
+        <NblocksProvider>
           {children}
         </NblocksProvider>
       </body>
@@ -31,9 +57,11 @@ export default function RootLayout({
 }
 ```
 
-> **Note:** You can find your app ID in the nBlocks Control Center by navigating to 'Keys' section.
+> **Alternative - Using Props:**
+> You can still pass the appId directly as a prop if you prefer: `<NblocksProvider appId="YOUR_APP_ID">`
+> Props will be overridden by environment variables if both are present.
 
-## Step 3: Add Route Protection (Middleware)
+## Step 4: Add Route Protection (Middleware)
 
 Create a `middleware.ts` file in your `src` directory to protect your routes:
 
@@ -42,7 +70,6 @@ Create a `middleware.ts` file in your `src` directory to protect your routes:
 import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
 
 export default withNblocksAuth({
-  appId: 'YOUR_APP_ID', // Same app ID as above
   rules: [
     { match: '/', public: true },              // Home page is public
     { match: '/login', public: true },          // Login page is public
@@ -58,12 +85,11 @@ export const config = {
 };
 ```
 
+> **Note:** The middleware automatically reads the appId from `NEXT_PUBLIC_NBLOCKS_APP_ID`. You can also pass it explicitly: `withNblocksAuth({ appId: 'YOUR_APP_ID', rules: [...] })`
+
 That's it! Your app is now protected with nBlocks authentication. All routes (except those marked as `public`) are protected, and unauthenticated users will be redirected to the nBlocks login page.
 
-> **Alternative - Using Environment Variables:**
-> If you prefer, you can set the `NEXT_PUBLIC_NBLOCKS_APP_ID` environment variable in a `.env.local` file and omit the `appId` parameter from both `NblocksProvider` and `withNblocksAuth`.
-
-## Step 4: Configure Callback URL
+## Step 5: Configure Callback URL
 
 1. Go to the nBlocks Control Center:
    - Navigate to Authentication -> Authentication -> Security
@@ -72,7 +98,7 @@ That's it! Your app is now protected with nBlocks authentication. All routes (ex
 
 The callback is automatically handled by the plugin - no additional setup needed!
 
-## Optional: Advanced Configuration
+## Step 6: Advanced Configuration (Optional)
 
 ### Adding a Login Button
 
