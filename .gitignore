@@ -55,8 +55,9 @@ Thumbs.db
 .next
 bridge-plugins/*
 bridge-angular-reference/*
-.turbo
+**/.turbo
 .bash_history
+
 
 # Project descriptions
 project_descriptions/
