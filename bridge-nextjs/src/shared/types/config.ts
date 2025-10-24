@@ -9,7 +9,7 @@
  * @example Environment Variables (Recommended)
  * ```env
  * NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id
- * NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=https://auth.bridge.cloud
+ * NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=https://auth.nblocks.cloud
  * NEXT_PUBLIC_BRIDGE_DEBUG=true
  * ```
  */
@@ -30,7 +30,7 @@ export interface BridgeConfig {
 
   /**
    * The base URL for bridge auth services
-   * @default 'https://auth.bridge.cloud'
+   * @default 'https://auth.nblocks.cloud'
    * @env NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL
    */
   authBaseUrl?: string;
@@ -51,7 +51,7 @@ export interface BridgeConfig {
 
   /**
    * URL for the team management portal
-   * @default 'https://backendless.bridge.cloud'
+   * @default 'https://backendless.nblocks.cloud'
    * @env NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL
    */
   teamManagementUrl?: string;

@@ -133,7 +133,13 @@ export class AuthService {
     });
     console.log(url);
     if (!response.ok) {
-      throw new Error('Failed to exchange code for tokens');
+      const errorText = await response.text();
+      console.error('Token exchange failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+      throw new Error(`Failed to exchange code for tokens: ${response.status} ${response.statusText} - ${errorText}`);
     }
     
     const data = await response.json();
@@ -176,7 +182,7 @@ export class AuthService {
     }
     
     try {
-      const authBaseUrl = this.config.authBaseUrl || 'https://auth.bridge.cloud';
+      const authBaseUrl = this.config.authBaseUrl || 'https://auth.nblocks.cloud';
       const url = `${authBaseUrl}/token`;
       
       // Log the start time of the refresh

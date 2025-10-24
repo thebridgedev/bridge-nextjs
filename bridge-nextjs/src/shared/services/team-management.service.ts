@@ -90,7 +90,7 @@ export class TeamManagementService {
 
     try {
       // Ensure we have the required config values
-      const authBaseUrl = this.config.authBaseUrl || 'https://auth.bridge.cloud';
+      const authBaseUrl = this.config.authBaseUrl || 'https://auth.nblocks.cloud';
       const appId = this.config.appId;
       
       if (!appId) {

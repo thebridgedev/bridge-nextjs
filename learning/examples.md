@@ -175,7 +175,7 @@ export default withBridgeAuth({
 
 After setting up your middleware, you need to configure the OAuth callback URL in the bridge Control Center:
 
-1. Go to the [bridge Control Center](https://admin.bridge.cloud)
+1. Go to the [bridge Control Center](https://admin.nblocks.cloud)
 2. Navigate to: **Authentication → Authentication → Security**
 3. Set the callback URL to match your application:
    - **Production**: `https://your-app.com/auth/oauth-callback`
@@ -555,7 +555,7 @@ All these settings have sensible defaults and are optional:
 
 | Variable Name | Description | Default Value |
 |---------------|-------------|---------------|
-| `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL` | Base URL for bridge auth services | `https://auth.bridge.cloud` |
+| `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL` | Base URL for bridge auth services | `https://auth.nblocks.cloud` |
 | `NEXT_PUBLIC_BRIDGE_CALLBACK_URL` | Custom OAuth callback URL | Auto-determined from origin |
 | `NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE` | Route to redirect to after login | `/` |
 | `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` | Route for login page | `/login` |
@@ -576,7 +576,7 @@ NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 
 # Optional: Custom auth base URL
-NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=https://auth.bridge.cloud
+NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=https://auth.nblocks.cloud
 
 # Optional: Custom callback URL
 NEXT_PUBLIC_BRIDGE_CALLBACK_URL=/auth/oauth-callback
@@ -588,7 +588,7 @@ NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/dashboard
 NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login
 
 # Optional: Team management portal URL
-NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL=https://backendless.bridge.cloud/user-management-portal/users
+NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL=https://backendless.nblocks.cloud/user-management-portal/users
 
 # Optional: Enable debug mode for detailed logging
 NEXT_PUBLIC_BRIDGE_DEBUG=true

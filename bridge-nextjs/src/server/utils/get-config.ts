@@ -4,8 +4,8 @@ import { BridgeConfig } from '../../shared/types/config';
  * Default configuration values for bridge
  */
 const DEFAULT_CONFIG: Partial<BridgeConfig> = {
-  authBaseUrl: 'https://auth.bridge.cloud',
-  teamManagementUrl: 'https://backendless.bridge.cloud/user-management-portal/users',
+  authBaseUrl: 'https://auth.nblocks.cloud',
+  teamManagementUrl: 'https://backendless.nblocks.cloud/user-management-portal/users',
   defaultRedirectRoute: '/',
   loginRoute: '/login',
   debug: false

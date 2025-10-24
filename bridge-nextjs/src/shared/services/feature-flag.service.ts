@@ -20,7 +20,7 @@ interface SingleFlagResponse {
   enabled: boolean;
 }
 
-const baseUrl = 'https://backendless.bridge.cloud';
+const baseUrl = 'https://backendless.nblocks.cloud';
 const cacheValidityMs = 5 * 60 * 1000; // 5 minutes
 let cachedFlags: { [key: string]: boolean } = {};
 let lastFetchTime = 0;
