@@ -89,6 +89,32 @@ export const config = {
 
 That's it! Your app is now protected with nBlocks authentication. All routes (except those marked as `public`) are protected, and unauthenticated users will be redirected to the nBlocks login page.
 
+### Understanding defaultAccess
+
+By default, any route not specified in the `rules` array is **protected** (requires authentication). You can change this behavior with the `defaultAccess` parameter:
+
+```tsx
+// Option 1: Protect by default (default behavior)
+export default withNblocksAuth({
+  defaultAccess: 'protected', // This is the default
+  rules: [
+    { match: '/', public: true },
+    { match: '/login', public: true },
+    // All other routes require authentication
+  ]
+});
+
+// Option 2: Public by default, protect specific routes
+export default withNblocksAuth({
+  defaultAccess: 'public', // All unmatched routes are public
+  rules: [
+    { match: '/dashboard', public: false }, // Require auth for dashboard
+    { match: '/profile', public: false },    // Require auth for profile
+    // All other routes are public
+  ]
+});
+```
+
 ## Step 5: Configure Callback URL
 
 1. Go to the nBlocks Control Center:

@@ -15,7 +15,11 @@ export interface RouteRule {
 export interface WithNblocksAuthOptions {
   /** Route rules for protection */
   rules?: RouteRule[];
-  /** Default access level for unmatched routes */
+  /** 
+   * Default access level for routes not matched by any rule
+   * @default 'protected' - All unmatched routes require authentication
+   * Set to 'public' to allow access to unmatched routes without authentication
+   */
   defaultAccess?: 'public' | 'protected';
   /** Custom callback path (defaults to /nblocks/auth/oauth-callback) */
   callbackPath?: string;
@@ -50,7 +54,7 @@ export interface WithNblocksAuthOptions {
  * 3. Default values
  * 
  * @example
- * // Recommended: Using environment variables only
+ * // Basic usage: Protect all routes except specified public routes
  * // Set NEXT_PUBLIC_NBLOCKS_APP_ID in your .env.local
  * import { withNblocksAuth } from '@nebulr/nblocks-nextjs/server';
  * 
@@ -58,8 +62,29 @@ export interface WithNblocksAuthOptions {
  *   rules: [
  *     { match: '/', public: true },
  *     { match: '/login', public: true },
- *     { match: '/nblocks/auth/oauth-callback', public: true },
- *     // All other routes are protected by default
+ *     { match: '/about', public: true },
+ *     // All other routes are protected by default (defaultAccess: 'protected')
+ *   ]
+ * });
+ * 
+ * @example
+ * // Make all routes public by default, only protect specific routes
+ * export default withNblocksAuth({
+ *   defaultAccess: 'public', // All unmatched routes are public
+ *   rules: [
+ *     { match: '/dashboard', public: false },
+ *     { match: '/profile', public: false },
+ *     // All other routes are public
+ *   ]
+ * });
+ * 
+ * @example
+ * // Explicit defaultAccess: 'protected' (this is the default behavior)
+ * export default withNblocksAuth({
+ *   defaultAccess: 'protected', // All unmatched routes require authentication
+ *   rules: [
+ *     { match: '/', public: true },
+ *     { match: '/login', public: true },
  *   ]
  * });
  * 
@@ -67,6 +92,7 @@ export interface WithNblocksAuthOptions {
  * // Alternative: Passing appId directly (still supported)
  * export default withNblocksAuth({
  *   appId: 'YOUR_APP_ID',
+ *   defaultAccess: 'protected',
  *   rules: [...]
  * });
  */
