@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { NblocksConfig } from '../../shared/types/config';
+import { BridgeConfig } from '../../shared/types/config';
 import { getConfig } from '../utils/get-config';
 import { initServices } from '../utils/init-services';
 
 export interface WithAuthOptions {
   publicPaths?: string[];
-  config?: Partial<NblocksConfig>;
+  config?: Partial<BridgeConfig>;
 }
 
 export function withAuth(options: WithAuthOptions = {}) {
@@ -40,7 +40,7 @@ export function withAuth(options: WithAuthOptions = {}) {
     const isAuthenticated = await tokenService.isAuthenticatedServer(request);
     
     if (!isAuthenticated) {
-      // Redirect to nBlocks login URL using AuthService
+      // Redirect to bridge login URL using AuthService
       const currentOrigin = new URL(request.url).origin;
       const loginUrl = authService.createLoginUrl({}, currentOrigin);
       return NextResponse.redirect(loginUrl);
@@ -51,7 +51,7 @@ export function withAuth(options: WithAuthOptions = {}) {
     const accessToken = tokenService.getAccessTokenServer(cookieString);
     
     if (!accessToken) {
-      // Redirect to nBlocks login URL using AuthService
+      // Redirect to bridge login URL using AuthService
       const currentOrigin = new URL(request.url).origin;
       const loginUrl = authService.createLoginUrl({}, currentOrigin);
       return NextResponse.redirect(loginUrl);
@@ -74,7 +74,7 @@ export function withAuth(options: WithAuthOptions = {}) {
     if (refreshed) {            
       // Log the new token expiry time only if debug is enabled
       if (config.debug) {
-        const newAccessToken = response.cookies.get('nblocks_access_token')?.value;
+        const newAccessToken = response.cookies.get('bridge_access_token')?.value;
         if (newAccessToken) {
           const newExpiryTime = tokenService.getTokenExpiryTime(newAccessToken);
           if (newExpiryTime) {

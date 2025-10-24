@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getCachedFlags, isFeatureEnabled, loadFeatureFlags } from '../../shared/services/feature-flag.service';
-import { NblocksConfig } from '../../shared/types/config';
+import { BridgeConfig } from '../../shared/types/config';
 import { getConfig } from './get-config';
 import { TokenServiceServer } from './token-service.server';
 
@@ -10,7 +10,7 @@ import { TokenServiceServer } from './token-service.server';
  */
 export class FeatureFlagServer {
   private static instance: FeatureFlagServer;
-  private config: NblocksConfig | null = null;
+  private config: BridgeConfig | null = null;
   
   private constructor() {}
   
@@ -23,9 +23,9 @@ export class FeatureFlagServer {
   
   /**
    * Initialize the feature flag server with configuration
-   * @param config The nBlocks configuration object
+   * @param config The bridge configuration object
    */
-  init(config: NblocksConfig): void {
+  init(config: BridgeConfig): void {
     this.config = config;
   }
   

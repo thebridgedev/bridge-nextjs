@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TeamManagementService } from '../../shared/services/team-management.service';
 import { TokenService } from '../../shared/services/token.service';
-import { useNblocksConfig } from './use-nblocks-config';
-import { useNblocksToken } from './use-nblocks-token';
+import { useBridgeConfig } from './use-bridge-config';
+import { useBridgeToken } from './use-bridge-token';
 
 /**
- * Hook for accessing nBlocks team management functionality
+ * Hook for accessing bridge team management functionality
  * 
  * @returns Team management functions and state
  * 
  * @example
- * import { useTeamManagement } from 'nblocks-nextjs';
+ * import { useTeamManagement } from 'bridge-nextjs';
  * 
  * function MyComponent() {
  *   const { 
@@ -43,8 +43,8 @@ export const useTeamManagement = () => {
   const [error, setError] = useState<string | null>(null);
   const [hasToken, setHasToken] = useState(false);
   
-  const config = useNblocksConfig();
-  const { isAuthenticated } = useNblocksToken();
+  const config = useBridgeConfig();
+  const { isAuthenticated } = useBridgeToken();
   
   // Initialize team management service
   useEffect(() => {

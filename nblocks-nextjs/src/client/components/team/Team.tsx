@@ -35,7 +35,7 @@ export function Team({ className = '' }: TeamProps) {
       // If token is not available from the token service, try to get it from cookies
       if (!token && typeof document !== 'undefined') {
         const cookies = document.cookie.split(';');
-        const accessTokenCookie = cookies.find(cookie => cookie.trim().startsWith('nblocks_access_token='));
+        const accessTokenCookie = cookies.find(cookie => cookie.trim().startsWith('bridge_access_token='));
         
         if (accessTokenCookie) {
           setHasToken(true);

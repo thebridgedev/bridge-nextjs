@@ -1,9 +1,9 @@
 'use client';
 
 import { createContext, FC, ReactNode } from 'react';
-import { useNblocksToken } from '../hooks/use-nblocks-token';
+import { useBridgeToken } from '../hooks/use-bridge-token';
 
-interface NblocksTokenContextType {
+interface BridgeTokenContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -14,7 +14,7 @@ interface NblocksTokenContextType {
   getIdToken: () => string | null;
 }
 
-export const NblocksTokenContext = createContext<NblocksTokenContextType>({
+export const BridgeTokenContext = createContext<BridgeTokenContextType>({
   isAuthenticated: false,
   isLoading: true,
   error: null,
@@ -25,22 +25,22 @@ export const NblocksTokenContext = createContext<NblocksTokenContextType>({
   getIdToken: () => null
 });
 
-interface NblocksTokenProviderProps {
+interface BridgeTokenProviderProps {
   children: ReactNode;
 }
 
 /**
- * Provider component for nBlocks token management
+ * Provider component for bridge token management
  * 
  * @param props The provider props
  * @returns The provider component
  */
-export const NblocksTokenProvider: FC<NblocksTokenProviderProps> = ({ children }) => {
-  const tokenContext = useNblocksToken();
+export const BridgeTokenProvider: FC<BridgeTokenProviderProps> = ({ children }) => {
+  const tokenContext = useBridgeToken();
   
   return (
-    <NblocksTokenContext.Provider value={tokenContext}>
+    <BridgeTokenContext.Provider value={tokenContext}>
       {children}
-    </NblocksTokenContext.Provider>
+    </BridgeTokenContext.Provider>
   );
 }; 

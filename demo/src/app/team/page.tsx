@@ -1,6 +1,6 @@
 'use client';
 
-import { Team } from '@nebulr-group/nblocks-nextjs/client';
+import { Team } from '@nebulr-group/bridge-nextjs/client';
 
 export default function TeamPage() {
   return (
@@ -10,7 +10,7 @@ export default function TeamPage() {
       padding: '2rem' 
     }}>
       <h1>Team Management</h1>
-      <p>This page demonstrates the Team component from nblocks-nextjs.</p>
+      <p>This page demonstrates the Team component from bridge-nextjs.</p>
       
       <div style={{ 
         marginTop: '2rem',

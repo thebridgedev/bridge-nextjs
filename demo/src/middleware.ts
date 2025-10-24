@@ -1,7 +1,7 @@
-import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
+import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
 
 // Export the middleware function using the new simplified approach
-export default withNblocksAuth({
+export default withBridgeAuth({
   rules: [
     { match: '/', public: true },
     { match: '/login', public: true },

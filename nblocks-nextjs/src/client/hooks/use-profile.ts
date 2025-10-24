@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Profile, ProfileService } from '../../shared/services/profile.service';
-import { useNblocksConfig } from './use-nblocks-config';
-import { useNblocksToken } from './use-nblocks-token';
+import { useBridgeConfig } from './use-bridge-config';
+import { useBridgeToken } from './use-bridge-token';
 
 /**
  * Hook for profile functionality
@@ -11,7 +11,7 @@ import { useNblocksToken } from './use-nblocks-token';
  * @returns Profile data and functions
  * 
  * @example
- * import { useProfile } from 'nblocks-nextjs';
+ * import { useProfile } from 'bridge-nextjs';
  * 
  * function MyComponent() {
  *   const { 
@@ -37,8 +37,8 @@ export function useProfile() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
-  const config = useNblocksConfig();
-  const { isAuthenticated } = useNblocksToken();
+  const config = useBridgeConfig();
+  const { isAuthenticated } = useBridgeToken();
   
   // Initialize profile service
   useEffect(() => {

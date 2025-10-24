@@ -1,7 +1,7 @@
 'use client';
 
 import { FC, useEffect, useState } from 'react';
-import { useNblocksToken } from '../../../client/hooks/use-nblocks-token';
+import { useBridgeToken } from '../../../client/hooks/use-bridge-token';
 import { TokenService } from '../../../shared/services/token.service';
 
 export interface TokenStatusProps {
@@ -19,7 +19,7 @@ export interface TokenStatusProps {
  * 
  * @example
  * // In your component
- * import { TokenStatus } from 'nblocks-nextjs';
+ * import { TokenStatus } from 'bridge-nextjs';
  * 
  * function MyComponent() {
  *   return (
@@ -31,7 +31,7 @@ export interface TokenStatusProps {
  * }
  */
 export const TokenStatus: FC<TokenStatusProps> = ({ className }) => {
-  const { isAuthenticated, isLoading, getAccessToken, getRefreshToken, getIdToken } = useNblocksToken();
+  const { isAuthenticated, isLoading, getAccessToken, getRefreshToken, getIdToken } = useBridgeToken();
   const tokenService = TokenService.getInstance();
   const [hasToken, setHasToken] = useState<boolean>(false);
   const [tokenExpiresIn, setTokenExpiresIn] = useState<number | null>(null);
@@ -123,9 +123,9 @@ export const TokenStatus: FC<TokenStatusProps> = ({ className }) => {
   };
 
   return (
-    <div className={`nblocks-token-status ${className || ''}`}>
+    <div className={`bridge-token-status ${className || ''}`}>
       <h3>Token Status</h3>
-      <div className="nblocks-token-status-content">
+      <div className="bridge-token-status-content">
         <p>
           <strong>Token expires in:</strong> {formatExpiryTime(tokenExpiresIn)}
         </p>
@@ -134,13 +134,13 @@ export const TokenStatus: FC<TokenStatusProps> = ({ className }) => {
         </p>
         <p>
           <strong>Status:</strong>{' '}
-          <span className={`nblocks-renewal-status ${isRenewing ? 'nblocks-renewing' : ''}`}>
+          <span className={`bridge-renewal-status ${isRenewing ? 'bridge-renewing' : ''}`}>
             {isRenewing ? 'Renewing...' : 'Idle'}
           </span>
         </p>
         {hasToken && (
           <button
-            className="nblocks-refresh-button"
+            className="bridge-refresh-button"
             onClick={refreshToken}
             disabled={isRenewing}
           >

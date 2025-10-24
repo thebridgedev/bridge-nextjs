@@ -1,7 +1,7 @@
 import { jwtDecode } from 'jwt-decode';
 import { NextResponse } from 'next/server';
 import { AuthService } from '../../shared/services/auth.service';
-import { NblocksConfig } from '../../shared/types/config';
+import { BridgeConfig } from '../../shared/types/config';
 
 export interface TokenSet {
   accessToken: string;
@@ -12,7 +12,7 @@ export interface TokenSet {
 // Server-side token service class
 export class TokenServiceServer {
   private static instance: TokenServiceServer;
-  private config: NblocksConfig | null = null;
+  private config: BridgeConfig | null = null;
   private readonly REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   private constructor() {}
@@ -33,7 +33,7 @@ export class TokenServiceServer {
     };
     
     // Access token - 24 hours expiry, accessible to JavaScript
-    response.cookies.set('nblocks_access_token', tokens.accessToken, {
+    response.cookies.set('bridge_access_token', tokens.accessToken, {
       ...commonSettings,
       maxAge: 24 * 60 * 60, // 24 hours
       httpOnly: false, // Make it accessible to JavaScript
@@ -41,7 +41,7 @@ export class TokenServiceServer {
     
     // Refresh token - 30 days expiry, not accessible to JavaScript
     if (tokens.refreshToken) {
-      response.cookies.set('nblocks_refresh_token', tokens.refreshToken, {
+      response.cookies.set('bridge_refresh_token', tokens.refreshToken, {
         ...commonSettings,
         maxAge: 30 * 24 * 60 * 60, // 30 days
         httpOnly: true, // Not accessible to JavaScript
@@ -50,7 +50,7 @@ export class TokenServiceServer {
     
     // ID token - 24 hours expiry, accessible to JavaScript
     if (tokens.idToken) {
-      response.cookies.set('nblocks_id_token', tokens.idToken, {
+      response.cookies.set('bridge_id_token', tokens.idToken, {
         ...commonSettings,
         maxAge: 24 * 60 * 60, // 24 hours
         httpOnly: false, // Make it accessible to JavaScript
@@ -59,9 +59,9 @@ export class TokenServiceServer {
   }
   
   clearTokensServer(response: NextResponse): void {
-    response.cookies.delete('nblocks_access_token');
-    response.cookies.delete('nblocks_refresh_token');
-    response.cookies.delete('nblocks_id_token');
+    response.cookies.delete('bridge_access_token');
+    response.cookies.delete('bridge_refresh_token');
+    response.cookies.delete('bridge_id_token');
   }
   
   async isAuthenticatedServer(request: Request): Promise<boolean> {
@@ -86,7 +86,7 @@ export class TokenServiceServer {
       return acc;
     }, {} as Record<string, string>);
     
-    return cookies['nblocks_access_token'] || null;
+    return cookies['bridge_access_token'] || null;
   }
   
   getRefreshTokenServer(cookieString: string): string | null {
@@ -96,7 +96,7 @@ export class TokenServiceServer {
       return acc;
     }, {} as Record<string, string>);
     
-    return cookies['nblocks_refresh_token'] || null;
+    return cookies['bridge_refresh_token'] || null;
   }
   
   getIdTokenServer(cookieString: string): string | null {
@@ -106,7 +106,7 @@ export class TokenServiceServer {
       return acc;
     }, {} as Record<string, string>);
     
-    return cookies['nblocks_id_token'] || null;
+    return cookies['bridge_id_token'] || null;
   }
   
   async isAccessTokenExpired(request?: Request): Promise<boolean> {
@@ -133,7 +133,7 @@ export class TokenServiceServer {
     }
   }
   
-  init(config: NblocksConfig): void {
+  init(config: BridgeConfig): void {
     this.config = config;
   }
   

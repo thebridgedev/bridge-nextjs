@@ -2,8 +2,8 @@
 
 import { createContext, FC, ReactNode, useContext, useEffect, useState } from 'react';
 import { getCachedFlags, loadFeatureFlags } from '../../shared/services/feature-flag.service';
-import { useNblocksConfig } from '../hooks/use-nblocks-config';
-import { useNblocksToken } from '../hooks/use-nblocks-token';
+import { useBridgeConfig } from '../hooks/use-bridge-config';
+import { useBridgeToken } from '../hooks/use-bridge-token';
 
 interface FeatureFlagsContextProps {
   flags: { [key: string]: boolean };
@@ -18,8 +18,8 @@ interface FeatureFlagsProviderProps {
 
 export const FeatureFlagsProvider: FC<FeatureFlagsProviderProps> = ({ children }) => {
   const [flags, setFlags] = useState<{ [key: string]: boolean }>({});
-  const config = useNblocksConfig();
-  const { getAccessToken, isAuthenticated, isLoading } = useNblocksToken();
+  const config = useBridgeConfig();
+  const { getAccessToken, isAuthenticated, isLoading } = useBridgeToken();
 
   useEffect(() => {
     const fetchFlags = async () => {

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { TokenServiceServer } from '../../server/utils/token-service.server';
-import { NblocksConfig } from '../types/config';
+import { BridgeConfig } from '../types/config';
 import { TokenService, TokenSet } from './token.service';
 
 export class AuthService {
   private static instance: AuthService;
   private tokenService: TokenService;
   private tokenServerService: TokenServiceServer;
-  private config: NblocksConfig | null = null;
+  private config: BridgeConfig | null = null;
   private initialized: boolean = false;
   
   private constructor() {
@@ -25,13 +25,13 @@ export class AuthService {
   /**
    * Initialize the service with the required configuration
    */
-  init(config: NblocksConfig): void {
+  init(config: BridgeConfig): void {
     this.config = config;
     this.initialized = true;
   }
   
   /**
-   * Creates the nBlocks login URL
+   * Creates the bridge login URL
    * @param options Optional redirect URI
    * @param currentOrigin Optional current origin (for server-side usage)
    * @returns The complete login URL
@@ -47,7 +47,7 @@ export class AuthService {
       `${origin}/auth/oauth-callback`;
     
     const authBaseUrl = this.config.authBaseUrl;
-    return `${authBaseUrl}/url/login/${this.config.appId}?cv_env=nblocks&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    return `${authBaseUrl}/url/login/${this.config.appId}?cv_env=bridge&redirect_uri=${encodeURIComponent(redirectUri)}`;
   }
   
   // Client-side methods
@@ -176,7 +176,7 @@ export class AuthService {
     }
     
     try {
-      const authBaseUrl = this.config.authBaseUrl || 'https://auth.nblocks.cloud';
+      const authBaseUrl = this.config.authBaseUrl || 'https://auth.bridge.cloud';
       const url = `${authBaseUrl}/token`;
       
       // Log the start time of the refresh

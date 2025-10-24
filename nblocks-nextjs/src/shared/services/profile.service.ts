@@ -1,6 +1,6 @@
 import * as jose from 'jose';
 import { create } from 'zustand';
-import { NblocksConfig } from '../types/config';
+import { BridgeConfig } from '../types/config';
 import { useTokenStore } from './token.service';
 
 export interface IDToken {
@@ -64,7 +64,7 @@ export class ProfileService {
   private jwksClient: ReturnType<typeof jose.createRemoteJWKSet> | null = null;
   private expectedIssuer: string | null = null;
   private expectedAudience: string | null = null;
-  private config: NblocksConfig | null = null;
+  private config: BridgeConfig | null = null;
   private isInitialized = false;
 
   private constructor() {
@@ -81,7 +81,7 @@ export class ProfileService {
   /**
    * Initialize the service with the required configuration
    */
-  public init(config: NblocksConfig): void {
+  public init(config: BridgeConfig): void {
     if (this.isInitialized) return;
 
     try {
@@ -93,7 +93,7 @@ export class ProfileService {
       this.config = config;
       
       // Use default authBaseUrl if not provided
-      this.expectedIssuer = config.authBaseUrl || 'https://auth.nblocks.cloud';
+      this.expectedIssuer = config.authBaseUrl || 'https://auth.bridge.cloud';
       
       if (!config.appId) {
         console.error('ProfileService - No appId in config');

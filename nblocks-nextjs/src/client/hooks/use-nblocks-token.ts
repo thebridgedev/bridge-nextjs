@@ -3,22 +3,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AuthService } from '../../shared/services/auth.service';
 import { TokenService } from '../../shared/services/token.service';
-import { useNblocksConfig } from './use-nblocks-config';
+import { useBridgeConfig } from './use-bridge-config';
 
 // Initialize services outside component
 const tokenService = TokenService.getInstance();
 const authService = AuthService.getInstance();
 
 /**
- * Hook for accessing nBlocks token functionality
+ * Hook for accessing bridge token functionality
  * 
  * @returns Token context values and functions
  * 
  * @example
- * import { useNblocksToken } from 'nblocks-nextjs';
+ * import { useBridgeToken } from 'bridge-nextjs';
  * 
  * function MyComponent() {
- *   const { isAuthenticated, login, logout } = useNblocksToken();
+ *   const { isAuthenticated, login, logout } = useBridgeToken();
  *   
  *   return (
  *     <div>
@@ -31,11 +31,11 @@ const authService = AuthService.getInstance();
  *   );
  * }
  */
-export const useNblocksToken = () => {
+export const useBridgeToken = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const config = useNblocksConfig();
+  const config = useBridgeConfig();
   
   // Initialize token service
   useEffect(() => {

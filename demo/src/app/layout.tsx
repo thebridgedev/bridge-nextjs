@@ -1,4 +1,4 @@
-import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
+import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from '../components/Navbar';
@@ -7,8 +7,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "nBlocks Next.js Demo",
-  description: "Demo application for nBlocks Next.js integration",
+  title: "bridge Next.js Demo",
+  description: "Demo application for bridge Next.js integration",
 };
 
 export default function RootLayout({
@@ -19,11 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* NblocksProvider automatically reads from NEXT_PUBLIC_NBLOCKS_APP_ID env var */}
-        <NblocksProvider>
+        {/* BridgeProvider automatically reads from NEXT_PUBLIC_BRIDGE_APP_ID env var */}
+        <BridgeProvider>
           <Navbar />
           <main>{children}</main>
-        </NblocksProvider>
+        </BridgeProvider>
       </body>
     </html>
   );

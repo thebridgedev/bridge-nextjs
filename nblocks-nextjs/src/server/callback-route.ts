@@ -15,17 +15,17 @@ export interface CallbackRouteOptions {
  * 
  * @example
  * // In your app/auth/callback/route.ts
- * import { createCallbackRoute } from 'nblocks-nextjs/server';
+ * import { createCallbackRoute } from 'bridge-nextjs/server';
  * 
  * export const GET = createCallbackRoute({
  *   redirectPath: '/dashboard', // Optional: redirect to a different path after login
  *   errorRedirectPath: '/login?error=auth_failed' // Optional: custom error redirect
  * });
  */
-export function createNblocksCallbackRoute(options: CallbackRouteOptions = {}) {
+export function createBridgeCallbackRoute(options: CallbackRouteOptions = {}) {
   return async function GET(request: NextRequest) {
     try {
-      console.log('🔑 createNblocksCallbackRoute: Starting callback route');
+      console.log('🔑 createBridgeCallbackRoute: Starting callback route');
       const searchParams = request.nextUrl.searchParams;
       const code = searchParams.get('code');
       

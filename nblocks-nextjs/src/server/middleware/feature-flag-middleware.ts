@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { NblocksConfig } from '../../shared/types/config';
+import { BridgeConfig } from '../../shared/types/config';
 import { FeatureFlagServer } from '../utils/feature-flag.server';
 import { getConfig } from '../utils/get-config';
 
@@ -7,14 +7,14 @@ export interface FeatureFlagProtection {
   flag: string;
   paths: string[];
   redirectTo?: string;
-  config?: Partial<NblocksConfig>;
+  config?: Partial<BridgeConfig>;
   responseType?: 'redirect' | 'error';
   errorStatus?: number;
   errorMessage?: string;
 }
 
 export interface WithFeatureFlagOptions {
-  config?: Partial<NblocksConfig> & {
+  config?: Partial<BridgeConfig> & {
     redirectRoute?: string;
   };
   fallbackPaths?: string[];
@@ -78,7 +78,7 @@ export function withFeatureFlags(protections: FeatureFlagProtection[]) {
 
     // Initialize feature flag server with protection-specific config if provided
     if (matchingProtection.config) {
-      const mergedConfig: NblocksConfig = {
+      const mergedConfig: BridgeConfig = {
         ...defaultConfig,
         ...matchingProtection.config,
         appId: matchingProtection.config.appId || defaultConfig.appId || '',
@@ -151,7 +151,7 @@ export function requireApiFeatureFlag(
   options: { 
     errorStatus?: number;
     errorMessage?: string;
-    config?: Partial<NblocksConfig>;
+    config?: Partial<BridgeConfig>;
   } = {}
 ) {
   return withFeatureFlag(flagName, {

@@ -1,27 +1,27 @@
-# nBlocks Next.js Quickstart Guide
+# bridge Next.js Quickstart Guide
 
 ## Step 1: Installation
-Install the nblocks nextjs plugin
+Install the bridge nextjs plugin
 
 ```bash
-npm install @nebulr-group/nblocks-nextjs
+npm install @nebulr-group/bridge-nextjs
 ```
 
 ## Step 2: Configure Environment Variables
-Create a `.env.local` file in your project root and add your nBlocks app ID:
+Create a `.env.local` file in your project root and add your bridge app ID:
 
 ```env
-NEXT_PUBLIC_NBLOCKS_APP_ID=your-app-id-here
+NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 ```
 
-> **Note:** You can find your app ID in the nBlocks Control Center by navigating to 'Keys' section.
+> **Note:** You can find your app ID in the bridge Control Center by navigating to 'Keys' section.
 
 ## Step 3: Add Client Provider
-Add the NblocksProvider to your app layout. It will automatically read configuration from your environment variables:
+Add the BridgeProvider to your app layout. It will automatically read configuration from your environment variables:
 
 ```tsx
 // app/layout.tsx
-import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
+import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
 
 export default function RootLayout({
   children,
@@ -31,9 +31,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <NblocksProvider>
+        <BridgeProvider>
           {children}
-        </NblocksProvider>
+        </BridgeProvider>
       </body>
     </html>
   );
@@ -46,9 +46,9 @@ Create a `middleware.ts` file in your `src` directory to protect your routes:
 
 ```tsx
 // src/middleware.ts
-import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
+import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
 
-export default withNblocksAuth({
+export default withBridgeAuth({
   rules:[
     { match: '/auth/oauth-callback', public: true },
   ]
@@ -71,6 +71,6 @@ export const config = {
 
 ## That's it!
 
-You have now set up a complete authentication flow with nBlocks in your Next.js application!
+You have now set up a complete authentication flow with bridge in your Next.js application!
 
-There is a lot more the nblocks-nextjs plugin can do. See [examples](examples.md) for advanced configuration, feature flags, and more.
+There is a lot more the bridge-nextjs plugin can do. See [examples](examples.md) for advanced configuration, feature flags, and more.

@@ -1,4 +1,4 @@
-# nBlocks Next.js Examples
+# bridge Next.js Examples
 
 ## Table of Contents
 - [Authentication](#authentication)
@@ -32,7 +32,7 @@ The simplest way to add login functionality to your app is to use the `useAuth` 
 // app/components/LoginButton.tsx
 'use client';
 
-import { useAuth } from '@nebulr-group/nblocks-nextjs/client';
+import { useAuth } from '@nebulr-group/bridge-nextjs/client';
 
 export default function LoginButton() {
   const { login, logout, isAuthenticated } = useAuth();
@@ -55,17 +55,17 @@ export default function LoginButton() {
 
 ### Route Protection
 
-nBlocks provides several ways to protect routes in your Next.js application:
+bridge provides several ways to protect routes in your Next.js application:
 
 #### Middleware Protection (Recommended)
 
-The most comprehensive way to protect routes is using the `withNblocksAuth` middleware:
+The most comprehensive way to protect routes is using the `withBridgeAuth` middleware:
 
 ```tsx
 // middleware.ts
-import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
+import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
 
-export default withNblocksAuth({
+export default withBridgeAuth({
   rules: [
     { match: '/', public: true },
     { match: '/login', public: true },
@@ -95,7 +95,7 @@ For more granular control, you can use the `ProtectedRoute` component:
 
 ```tsx
 // app/dashboard/page.tsx
-import { ProtectedRoute } from '@nebulr/nblocks-nextjs';
+import { ProtectedRoute } from '@nebulr/bridge-nextjs';
 
 export default function DashboardPage() {
   return (
@@ -115,7 +115,7 @@ For server components, you can use the `ServerAuthCheck` component:
 
 ```tsx
 // app/dashboard/page.tsx
-import { ServerAuthCheck } from '@nebulr/nblocks-nextjs/server';
+import { ServerAuthCheck } from '@nebulr/bridge-nextjs/server';
 
 export default function DashboardPage() {
   return (
@@ -137,7 +137,7 @@ By default, any route not specified in the `rules` array is **protected** (requi
 
 ```tsx
 // Option 1: Protect by default (default behavior)
-export default withNblocksAuth({
+export default withBridgeAuth({
   defaultAccess: 'protected', // This is the default
   rules: [
     { match: '/', public: true },
@@ -147,7 +147,7 @@ export default withNblocksAuth({
 });
 
 // Option 2: Public by default, protect specific routes
-export default withNblocksAuth({
+export default withBridgeAuth({
   defaultAccess: 'public', // All unmatched routes are public
   rules: [
     { match: '/dashboard', public: false }, // Require auth for dashboard
@@ -162,7 +162,7 @@ export default withNblocksAuth({
 You can use regex patterns for more flexible route matching:
 
 ```tsx
-export default withNblocksAuth({
+export default withBridgeAuth({
   rules: [
     { match: new RegExp('^/public'), public: true },  // All /public/* routes
     { match: new RegExp('^/api/public'), public: true }, // All public API routes
@@ -173,26 +173,26 @@ export default withNblocksAuth({
 
 ### Configuring OAuth Callback URL
 
-After setting up your middleware, you need to configure the OAuth callback URL in the nBlocks Control Center:
+After setting up your middleware, you need to configure the OAuth callback URL in the bridge Control Center:
 
-1. Go to the [nBlocks Control Center](https://admin.nblocks.cloud)
+1. Go to the [bridge Control Center](https://admin.bridge.cloud)
 2. Navigate to: **Authentication → Authentication → Security**
 3. Set the callback URL to match your application:
    - **Production**: `https://your-app.com/auth/oauth-callback`
    - **Local Development**: `http://localhost:3000/auth/oauth-callback`
 
-The callback route is automatically handled by the `withNblocksAuth` middleware - no additional setup needed!
+The callback route is automatically handled by the `withBridgeAuth` middleware - no additional setup needed!
 
 > **Note**: Make sure to include the `/auth/oauth-callback` route as public in your middleware rules, or it will be protected and authentication won't work.
 
 ### Renewing User Tokens
 
-nBlocks automatically handles token renewal for you. The token service will refresh tokens before they expire to ensure a seamless user experience.
+bridge automatically handles token renewal for you. The token service will refresh tokens before they expire to ensure a seamless user experience.
 
 ```tsx
 // The token service handles renewal automatically
 // You can monitor token status with the useAuth hook
-import { useAuth } from '@nebulr/nblocks-nextjs';
+import { useAuth } from '@nebulr/bridge-nextjs';
 
 function TokenStatus() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -212,7 +212,7 @@ function TokenStatus() {
 You can use the `useAuth` hook to check if a user is currently logged in:
 
 ```tsx
-import { useAuth } from '@nebulr/nblocks-nextjs';
+import { useAuth } from '@nebulr/bridge-nextjs';
 
 function AuthStatus() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -236,7 +236,7 @@ function AuthStatus() {
 Access the current user's profile information using the `useAuth` hook:
 
 ```tsx
-import { useAuth } from '@nebulr/nblocks-nextjs';
+import { useAuth } from '@nebulr/bridge-nextjs';
 
 function UserProfile() {
   const { user, isLoading } = useAuth();
@@ -260,7 +260,7 @@ function UserProfile() {
 
 ### Bulk Fetching vs Live
 
-nBlocks provides two ways to work with feature flags:
+bridge provides two ways to work with feature flags:
 
 1. **Bulk Fetching (Recommended)**: Get all feature flags at once and use them throughout your application. This approach uses a 5-minute cache to improve performance.
 2. **Live Updates**: Check feature flags individually with real-time updates, bypassing the cache.
@@ -269,7 +269,7 @@ The recommended approach is to use bulk fetching with caching for better perform
 
 ```tsx
 // Bulk fetching example - RECOMMENDED APPROACH
-import { useFeatureFlagsContext } from '@nebulr/nblocks-nextjs';
+import { useFeatureFlagsContext } from '@nebulr/bridge-nextjs';
 
 function FeatureFlagsPanel() {
   const { flags, refreshFlags } = useFeatureFlagsContext();
@@ -293,7 +293,7 @@ When using the `FeatureFlag` component without the `forceLive` prop, it will use
 
 ```tsx
 // Using cached feature flags (recommended for better performance)
-import { FeatureFlag } from '@nebulr/nblocks-nextjs';
+import { FeatureFlag } from '@nebulr/bridge-nextjs';
 
 function CachedFeatureExample() {
   return (
@@ -317,7 +317,7 @@ For cases where you need real-time updates, you can use the `forceLive` prop:
 
 ```tsx
 // Live feature flag example (bypasses cache)
-import { FeatureFlag } from '@nebulr/nblocks-nextjs';
+import { FeatureFlag } from '@nebulr/bridge-nextjs';
 
 function LiveFeatureExample() {
   return (
@@ -342,7 +342,7 @@ function LiveFeatureExample() {
 Use the `FeatureFlag` component with the `negate` prop to show content when a flag is disabled:
 
 ```tsx
-import { FeatureFlag } from '@nebulr/nblocks-nextjs';
+import { FeatureFlag } from '@nebulr/bridge-nextjs';
 
 function ConditionalContent() {
   return (
@@ -362,7 +362,7 @@ function ConditionalContent() {
 You can also use the `fallback` prop to provide alternative content:
 
 ```tsx
-import { FeatureFlag } from '@nebulr/nblocks-nextjs';
+import { FeatureFlag } from '@nebulr/bridge-nextjs';
 
 function FeatureWithFallback() {
   return (
@@ -382,7 +382,7 @@ Protect entire routes with feature flags using middleware:
 
 ```tsx
 // middleware.ts
-import { withFeatureFlags } from '@nebulr/nblocks-nextjs/server';
+import { withFeatureFlags } from '@nebulr/bridge-nextjs/server';
 import { NextRequest } from 'next/server';
 
 // Define feature flag protections
@@ -422,7 +422,7 @@ Use feature flags in server-side code, including API routes:
 ```tsx
 // app/api/premium/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { isFeatureEnabledServer } from '@nebulr/nblocks-nextjs/server';
+import { isFeatureEnabledServer } from '@nebulr/bridge-nextjs/server';
 
 export async function GET(request: NextRequest) {
   // Get the access token from the request
@@ -457,7 +457,7 @@ You can customize error handling for feature flag checks:
 ```tsx
 // app/api/feature/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { isFeatureEnabledServer } from '@nebulr/nblocks-nextjs/server';
+import { isFeatureEnabledServer } from '@nebulr/bridge-nextjs/server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -499,7 +499,7 @@ For feature flags in server components:
 
 ```tsx
 // app/premium/page.tsx
-import { ServerFeatureFlag } from '@nebulr/nblocks-nextjs/server';
+import { ServerFeatureFlag } from '@nebulr/bridge-nextjs/server';
 
 export default function PremiumPage() {
   return (
@@ -523,14 +523,14 @@ export default function PremiumPage() {
 Access configuration values in your application:
 
 ```tsx
-import { useNblocksConfig } from '@nebulr/nblocks-nextjs';
+import { useBridgeConfig } from '@nebulr/bridge-nextjs';
 
 function ConfigDisplay() {
-  const config = useNblocksConfig();
+  const config = useBridgeConfig();
   
   return (
     <div>
-      <h2>nBlocks Configuration</h2>
+      <h2>bridge Configuration</h2>
       <p>App ID: {config.appId}</p>
       <p>Auth Base URL: {config.authBaseUrl}</p>
       <p>Callback URL: {config.callbackUrl}</p>
@@ -541,13 +541,13 @@ function ConfigDisplay() {
 
 ### Environment Variables
 
-nBlocks configuration is primarily set through environment variables in your `.env.local` file. 
+bridge configuration is primarily set through environment variables in your `.env.local` file. 
 
 #### Required Configuration
 
 | Variable Name | Description |
 |---------------|-------------|
-| `NEXT_PUBLIC_NBLOCKS_APP_ID` | Your nBlocks application ID (get this from the Control Center → Keys) |
+| `NEXT_PUBLIC_BRIDGE_APP_ID` | Your bridge application ID (get this from the Control Center → Keys) |
 
 #### Optional Configuration
 
@@ -555,43 +555,43 @@ All these settings have sensible defaults and are optional:
 
 | Variable Name | Description | Default Value |
 |---------------|-------------|---------------|
-| `NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL` | Base URL for nBlocks auth services | `https://auth.nblocks.cloud` |
-| `NEXT_PUBLIC_NBLOCKS_CALLBACK_URL` | Custom OAuth callback URL | Auto-determined from origin |
-| `NEXT_PUBLIC_NBLOCKS_DEFAULT_REDIRECT_ROUTE` | Route to redirect to after login | `/` |
-| `NEXT_PUBLIC_NBLOCKS_LOGIN_ROUTE` | Route for login page | `/login` |
-| `NEXT_PUBLIC_NBLOCKS_TEAM_MANAGEMENT_URL` | URL for team management portal | nBlocks default portal |
-| `NEXT_PUBLIC_NBLOCKS_DEBUG` | Enable debug logging | `false` |
+| `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL` | Base URL for bridge auth services | `https://auth.bridge.cloud` |
+| `NEXT_PUBLIC_BRIDGE_CALLBACK_URL` | Custom OAuth callback URL | Auto-determined from origin |
+| `NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE` | Route to redirect to after login | `/` |
+| `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` | Route for login page | `/login` |
+| `NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL` | URL for team management portal | bridge default portal |
+| `NEXT_PUBLIC_BRIDGE_DEBUG` | Enable debug logging | `false` |
 
 #### Example Configuration Files
 
 **Minimal `.env.local` (recommended):**
 ```env
 # Only the app ID is required - everything else uses defaults
-NEXT_PUBLIC_NBLOCKS_APP_ID=your-app-id-here
+NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 ```
 
 **Full `.env.local` (with all optional settings):**
 ```env
 # Required
-NEXT_PUBLIC_NBLOCKS_APP_ID=your-app-id-here
+NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 
 # Optional: Custom auth base URL
-NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL=https://auth.nblocks.cloud
+NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=https://auth.bridge.cloud
 
 # Optional: Custom callback URL
-NEXT_PUBLIC_NBLOCKS_CALLBACK_URL=/auth/oauth-callback
+NEXT_PUBLIC_BRIDGE_CALLBACK_URL=/auth/oauth-callback
 
 # Optional: Default redirect route after login
-NEXT_PUBLIC_NBLOCKS_DEFAULT_REDIRECT_ROUTE=/dashboard
+NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/dashboard
 
 # Optional: Login route for unauthenticated users
-NEXT_PUBLIC_NBLOCKS_LOGIN_ROUTE=/auth/login
+NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login
 
 # Optional: Team management portal URL
-NEXT_PUBLIC_NBLOCKS_TEAM_MANAGEMENT_URL=https://backendless.nblocks.cloud/user-management-portal/users
+NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL=https://backendless.bridge.cloud/user-management-portal/users
 
 # Optional: Enable debug mode for detailed logging
-NEXT_PUBLIC_NBLOCKS_DEBUG=true
+NEXT_PUBLIC_BRIDGE_DEBUG=true
 ```
 
 > **Configuration Priority**: Environment variables take highest priority, followed by props passed to the provider, then default values.
@@ -604,15 +604,15 @@ You can also provide configuration directly through props (though environment va
 
 ```tsx
 // app/layout.tsx
-import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
+import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <NblocksProvider appId={process.env.NEXT_PUBLIC_NBLOCKS_APP_ID!}>
+        <BridgeProvider appId={process.env.NEXT_PUBLIC_BRIDGE_APP_ID!}>
           {children}
-        </NblocksProvider>
+        </BridgeProvider>
       </body>
     </html>
   );
@@ -623,13 +623,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ```tsx
 // app/layout.tsx
-import { NblocksProvider } from '@nebulr-group/nblocks-nextjs/client';
+import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <NblocksProvider
+        <BridgeProvider
           config={{
             appId: 'your-app-id',
             callbackUrl: '/custom-callback',
@@ -639,7 +639,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         >
           {children}
-        </NblocksProvider>
+        </BridgeProvider>
       </body>
     </html>
   );
@@ -652,10 +652,10 @@ Similarly, you can pass configuration to the middleware:
 
 ```tsx
 // middleware.ts
-import { withNblocksAuth } from '@nebulr-group/nblocks-nextjs/server';
+import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
 
-export default withNblocksAuth({
-  appId: 'your-app-id', // Optional - reads from NEXT_PUBLIC_NBLOCKS_APP_ID by default
+export default withBridgeAuth({
+  appId: 'your-app-id', // Optional - reads from NEXT_PUBLIC_BRIDGE_APP_ID by default
   debug: true,          // Optional - enable debug logging
   rules: [
     { match: '/', public: true },

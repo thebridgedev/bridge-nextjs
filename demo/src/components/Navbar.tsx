@@ -1,6 +1,6 @@
 'use client';
 
-import { Login, useAuth, useProfile } from '@nebulr-group/nblocks-nextjs/client';
+import { Login, useAuth, useProfile } from '@nebulr-group/bridge-nextjs/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import '../app/globals.css';
@@ -22,7 +22,7 @@ export default function Navbar() {
     <nav className="nav-menu">
       <div className="nav-container">
         <Link href="/" className="nav-brand">
-          nBlocks Demo
+          bridge Demo
         </Link>
         
         {isLoading ? (

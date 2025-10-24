@@ -1,61 +1,61 @@
 'use client';
 
 import { FC, ReactNode } from 'react';
-import { NblocksConfig } from '../../shared/types/config';
+import { BridgeConfig } from '../../shared/types/config';
 import { FeatureFlagsProvider } from './feature-flags.provider';
-import { NblocksConfigProvider } from './nblocks-config.provider';
-import { NblocksTokenProvider } from './nblocks-token.provider';
+import { BridgeConfigProvider } from './bridge-config.provider';
+import { BridgeTokenProvider } from './bridge-token.provider';
 
-interface NblocksProviderProps {
-  /** Your nBlocks application ID - can be provided directly or via config */
+interface BridgeProviderProps {
+  /** Your bridge application ID - can be provided directly or via config */
   appId?: string;
-  /** Full nBlocks configuration object */
-  config?: NblocksConfig;
+  /** Full bridge configuration object */
+  config?: BridgeConfig;
   children: ReactNode;
 }
 
 /**
- * Main provider for nBlocks functionality
- * This provider wraps all nBlocks related providers
+ * Main provider for bridge functionality
+ * This provider wraps all bridge related providers
  * 
  * Configuration priority (highest to lowest):
- * 1. Environment variables (NEXT_PUBLIC_NBLOCKS_APP_ID, etc.)
+ * 1. Environment variables (NEXT_PUBLIC_BRIDGE_APP_ID, etc.)
  * 2. Props passed to this provider
  * 3. Default values
  * 
  * @example
  * // Recommended: Using environment variables
- * // Set NEXT_PUBLIC_NBLOCKS_APP_ID in your .env.local
- * import { NblocksProvider } from 'nblocks-nextjs';
+ * // Set NEXT_PUBLIC_BRIDGE_APP_ID in your .env.local
+ * import { BridgeProvider } from 'bridge-nextjs';
  * 
- * <NblocksProvider>
+ * <BridgeProvider>
  *   <App />
- * </NblocksProvider>
+ * </BridgeProvider>
  * 
  * @example
  * // Alternative: Using appId prop
- * <NblocksProvider appId="your-app-id">
+ * <BridgeProvider appId="your-app-id">
  *   <App />
- * </NblocksProvider>
+ * </BridgeProvider>
  * 
  * @example
  * // Advanced: Using full config object
- * <NblocksProvider config={{ appId: 'your-app-id', debug: true }}>
+ * <BridgeProvider config={{ appId: 'your-app-id', debug: true }}>
  *   <App />
- * </NblocksProvider>
+ * </BridgeProvider>
  */
-export const NblocksProvider: FC<NblocksProviderProps> = ({ appId, config, children }) => {
+export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, children }) => {
   // Merge appId prop with config if both are provided
-  // The actual validation and env var reading happens in NblocksConfigProvider
+  // The actual validation and env var reading happens in BridgeConfigProvider
   const mergedConfig = appId ? { ...config, appId } : config;
   
   return (
-    <NblocksConfigProvider config={mergedConfig}>
-      <NblocksTokenProvider>
+    <BridgeConfigProvider config={mergedConfig}>
+      <BridgeTokenProvider>
         <FeatureFlagsProvider>
           {children}
         </FeatureFlagsProvider>
-      </NblocksTokenProvider>
-    </NblocksConfigProvider>
+      </BridgeTokenProvider>
+    </BridgeConfigProvider>
   );
 }; 

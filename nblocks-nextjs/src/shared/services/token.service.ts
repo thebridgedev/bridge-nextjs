@@ -1,6 +1,6 @@
 import { jwtDecode } from 'jwt-decode';
 import { create } from 'zustand';
-import { NblocksConfig } from '../types/config';
+import { BridgeConfig } from '../types/config';
 import { AuthService } from './auth.service';
 
 export interface TokenSet {
@@ -23,15 +23,15 @@ interface TokenState {
 
 // Create a Zustand store for client-side token management
 export const useTokenStore = create<TokenState>((set, get) => ({
-  accessToken: typeof window !== 'undefined' ? localStorage.getItem('nblocks_access_token') : null,
-  refreshToken: typeof window !== 'undefined' ? localStorage.getItem('nblocks_refresh_token') : null,
-  idToken: typeof window !== 'undefined' ? localStorage.getItem('nblocks_id_token') : null,
+  accessToken: typeof window !== 'undefined' ? localStorage.getItem('bridge_access_token') : null,
+  refreshToken: typeof window !== 'undefined' ? localStorage.getItem('bridge_refresh_token') : null,
+  idToken: typeof window !== 'undefined' ? localStorage.getItem('bridge_id_token') : null,
   
   setTokens: (tokens: TokenSet) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('nblocks_access_token', tokens.accessToken);
-      localStorage.setItem('nblocks_refresh_token', tokens.refreshToken);
-      localStorage.setItem('nblocks_id_token', tokens.idToken);
+      localStorage.setItem('bridge_access_token', tokens.accessToken);
+      localStorage.setItem('bridge_refresh_token', tokens.refreshToken);
+      localStorage.setItem('bridge_id_token', tokens.idToken);
     }
     set({
       accessToken: tokens.accessToken,
@@ -42,9 +42,9 @@ export const useTokenStore = create<TokenState>((set, get) => ({
   
   clearTokens: () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('nblocks_access_token');
-      localStorage.removeItem('nblocks_refresh_token');
-      localStorage.removeItem('nblocks_id_token');
+      localStorage.removeItem('bridge_access_token');
+      localStorage.removeItem('bridge_refresh_token');
+      localStorage.removeItem('bridge_id_token');
     }
     set({
       accessToken: null,
@@ -74,7 +74,7 @@ export const useTokenStore = create<TokenState>((set, get) => ({
 // Token service class for more complex operations
 export class TokenService {
   private static instance: TokenService;
-  private config: NblocksConfig | null = null;
+  private config: BridgeConfig | null = null;
   private refreshCheckInterval: NodeJS.Timeout | null = null;
   private isRefreshing = false;
   private lastRenewalTime: Date | null = null;
@@ -106,8 +106,8 @@ export class TokenService {
 
   // Helper method to get all tokens from cookies
   private getTokensFromCookies(): TokenSet | null {
-    const accessToken = this.getCookieValue('nblocks_access_token');
-    const idToken = this.getCookieValue('nblocks_id_token');
+    const accessToken = this.getCookieValue('bridge_access_token');
+    const idToken = this.getCookieValue('bridge_id_token');
     
     if (accessToken && idToken) {
       return { 
@@ -152,8 +152,8 @@ export class TokenService {
     // Also set in cookies
     if (typeof document !== 'undefined') {
       const cookieOptions = 'path=/; max-age=86400'; // 24 hours
-      document.cookie = `nblocks_access_token=${tokens.accessToken}; ${cookieOptions}`;
-      document.cookie = `nblocks_id_token=${tokens.idToken}; ${cookieOptions}`;
+      document.cookie = `bridge_access_token=${tokens.accessToken}; ${cookieOptions}`;
+      document.cookie = `bridge_id_token=${tokens.idToken}; ${cookieOptions}`;
     }
   }
   
@@ -163,8 +163,8 @@ export class TokenService {
     
     // Also clear from cookies
     if (typeof document !== 'undefined') {
-      document.cookie = 'nblocks_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      document.cookie = 'nblocks_id_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'bridge_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'bridge_id_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     }
   }
   
@@ -213,7 +213,7 @@ export class TokenService {
   }
   
   // Common methods
-  init(config: NblocksConfig): void {
+  init(config: BridgeConfig): void {
     this.config = config;
     this._startTokenExpiryCheck();
   }

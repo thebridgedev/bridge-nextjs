@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { NblocksConfig } from '../../shared/types/config';
+import { BridgeConfig } from '../../shared/types/config';
 import { FeatureFlagServer } from './feature-flag.server';
 import { getConfig } from './get-config';
 
@@ -10,7 +10,7 @@ interface RequireFeatureFlagOptions {
   /**
    * Optional config overrides
    */
-  config?: Partial<NblocksConfig>;
+  config?: Partial<BridgeConfig>;
   
   /**
    * Custom error message to return when the feature flag is disabled
@@ -54,7 +54,7 @@ export const requireFeatureFlagForRoute = (
   const defaultConfig = getConfig();
   
   // Merge with any provided overrides
-  const mergedConfig: NblocksConfig = {
+  const mergedConfig: BridgeConfig = {
     ...defaultConfig,
     ...options.config
   };

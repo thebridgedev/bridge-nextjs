@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { isFeatureEnabled } from '../../shared/services/feature-flag.service';
-import { useNblocksConfig } from './use-nblocks-config';
-import { useNblocksToken } from './use-nblocks-token';
+import { useBridgeConfig } from './use-bridge-config';
+import { useBridgeToken } from './use-bridge-token';
 
 interface UseFeatureFlagOptions {
   forceLive?: boolean;
@@ -12,8 +12,8 @@ interface UseFeatureFlagOptions {
 const useFeatureFlag = (flagName: string, options: UseFeatureFlagOptions = {}): boolean => {
   const { forceLive = false } = options;
   const [isEnabled, setIsEnabled] = useState<boolean>(false);
-  const config = useNblocksConfig();
-  const { getAccessToken, isAuthenticated } = useNblocksToken();
+  const config = useBridgeConfig();
+  const { getAccessToken, isAuthenticated } = useBridgeToken();
 
   useEffect(() => {
     const checkFeatureFlag = async () => {

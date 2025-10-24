@@ -1,4 +1,4 @@
-import { NblocksConfig } from '../types/config';
+import { BridgeConfig } from '../types/config';
 import { TokenService } from './token.service';
 
 /**
@@ -6,7 +6,7 @@ import { TokenService } from './token.service';
  */
 export class TeamManagementService {
   private static instance: TeamManagementService;
-  private config: NblocksConfig | null = null;
+  private config: BridgeConfig | null = null;
   private tokenService: TokenService | null = null;
 
   private constructor() {}
@@ -24,7 +24,7 @@ export class TeamManagementService {
   /**
    * Initialize the service with the required dependencies
    */
-  public init(config: NblocksConfig, tokenService: TokenService): void {
+  public init(config: BridgeConfig, tokenService: TokenService): void {
     // Use the provided config directly
     this.config = config;
     this.tokenService = tokenService;
@@ -72,7 +72,7 @@ export class TeamManagementService {
     if (!accessToken && typeof document !== 'undefined') {
       console.log('Token not found in token service, checking cookies...');
       const cookies = document.cookie.split(';');
-      const accessTokenCookie = cookies.find(cookie => cookie.trim().startsWith('nblocks_access_token='));
+      const accessTokenCookie = cookies.find(cookie => cookie.trim().startsWith('bridge_access_token='));
       
       if (accessTokenCookie) {
         accessToken = accessTokenCookie.split('=')[1];
@@ -90,7 +90,7 @@ export class TeamManagementService {
 
     try {
       // Ensure we have the required config values
-      const authBaseUrl = this.config.authBaseUrl || 'https://auth.nblocks.cloud';
+      const authBaseUrl = this.config.authBaseUrl || 'https://auth.bridge.cloud';
       const appId = this.config.appId;
       
       if (!appId) {
@@ -100,7 +100,7 @@ export class TeamManagementService {
       console.log('Config structure:', JSON.stringify(this.config, null, 2));
       console.log('Using authBaseUrl:', authBaseUrl);
       
-      // Get handover code from nBlocks
+      // Get handover code from bridge
       console.log('Fetching handover code from:', `${authBaseUrl}/handover/code/${appId}`);
       
       const response = await fetch(

@@ -1,19 +1,19 @@
 'use client';
 
 import { useContext } from 'react';
-import { NblocksConfig } from '../../shared/types/config';
-import { NblocksConfigContext } from '../providers/nblocks-config.provider';
+import { BridgeConfig } from '../../shared/types/config';
+import { BridgeConfigContext } from '../providers/bridge-config.provider';
 
 /**
- * Hook for accessing nBlocks configuration
+ * Hook for accessing bridge configuration
  * 
- * @returns The nBlocks configuration
+ * @returns The bridge configuration
  * 
  * @example
- * import { useNblocksConfig } from 'nblocks-nextjs';
+ * import { useBridgeConfig } from 'bridge-nextjs';
  * 
  * function MyComponent() {
- *   const config = useNblocksConfig();
+ *   const config = useBridgeConfig();
  *   
  *   return (
  *     <div>
@@ -23,15 +23,15 @@ import { NblocksConfigContext } from '../providers/nblocks-config.provider';
  *   );
  * }
  */
-export const useNblocksConfig = (): NblocksConfig => {
-  const config = useContext(NblocksConfigContext);
+export const useBridgeConfig = (): BridgeConfig => {
+  const config = useContext(BridgeConfigContext);
   if (!config) {
-    throw new Error('NblocksConfigProvider has not been initialized. Make sure it is used within a NblocksConfigProvider.');
+    throw new Error('BridgeConfigProvider has not been initialized. Make sure it is used within a BridgeConfigProvider.');
   }
   
   // Check if appId is missing
   if (!config.appId) {
-    throw new Error('nBlocks appId is required but was not provided in the configuration.');
+    throw new Error('bridge appId is required but was not provided in the configuration.');
   }
   
   return config;

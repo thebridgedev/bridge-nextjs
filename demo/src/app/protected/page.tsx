@@ -1,6 +1,6 @@
 'use client';
 
-import { useProfile } from '@nebulr-group/nblocks-nextjs/client';
+import { useProfile } from '@nebulr-group/bridge-nextjs/client';
 
 export default function ProtectedPage() {
   const { profile } = useProfile();

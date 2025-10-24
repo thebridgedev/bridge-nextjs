@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AuthService } from '../../shared/services/auth.service';
-import { useNblocksConfig } from './use-nblocks-config';
+import { useBridgeConfig } from './use-bridge-config';
 
 /**
  * Hook for authentication functionality
@@ -10,7 +10,7 @@ import { useNblocksConfig } from './use-nblocks-config';
  * @returns Authentication functions and state
  * 
  * @example
- * import { useAuth } from 'nblocks-nextjs';
+ * import { useAuth } from 'bridge-nextjs';
  * 
  * function MyComponent() {
  *   const { 
@@ -35,7 +35,7 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
-  const config = useNblocksConfig();
+  const config = useBridgeConfig();
   
   // Initialize auth service
   useEffect(() => {

@@ -12,7 +12,7 @@ export interface RouteRule {
   redirectTo?: string;
 }
 
-export interface WithNblocksAuthOptions {
+export interface WithBridgeAuthOptions {
   /** Route rules for protection */
   rules?: RouteRule[];
   /** 
@@ -24,29 +24,29 @@ export interface WithNblocksAuthOptions {
   /** Custom callback path (defaults to /auth/oauth-callback) */
   callbackPath?: string;
   /** 
-   * nBlocks App ID (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_APP_ID env var)
+   * bridge App ID (optional - automatically reads from NEXT_PUBLIC_BRIDGE_APP_ID env var)
    * Only provide this if you need to override the env var
    */
   appId?: string;
   /** 
-   * Auth base URL (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_AUTH_BASE_URL env var)
-   * Defaults to https://auth.nblocks.cloud
+   * Auth base URL (optional - automatically reads from NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL env var)
+   * Defaults to https://auth.bridge.cloud
    */
   authBaseUrl?: string;
   /** 
-   * Callback URL (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_CALLBACK_URL env var)
+   * Callback URL (optional - automatically reads from NEXT_PUBLIC_BRIDGE_CALLBACK_URL env var)
    */
   callbackUrl?: string;
   /** 
-   * Enable debug logging (optional - automatically reads from NEXT_PUBLIC_NBLOCKS_DEBUG env var)
+   * Enable debug logging (optional - automatically reads from NEXT_PUBLIC_BRIDGE_DEBUG env var)
    * Defaults to false
    */
   debug?: boolean;
 }
 
 /**
- * Enhanced middleware helper for nBlocks authentication
- * Automatically reads configuration from environment variables (NEXT_PUBLIC_NBLOCKS_*)
+ * Enhanced middleware helper for bridge authentication
+ * Automatically reads configuration from environment variables (NEXT_PUBLIC_BRIDGE_*)
  * 
  * Configuration priority (highest to lowest):
  * 1. Environment variables (recommended)
@@ -55,10 +55,10 @@ export interface WithNblocksAuthOptions {
  * 
  * @example
  * // Basic usage: Protect all routes except specified public routes
- * // Set NEXT_PUBLIC_NBLOCKS_APP_ID in your .env.local
- * import { withNblocksAuth } from '@nebulr/nblocks-nextjs/server';
+ * // Set NEXT_PUBLIC_BRIDGE_APP_ID in your .env.local
+ * import { withBridgeAuth } from '@nebulr/bridge-nextjs/server';
  * 
- * export default withNblocksAuth({
+ * export default withBridgeAuth({
  *   rules: [
  *     { match: '/', public: true },
  *     { match: '/login', public: true },
@@ -69,7 +69,7 @@ export interface WithNblocksAuthOptions {
  * 
  * @example
  * // Make all routes public by default, only protect specific routes
- * export default withNblocksAuth({
+ * export default withBridgeAuth({
  *   defaultAccess: 'public', // All unmatched routes are public
  *   rules: [
  *     { match: '/dashboard', public: false },
@@ -80,7 +80,7 @@ export interface WithNblocksAuthOptions {
  * 
  * @example
  * // Explicit defaultAccess: 'protected' (this is the default behavior)
- * export default withNblocksAuth({
+ * export default withBridgeAuth({
  *   defaultAccess: 'protected', // All unmatched routes require authentication
  *   rules: [
  *     { match: '/', public: true },
@@ -90,13 +90,13 @@ export interface WithNblocksAuthOptions {
  * 
  * @example
  * // Alternative: Passing appId directly (still supported)
- * export default withNblocksAuth({
+ * export default withBridgeAuth({
  *   appId: 'YOUR_APP_ID',
  *   defaultAccess: 'protected',
  *   rules: [...]
  * });
  */
-export function withNblocksAuth(options: WithNblocksAuthOptions = {}) {
+export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
   const {
     rules = [],
     defaultAccess = 'protected',
@@ -179,8 +179,8 @@ async function handleOAuthCallback(request: NextRequest) {
     }
     
     // Import the callback handler dynamically to avoid circular dependencies
-    const { createNblocksCallbackRoute } = await import('../callback-route');
-    const callbackHandler = createNblocksCallbackRoute({
+    const { createBridgeCallbackRoute } = await import('../callback-route');
+    const callbackHandler = createBridgeCallbackRoute({
       redirectPath: '/',
       errorRedirectPath: '/?error=auth_failed'
     });
@@ -208,4 +208,4 @@ function matchesRule(pathname: string, pattern: string | RegExp): boolean {
   return false;
 }
 
-export default withNblocksAuth;
+export default withBridgeAuth;

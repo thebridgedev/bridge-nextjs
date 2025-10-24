@@ -1,9 +1,9 @@
-import { NblocksConfigProvider } from './nblocks-config.provider';
-import { NblocksProvider } from './nblocks-provider';
-import { NblocksTokenProvider } from './nblocks-token.provider';
+import { BridgeConfigProvider } from './bridge-config.provider';
+import { BridgeProvider } from './bridge-provider';
+import { BridgeTokenProvider } from './bridge-token.provider';
 
 export {
-    NblocksConfigProvider, NblocksProvider,
-    NblocksTokenProvider
+    BridgeConfigProvider, BridgeProvider,
+    BridgeTokenProvider
 };
 

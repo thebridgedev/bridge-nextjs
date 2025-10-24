@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { JSX, ReactNode } from 'react';
 import { isFeatureEnabled } from '../../shared/services/feature-flag.service';
-import { NblocksConfig } from '../../shared/types/config';
+import { BridgeConfig } from '../../shared/types/config';
 import { getConfig } from '../utils/get-config';
 import { initServices } from '../utils/init-services';
 
@@ -34,7 +34,7 @@ interface ServerFeatureFlagProps {
   /**
    * Config override (optional)
    */
-  config?: Partial<NblocksConfig>;
+  config?: Partial<BridgeConfig>;
   
   /**
    * Access token (for testing or explicit passing)
@@ -78,7 +78,7 @@ export async function ServerFeatureFlag({
 }: ServerFeatureFlagProps): Promise<JSX.Element | null> {
   // Get the default config and apply any overrides
   const defaultConfig = getConfig();
-  const mergedConfig: NblocksConfig = {
+  const mergedConfig: BridgeConfig = {
     ...defaultConfig,
     ...configOverride
   };

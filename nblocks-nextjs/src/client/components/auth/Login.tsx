@@ -26,7 +26,7 @@ export function Login({ redirectUri }: LoginProps) {
         cursor: 'pointer'
       }}
     >
-      Login with nBlocks
+      Login with bridge
     </button>
   );
 } 
