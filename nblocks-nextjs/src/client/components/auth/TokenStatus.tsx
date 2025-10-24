@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { FC, useEffect, useState } from 'react';
 import { useNblocksToken } from '../../../client/hooks/use-nblocks-token';
 import { TokenService } from '../../../shared/services/token.service';
 
@@ -30,7 +30,7 @@ export interface TokenStatusProps {
  *   );
  * }
  */
-export const TokenStatus: React.FC<TokenStatusProps> = ({ className }) => {
+export const TokenStatus: FC<TokenStatusProps> = ({ className }) => {
   const { isAuthenticated, isLoading, getAccessToken, getRefreshToken, getIdToken } = useNblocksToken();
   const tokenService = TokenService.getInstance();
   const [hasToken, setHasToken] = useState<boolean>(false);

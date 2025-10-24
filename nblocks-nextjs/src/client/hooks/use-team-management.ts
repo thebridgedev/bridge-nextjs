@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback, useEffect, useState } from 'react';
 import { TeamManagementService } from '../../shared/services/team-management.service';
 import { TokenService } from '../../shared/services/token.service';

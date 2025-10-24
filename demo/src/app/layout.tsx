@@ -1,8 +1,8 @@
+import { NblocksProvider } from 'nblocks-nextjs/client';
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from '../components/Navbar';
 import "./globals.css";
-import { Providers } from './providers';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,10 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Providers>
+        <NblocksProvider appId={process.env.NEXT_PUBLIC_NBLOCKS_APP_ID!}>
           <Navbar />
           <main>{children}</main>
-        </Providers>
+        </NblocksProvider>
       </body>
     </html>
   );

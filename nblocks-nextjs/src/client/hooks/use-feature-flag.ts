@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { isFeatureEnabled } from '../../shared/services/feature-flag.service';
 import { useNblocksConfig } from './use-nblocks-config';
@@ -19,6 +21,12 @@ const useFeatureFlag = (flagName: string, options: UseFeatureFlagOptions = {}): 
         const accessToken = getAccessToken();
         
         if (!accessToken) {
+          setIsEnabled(false);
+          return;
+        }
+        
+        if (!config.appId) {
+          console.error('appId is required for feature flag checking');
           setIsEnabled(false);
           return;
         }

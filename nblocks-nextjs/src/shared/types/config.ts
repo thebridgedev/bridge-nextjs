@@ -1,9 +1,9 @@
 export interface NblocksConfig {
   /**
    * Your nBlocks application ID
-   * @required
+   * @required - Must be provided via NblocksProvider props
    */
-  appId: string;
+  appId?: string;
 
   /**
    * The URL to redirect to after successful login

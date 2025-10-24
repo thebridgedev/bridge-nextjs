@@ -1,4 +1,6 @@
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+'use client';
+
+import { createContext, FC, ReactNode, useContext, useEffect, useState } from 'react';
 import { getCachedFlags, loadFeatureFlags } from '../../shared/services/feature-flag.service';
 import { useNblocksConfig } from '../hooks/use-nblocks-config';
 import { useNblocksToken } from '../hooks/use-nblocks-token';
@@ -14,7 +16,7 @@ interface FeatureFlagsProviderProps {
   children: ReactNode;
 }
 
-export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ children }) => {
+export const FeatureFlagsProvider: FC<FeatureFlagsProviderProps> = ({ children }) => {
   const [flags, setFlags] = useState<{ [key: string]: boolean }>({});
   const config = useNblocksConfig();
   const { getAccessToken, isAuthenticated, isLoading } = useNblocksToken();
@@ -32,6 +34,11 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
           return;
         }
 
+        if (!config.appId) {
+          console.error('appId is required for feature flag loading');
+          return;
+        }
+        
         await loadFeatureFlags(config.appId, accessToken);
         const updatedFlags = getCachedFlags();
         setFlags(updatedFlags);
@@ -54,6 +61,11 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
         return;
       }
 
+      if (!config.appId) {
+        console.error('appId is required for feature flag loading');
+        return;
+      }
+      
       await loadFeatureFlags(config.appId, accessToken);
       const updatedFlags = getCachedFlags();
       setFlags(updatedFlags);

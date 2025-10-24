@@ -1,41 +1,49 @@
 # nBlocks Next.js Quickstart Guide
 
-## Installation
+## Step 1: Installation
 Install the nblocks nextjs plugin
 
 ```bash
 npm install @nebulr/nblocks-nextjs
 ```
 
-## Configuration
-Add the variable NEXT_PUBLIC_NBLOCKS_APP_ID to your .env file
-
-> **Note:** You can find your app ID in the nBlocks Control Center by navigating to 'Keys' section.
-
-Add the NblocksProvider to your app:
+## Step 2: Configuration
+Add the NblocksProvider directly to your app layout with your app ID:
 
 ```tsx
-// app/providers.tsx
-import { NblocksProvider } from '@nebulr/nblocks-nextjs';
+// app/layout.tsx
+import { NblocksProvider } from '@nebulr/nblocks-nextjs/client';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <NblocksProvider>
-      {children}
-    </NblocksProvider>
+    <html lang="en">
+      <body>
+        <NblocksProvider appId="YOUR_APP_ID">
+          {children}
+        </NblocksProvider>
+      </body>
+    </html>
   );
 }
 ```
 
-## Authentication
+> **Note:** You can find your app ID in the nBlocks Control Center by navigating to 'Keys' section.
 
-### Redirecting to nblocks login
+That's it! Your app is now protected with nBlocks authentication. All routes are protected by default, and users will be redirected to login when they try to access protected content.
+
+## Optional: Advanced Configuration
+
+### Adding Login Functionality
 
 The simplest way to add login functionality to your app is to use the `useAuth` hook:
 
 ```tsx
 // app/components/LoginButton.tsx
-import { useAuth } from '@nebulr/nblocks-nextjs';
+import { useAuth } from '@nebulr/nblocks-nextjs/client';
 
 export default function LoginButton() {
   const { login } = useAuth();
@@ -48,52 +56,31 @@ export default function LoginButton() {
 }
 ```
 
-### Handling the callback
+### Configuring Callback URL
 
-After a user logs in through nBlocks, they'll be redirected back to your application. You need to set up a callback route to handle this redirect:
-
-1. First, go to the nBlocks Control Center:
+1. Go to the nBlocks Control Center:
    - Navigate to Authentication -> Authentication -> Security
-   - Change the callback URL to point to your application with the path `/auth/oauth-callback`
-   - For example: `https://your-app.com/auth/oauth-callback` or `localhost:3000/auth/oauth-callback`
-   - **Important**: The path you specify here (`/auth/oauth-callback`) must match exactly where you create your server-side route
+   - Change the callback URL to: `https://your-app.com/nblocks/auth/oauth-callback`
+   - For local development: `http://localhost:3000/nblocks/auth/oauth-callback`
 
-2. Now create a server-side route in your Next.js application:
-   - The route must be located at the exact path you specified in the control center
-   - For the example above, create the file at `app/auth/oauth-callback/route.ts`
+The callback is automatically handled by the plugin - no additional setup needed!
 
-```tsx
-// app/auth/oauth-callback/route.ts
-import { createNblocksCallbackRoute } from '@nebulr/nblocks-nextjs/server';
+### Server-Side Route Protection (Optional)
 
-export const GET = createNblocksCallbackRoute({
-  redirectPath: '/',
-  errorRedirectPath: '/?error=auth_failed'
-});
-```
-
-### Protecting routes
-
-To protect routes in your Next.js application, you need to set up middleware that uses the nBlocks authentication middleware:
+For additional server-side protection, you can add middleware:
 
 ```tsx
 // middleware.ts
-import { withAuth } from '@nebulr/nblocks-nextjs/server';
-import { NextRequest } from 'next/server';
+import { withNblocksAuth } from '@nebulr/nblocks-nextjs/server';
 
-// Create the auth middleware
-const authMiddleware = withAuth({
-  // Public paths that don't require authentication
-  publicPaths: ['/', '/login', '/auth/oauth-callback'],
+export default withNblocksAuth({
+  rules: [
+    { match: '/', public: true },
+    { match: '/login', public: true },
+    // All other routes are protected by default
+  ]
 });
 
-// Export the middleware function
-export async function middleware(request: NextRequest) {
-  // Let the auth middleware handle all path protection logic
-  return authMiddleware(request);
-}
-
-// Configure which paths the middleware should run on
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico).*)',
@@ -101,8 +88,26 @@ export const config = {
 };
 ```
 
+### Environment Variables (Alternative)
+
+Instead of passing `appId` as a prop, you can use environment variables:
+
+```bash
+# .env.local
+NEXT_PUBLIC_NBLOCKS_APP_ID=your_app_id_here
+```
+
+Then use the provider without the appId prop:
+
+```tsx
+<NblocksProvider>
+  {children}
+</NblocksProvider>
+```
+
+## That's it!
+
 You have now set up a complete authentication flow with nBlocks in your Next.js application!
 Go ahead and give it a try by clicking the login button, signup with a new account and login with it.
-
 
 There is a lot more the nblocks-nextjs plugin can do. And you can see many examples [here](examples.md)

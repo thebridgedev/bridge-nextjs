@@ -1,3 +1,5 @@
+'use client';
+
 import { useContext } from 'react';
 import { NblocksConfig } from '../../shared/types/config';
 import { NblocksConfigContext } from '../providers/nblocks-config.provider';

@@ -1,4 +1,6 @@
-import React, { ReactNode } from 'react';
+'use client';
+
+import { FC, ReactNode } from 'react';
 import useFeatureFlag from '../hooks/use-feature-flag';
 
 interface FeatureFlagProps {
@@ -50,7 +52,7 @@ interface FeatureFlagProps {
  *   <NormalContent />
  * </FeatureFlag>
  */
-export const FeatureFlag: React.FC<FeatureFlagProps> = ({
+export const FeatureFlag: FC<FeatureFlagProps> = ({
   flagName,
   children,
   fallback = null,

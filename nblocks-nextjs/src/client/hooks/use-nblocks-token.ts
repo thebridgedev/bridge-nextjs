@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback, useEffect, useState } from 'react';
 import { AuthService } from '../../shared/services/auth.service';
 import { TokenService } from '../../shared/services/token.service';

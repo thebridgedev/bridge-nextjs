@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback, useEffect, useState } from 'react';
 import { Profile, ProfileService } from '../../shared/services/profile.service';
 import { useNblocksConfig } from './use-nblocks-config';

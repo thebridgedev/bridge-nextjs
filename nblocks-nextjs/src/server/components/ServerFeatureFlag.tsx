@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { ReactNode } from 'react';
+import { JSX, ReactNode } from 'react';
 import { isFeatureEnabled } from '../../shared/services/feature-flag.service';
 import { NblocksConfig } from '../../shared/types/config';
 import { getConfig } from '../utils/get-config';
@@ -75,7 +75,7 @@ export async function ServerFeatureFlag({
   config: configOverride,
   accessToken: explicitToken,
   forceLive = false
-}: ServerFeatureFlagProps) {
+}: ServerFeatureFlagProps): Promise<JSX.Element | null> {
   // Get the default config and apply any overrides
   const defaultConfig = getConfig();
   const mergedConfig: NblocksConfig = {
@@ -89,14 +89,14 @@ export async function ServerFeatureFlag({
   try {
     // Try to initialize services and get authentication status
     // This is a safer approach that avoids direct cookie access
-    const { isAuthenticated } = await initServices(mergedConfig);
+    const services = await initServices(mergedConfig);
     
     // If no explicit token and not authenticated, show fallback or redirect
-    if (!explicitToken && !isAuthenticated) {
+    if (!explicitToken && !services.isAuthenticated) {
       if (redirectTo) {
         redirect(redirectTo);
       }
-      return fallback || null;
+      return (fallback as JSX.Element) || null;
     }
     
     // If we have an explicit token, use it
@@ -104,8 +104,11 @@ export async function ServerFeatureFlag({
     // and the feature flag service will handle token retrieval
     
     // Check if the feature flag is enabled
-    // We're passing an empty string for the access token when we don't have an explicit one,
-    // trusting that the feature flag service will get the token from cookies
+    if (!mergedConfig.appId) {
+      console.error('appId is required for feature flag checking');
+      return (fallback as JSX.Element) || null;
+    }
+    
     const enabled = await isFeatureEnabled(
       flagName, 
       mergedConfig.appId,
@@ -116,11 +119,11 @@ export async function ServerFeatureFlag({
     const shouldRender = negate ? !enabled : enabled;
     
     if (shouldRender) {
-      return children;
+      return <>{children}</> as JSX.Element;
     } else if (redirectTo) {
       redirect(redirectTo);
     } else {
-      return fallback || null;
+      return (fallback as JSX.Element) || null;
     }
   } catch (error) {
     console.error(`Error in ServerFeatureFlag:`, error);
@@ -128,6 +131,6 @@ export async function ServerFeatureFlag({
     if (redirectTo) {
       redirect(redirectTo);
     }
-    return fallback || null;
+    return (fallback as JSX.Element) || null;
   }
 } 

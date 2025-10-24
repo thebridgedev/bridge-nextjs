@@ -1,4 +1,6 @@
-import React, { ReactNode, createContext } from 'react';
+'use client';
+
+import { createContext, FC, ReactNode } from 'react';
 import { useNblocksToken } from '../hooks/use-nblocks-token';
 
 interface NblocksTokenContextType {
@@ -33,7 +35,7 @@ interface NblocksTokenProviderProps {
  * @param props The provider props
  * @returns The provider component
  */
-export const NblocksTokenProvider: React.FC<NblocksTokenProviderProps> = ({ children }) => {
+export const NblocksTokenProvider: FC<NblocksTokenProviderProps> = ({ children }) => {
   const tokenContext = useNblocksToken();
   
   return (
