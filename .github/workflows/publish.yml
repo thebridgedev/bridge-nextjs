@@ -76,9 +76,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v4
@@ -100,9 +97,6 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v4
@@ -123,6 +117,7 @@ jobs:
       - name: 🛑 Pre-publish validation
         env:
           INPUT_PACKAGE_NAME: ${{ inputs.package-name }}
+        working-directory: ${{ inputs.working-directory }}
         run: |
           PACKAGE_NAME="$INPUT_PACKAGE_NAME"
           if [ -z "$PACKAGE_NAME" ]; then
@@ -151,6 +146,7 @@ jobs:
         run: ${{ inputs.publish-command }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        working-directory: ${{ inputs.working-directory }}
 
       - name: ✨ Create GitHub Release
         run: |

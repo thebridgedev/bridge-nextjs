@@ -16,7 +16,7 @@ jobs:
   pipeline:
     uses: ./.github/workflows/publish.yml
     with:
-      working-directory: bridge-nextjs/bridge-nextjs
+      working-directory: bridge-nextjs
       setup-bun: false
       setup-pnpm: true
       install-command: pnpm install
