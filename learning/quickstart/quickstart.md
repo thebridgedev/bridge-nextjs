@@ -1,4 +1,4 @@
-# bridge Next.js Quickstart Guide
+# Bridge Next.js Quickstart Guide
 
 ## Step 1: Installation
 Install the bridge nextjs plugin
