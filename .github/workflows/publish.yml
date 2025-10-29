@@ -142,11 +142,41 @@ jobs:
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> "$GITHUB_ENV"
           echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
 
+          DIST_TAG="latest"
+          if [[ "$PACKAGE_VERSION" == *-* ]]; then
+            PRERELEASE_PART=${PACKAGE_VERSION#*-}
+            DIST_TAG=${PRERELEASE_PART%%.*}
+            if [ -z "$DIST_TAG" ]; then
+              DIST_TAG="latest"
+            fi
+          fi
+
+          echo "Detected package dist-tag: $DIST_TAG"
+          echo "DIST_TAG=$DIST_TAG" >> "$GITHUB_ENV"
+
       - name: 🚀 Publish package
-        run: ${{ inputs.publish-command }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+          PUBLISH_COMMAND: ${{ inputs.publish-command }}
+          DIST_TAG: ${{ env.DIST_TAG }}
         working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -z "$PUBLISH_COMMAND" ]; then
+            if [ "$DIST_TAG" = "latest" ]; then
+              echo "Publishing with default command (latest dist-tag)"
+              npm publish --provenance --access public
+            else
+              echo "Publishing with default command using dist-tag: $DIST_TAG"
+              npm publish --provenance --access public --tag "$DIST_TAG"
+            fi
+          else
+            cat <<'CMD' > .publish-command.sh
+${{ inputs.publish-command }}
+CMD
+            chmod +x .publish-command.sh
+            echo "Running custom publish command (DIST_TAG=$DIST_TAG)"
+            bash .publish-command.sh
+          fi
 
       - name: ✨ Create GitHub Release
         run: |

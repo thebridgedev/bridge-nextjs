@@ -21,7 +21,13 @@ jobs:
       setup-pnpm: true
       install-command: pnpm install
       build-command: pnpm run build
-      publish-command: pnpm run copy-files && pnpm publish --access public
+      publish-command: |
+        pnpm run copy-files
+        if [ "$DIST_TAG" = "latest" ]; then
+          pnpm publish --access public
+        else
+          pnpm publish --access public --tag "$DIST_TAG"
+        fi
     secrets:
       npm-token: ${{ secrets.NPM_TOKEN }}
       docs-sync-key: ${{ secrets.DOCS_SYNC_KEY }}
