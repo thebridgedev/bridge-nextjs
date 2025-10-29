@@ -24,9 +24,9 @@ jobs:
       publish-command: |
         pnpm run copy-files
         if [ "$DIST_TAG" = "latest" ]; then
-          pnpm publish --access public
+          pnpm publish --access public --no-git-checks
         else
-          pnpm publish --access public --tag "$DIST_TAG"
+          pnpm publish --access public --tag "$DIST_TAG" --no-git-checks
         fi
     secrets:
       npm-token: ${{ secrets.NPM_TOKEN }}
