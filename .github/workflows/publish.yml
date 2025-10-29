@@ -170,9 +170,7 @@ jobs:
               npm publish --provenance --access public --tag "$DIST_TAG"
             fi
           else
-            cat <<'CMD' > .publish-command.sh
-${{ inputs.publish-command }}
-CMD
+            printf '%s\n' "$PUBLISH_COMMAND" > .publish-command.sh
             chmod +x .publish-command.sh
             echo "Running custom publish command (DIST_TAG=$DIST_TAG)"
             bash .publish-command.sh
