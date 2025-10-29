@@ -1,4 +1,4 @@
-name: Build and Publish
+name: Reusable – Build and Publish
 
 on:
   workflow_call:
