@@ -1,12 +1,7 @@
-x-nblocks-angular-volume: &nblocks-angular-volume
-  type: bind
-  source: ../nblocks-angular
-  target: /home/appuser/nblocks-plugins/nblocks-angular
-
 services:
-  nblocks-nextjs:
-    container_name: nblocks-nextjs
-    image: nblocks-nextjs:dev
+  bridge-nextjs:
+    container_name: bridge-nextjs
+    image: bridge-nextjs:dev
     build:
       target: dev
       context: ./

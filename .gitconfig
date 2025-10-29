@@ -10,4 +10,4 @@
 	cmd = /Users/imanpouya/Applications/Sourcetree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
 	trustExitCode = true
 [credential]
-	helper = "!f() { /home/appuser/.cursor-server/bin/1d623c4cc1d3bb6e0fe4f1d5434b47b958b05870/node /tmp/vscode-remote-containers-e66f6763-2b5a-4258-944d-80478b437da3.js git-credential-helper $*; }; f"
+	helper = "!f() { /home/appuser/.cursor-server/bin/8ea935e79a50a02da912a034bbeda84a6d3d3550/node /tmp/vscode-remote-containers-bd16044a-b4e2-4502-8c80-9668705d11e6.js git-credential-helper $*; }; f"

@@ -19,7 +19,7 @@ ps -ax
 npm run dev
 mv src/index.ts src/client.ts
 pwd
-cd nblocks-nextjs/
+cd bridge-nextjs/
 mv src/index.ts src/client.ts
 ls
 cd ..
