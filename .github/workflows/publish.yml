@@ -1,0 +1,175 @@
+name: Build and Publish
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Directory containing the package to build and publish
+        required: true
+        type: string
+      node-version:
+        description: Node.js version to use
+        required: false
+        default: '20'
+        type: string
+      registry-url:
+        description: npm registry URL for authentication
+        required: false
+        default: 'https://registry.npmjs.org'
+        type: string
+      setup-bun:
+        description: Install and configure Bun
+        required: false
+        default: true
+        type: boolean
+      bun-version:
+        description: Bun version to install when setup-bun is true
+        required: false
+        default: 'latest'
+        type: string
+      setup-pnpm:
+        description: Install and configure pnpm
+        required: false
+        default: false
+        type: boolean
+      pnpm-version:
+        description: pnpm version to install when setup-pnpm is true
+        required: false
+        default: 'latest'
+        type: string
+      install-command:
+        description: Command used to install dependencies
+        required: false
+        default: 'bun install'
+        type: string
+      build-command:
+        description: Command used to build the package
+        required: false
+        default: 'bun run build'
+        type: string
+      publish-command:
+        description: Command used to publish the package
+        required: false
+        default: 'npm publish --provenance --access public'
+        type: string
+      package-name:
+        description: Optional npm package name (falls back to package.json name if omitted)
+        required: false
+        type: string
+      sync-docs:
+        description: Run documentation sync after publish
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      npm-token:
+        description: Token used to publish the package to npm
+        required: true
+      docs-sync-key:
+        description: SSH key used to sync documentation
+        required: false
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup and Build
+        uses: ./.github/actions/setup-and-build
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          node-version: ${{ inputs.node-version }}
+          registry-url: ${{ inputs.registry-url }}
+          setup-bun: ${{ inputs.setup-bun }}
+          bun-version: ${{ inputs.bun-version }}
+          setup-pnpm: ${{ inputs.setup-pnpm }}
+          pnpm-version: ${{ inputs.pnpm-version }}
+          install-command: ${{ inputs.install-command }}
+          build-command: ${{ inputs.build-command }}
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup and Build (frozen)
+        uses: ./.github/actions/setup-and-build
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          node-version: ${{ inputs.node-version }}
+          registry-url: ${{ inputs.registry-url }}
+          setup-bun: ${{ inputs.setup-bun }}
+          bun-version: ${{ inputs.bun-version }}
+          setup-pnpm: ${{ inputs.setup-pnpm }}
+          pnpm-version: ${{ inputs.pnpm-version }}
+          install-command: ${{ inputs.install-command }}
+          build-command: ${{ inputs.build-command }}
+
+      - name: 🛑 Pre-publish validation
+        env:
+          INPUT_PACKAGE_NAME: ${{ inputs.package-name }}
+        run: |
+          PACKAGE_NAME="$INPUT_PACKAGE_NAME"
+          if [ -z "$PACKAGE_NAME" ]; then
+            PACKAGE_NAME=$(node -p "require('./package.json').name")
+          fi
+
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          echo "Git Tag: ${{ github.ref_name }}, Package: $PACKAGE_NAME, Version: $PACKAGE_VERSION"
+
+          if [ "v${PACKAGE_VERSION}" != "${{ github.ref_name }}" ]; then
+            echo "❌ package.json version ($PACKAGE_VERSION) does not match tag (${{ github.ref_name }})" && exit 1
+          fi
+
+          PUBLISHED_VERSIONS=$(npm view "$PACKAGE_NAME" versions --json || true)
+          if echo "$PUBLISHED_VERSIONS" | grep -q "\"$PACKAGE_VERSION\""; then
+            echo "❌ Version $PACKAGE_VERSION already published to npm" && exit 1
+          else
+            echo "✅ Version $PACKAGE_VERSION is new; proceeding"
+          fi
+
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+
+      - name: 🚀 Publish package
+        run: ${{ inputs.publish-command }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+
+      - name: ✨ Create GitHub Release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "This release was automatically published from CI."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  sync_docs:
+    needs: publish
+    if: ${{ inputs.sync-docs && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') && secrets.docs-sync-key != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🔄 Sync Docs
+        uses: ./.github/actions/sync-docs
+        env:
+          DOCS_SYNC_KEY: ${{ secrets.docs-sync-key }}
+

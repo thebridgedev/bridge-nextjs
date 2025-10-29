@@ -1,0 +1,24 @@
+name: Build and Publish
+
+on:
+  push:
+    branches: ["**"]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  pull_request:
+    branches: [main]
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/publish.yml
+    with:
+      working-directory: bridge-nextjs/bridge-nextjs
+      setup-bun: false
+      setup-pnpm: true
+      install-command: pnpm install
+      build-command: pnpm run build
+      publish-command: pnpm run copy-files && pnpm publish --access public
+    secrets:
+      npm-token: ${{ secrets.NPM_TOKEN }}
+      docs-sync-key: ${{ secrets.DOCS_SYNC_KEY }}
+
