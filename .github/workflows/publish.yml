@@ -114,6 +114,13 @@ jobs:
           install-command: ${{ inputs.install-command }}
           build-command: ${{ inputs.build-command }}
 
+      - name: 🔐 Configure npm auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          npm config set //registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+
       - name: 🛑 Pre-publish validation
         env:
           INPUT_PACKAGE_NAME: ${{ inputs.package-name }}
