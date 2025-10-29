@@ -162,14 +162,21 @@ jobs:
   
   sync_docs:
     needs: publish
-    if: ${{ inputs.sync-docs && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') && secrets.docs-sync-key != '' }}
+    if: ${{ inputs.sync-docs && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
+    env:
+      DOCS_SYNC_KEY: ${{ secrets.docs-sync-key }}
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v4
 
       - name: 🔄 Sync Docs
+        if: ${{ env.DOCS_SYNC_KEY != '' }}
         uses: ./.github/actions/sync-docs
         env:
-          DOCS_SYNC_KEY: ${{ secrets.docs-sync-key }}
+          DOCS_SYNC_KEY: ${{ env.DOCS_SYNC_KEY }}
+
+      - name: 📭 Docs sync skipped (no secret provided)
+        if: ${{ env.DOCS_SYNC_KEY == '' }}
+        run: echo "DOCS_SYNC_KEY not provided; skipping documentation sync."
 
