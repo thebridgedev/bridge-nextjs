@@ -1,6 +1,6 @@
 'use client';
 
-import { TokenStatus, useAuth } from 'nblocks-nextjs';
+import { TokenStatus, useAuth } from '@nebulr-group/bridge-nextjs/client';
 import Link from 'next/link';
 
 export function TokenStatusDemo() {

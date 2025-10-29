@@ -1,6 +1,6 @@
 'use client';
 
-import { FeatureFlag, useNblocksConfig } from 'nblocks-nextjs/client';
+import { FeatureFlag, useBridgeConfig } from '@nebulr-group/bridge-nextjs/client';
 import Link from 'next/link';
 import { Component, ReactNode } from 'react';
 import FeatureFlagAPIExample from '../components/FeatureFlagAPIExample';
@@ -15,7 +15,7 @@ function HelloComponent() {
   );
 }
 
-// Error boundary component to catch errors from useNblocksConfig
+// Error boundary component to catch errors from useBridgeConfig
 class ConfigErrorBoundary extends Component<
   { children: ReactNode; fallback: (error: Error) => ReactNode },
   { error: Error | null }
@@ -40,12 +40,12 @@ class ConfigErrorBoundary extends Component<
 
 // Component that uses the hook
 function ConfigDisplay() {
-  const config = useNblocksConfig();
+  const config = useBridgeConfig();
   
   return (
     <div className="feature-status active">
       <p className="font-bold">Success</p>
-      <p>nBlocks configuration initialized with appId: {config.appId}</p>
+      <p>bridge configuration initialized with appId: {config.appId}</p>
     </div>
   );
 }
@@ -59,11 +59,11 @@ function ConfigError({ error }: { error: Error }) {
       <p className="mt-2 text-sm">
         {error.message.includes('appId is required') ? (
           <>
-            Please set the <code>NEXT_PUBLIC_NBLOCKS_APP_ID</code> environment variable or provide an appId in the NblocksConfigProvider.
+            Please set the <code>NEXT_PUBLIC_BRIDGE_APP_ID</code> environment variable or provide an appId in the BridgeConfigProvider.
           </>
         ) : (
           <>
-            Make sure the NblocksConfigProvider is properly initialized in your app.
+            Make sure the BridgeConfigProvider is properly initialized in your app.
           </>
         )}
       </p>
@@ -77,9 +77,9 @@ export default function Home() {
       <div className="container">
         <div className="content">
           <div className="hero">
-            <h1 className="heading-xl">Welcome to the nBlocks Next.js Demo</h1>
+            <h1 className="heading-xl">Welcome to the bridge Next.js Demo</h1>
             <p className="text-lead">
-              This demo showcases the integration of nBlocks features in a Next.js application.
+              This demo showcases the integration of bridge features in a Next.js application.
             </p>
           </div>
 

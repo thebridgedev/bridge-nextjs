@@ -53,7 +53,13 @@ Thumbs.db
 .local
 
 .next
-nblocks-plugins/*
-nblocks-angular-reference/*
-.turbo
+bridge-plugins/*
+bridge-angular-reference/*
+**/.turbo
 .bash_history
+*workspace*
+
+
+# Project descriptions
+project_descriptions/
+*tgz

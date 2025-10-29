@@ -1,14 +1,14 @@
+import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from '../components/Navbar';
 import "./globals.css";
-import { Providers } from './providers';
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "nBlocks Next.js Demo",
-  description: "Demo application for nBlocks Next.js integration",
+  title: "bridge Next.js Demo",
+  description: "Demo application for bridge Next.js integration",
 };
 
 export default function RootLayout({
@@ -19,10 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Providers>
+        {/* BridgeProvider automatically reads from NEXT_PUBLIC_BRIDGE_APP_ID env var */}
+        <BridgeProvider>
           <Navbar />
           <main>{children}</main>
-        </Providers>
+        </BridgeProvider>
       </body>
     </html>
   );

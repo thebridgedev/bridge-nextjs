@@ -1,29 +1,7 @@
-import { ServerFeatureFlag } from 'nblocks-nextjs/server';
-import { Suspense } from 'react';
+import { ServerFeatureFlag } from '@nebulr-group/bridge-nextjs/server';
 import '../page.css';
 
-// Wrapper component to handle the async ServerFeatureFlag
-function ServerFeatureFlagWrapper() {
-  return (
-    <Suspense fallback={<div className="text-gray-500">Loading feature flag status...</div>}>
-      <ServerFeatureFlag 
-        flagName="demo-flag"
-        forceLive={true}
-        fallback={
-          <div className="feature-status">
-            <p>Create a feature flag called "demo-flag"</p>
-          </div>
-        }
-      >
-        <div className="feature-status active">
-          <p>Feature flag "demo-flag" is active</p>
-        </div>
-      </ServerFeatureFlag>
-    </Suspense>
-  );
-}
-
-export default function ServerFeatureFlagExamplePage() {
+export default async function ServerFeatureFlagExamplePage() {
   return (
     <div className="page-container">      
       <div className="container">
@@ -41,7 +19,19 @@ export default function ServerFeatureFlagExamplePage() {
             <div className="feature-example">
               <div className="card">
                 <p className="note">Rendered on the server at build time or request time</p>
-                <ServerFeatureFlagWrapper />
+                <ServerFeatureFlag 
+                  flagName="demo-flag"
+                  forceLive={true}
+                  fallback={
+                    <div className="feature-status">
+                      <p>Create a feature flag called "demo-flag"</p>
+                    </div>
+                  }
+                >
+                  <div className="feature-status active">
+                    <p>Feature flag "demo-flag" is active</p>
+                  </div>
+                </ServerFeatureFlag>
               </div>
             </div>
             

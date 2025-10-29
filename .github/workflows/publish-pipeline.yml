@@ -1,0 +1,35 @@
+name: Build and Publish
+run-name: Build and Publish – ${{ github.ref_name }}
+
+on:
+  push:
+    branches: ["**"]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/publish.yml
+    with:
+      working-directory: bridge-nextjs
+      setup-bun: false
+      setup-pnpm: true
+      install-command: pnpm install
+      build-command: pnpm run build
+      publish-command: |
+        pnpm run copy-files
+        if [ "$DIST_TAG" = "latest" ]; then
+          pnpm publish --access public --no-git-checks
+        else
+          pnpm publish --access public --tag "$DIST_TAG" --no-git-checks
+        fi
+    secrets:
+      npm-token: ${{ secrets.NPM_TOKEN }}
+      docs-sync-key: ${{ secrets.DOCS_SYNC_KEY }}
+

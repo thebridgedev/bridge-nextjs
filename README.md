@@ -1,10 +1,10 @@
-# nBlocks Next.js Demo & Library Documentation
+# bridge Next.js Demo & Library Documentation
 
-This repository contains both the nBlocks Next.js library and a demo application showcasing its features.
+This repository contains both the bridge Next.js library and a demo application showcasing its features.
 
 ## Quick Links
-- [Quickstart Guide](learning/quickstart.md) - Get started quickly with nBlocks in your Next.js application
-- [Examples](learning/examples.md) - Detailed examples of nBlocks features
+- [Quickstart Guide](learning/quickstart.md) - Get started quickly with bridge in your Next.js application
+- [Examples](learning/examples.md) - Detailed examples of bridge features
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ This repository contains both the nBlocks Next.js library and a demo application
 ## Installation
 
 ```bash
-npm install @nblocks/nextjs
+npm install @bridge/nextjs
 ```
 
 ## Configuration

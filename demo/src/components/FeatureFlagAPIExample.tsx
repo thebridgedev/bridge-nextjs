@@ -55,7 +55,7 @@ export default function FeatureFlagAPIExample() {
           <div className="feature-status">
             <p>Feature flag "demo-flag" is not enabled</p>
             <p className="mt-2 text-sm">
-              This error occurs because the feature flag is not enabled. Try enabling the "demo-flag" feature flag in your nBlocks dashboard.
+              This error occurs because the feature flag is not enabled. Try enabling the "demo-flag" feature flag in your bridge dashboard.
             </p>
           </div>
         )}
