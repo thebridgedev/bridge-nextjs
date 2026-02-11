@@ -12,8 +12,10 @@ export { default as useFeatureFlag } from './client/hooks/use-feature-flag';
 export { useBridgeConfig } from './client/hooks/use-bridge-config';
 export { useProfile } from './client/hooks/use-profile';
 export { useTeamManagement } from './client/hooks/use-team-management';
+export { usePlanService } from './client/hooks/use-plan-service';
 export { useFeatureFlagsContext } from './client/providers/feature-flags.provider';
 export { useTokenStore } from './shared/services/token.service';
+export { planService } from './shared/services/plan.service';
 
 // Client-side providers
 export { FeatureFlagsProvider } from './client/providers/feature-flags.provider';

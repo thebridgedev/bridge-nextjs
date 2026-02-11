@@ -17,6 +17,8 @@
   - [Route Protection with Feature Flags](#feature-flags-on-routes)
   - [Server-Side Feature Flags](#feature-flags-on-server-side-code-like-apis)
 - [Server-Side Rendering](#server-side-rendering)
+- [Payments & Subscriptions](#payments--subscriptions)
+  - [Redirect to plan selection](#redirect-to-plan-selection)
 - [Configuration](#configuration)
   - [Getting Config Values](#getting-config-values)
   - [Environment Variables](#environment-variables)
@@ -516,6 +518,34 @@ export default function PremiumPage() {
 }
 ```
 
+## Payments & Subscriptions
+
+### Redirect to plan selection
+
+Redirect authenticated users to Bridge's plan selection page using the handover protocol:
+
+```tsx
+'use client';
+
+import { usePlanService } from '@nebulr-group/bridge-nextjs/client';
+
+export default function ManagePlanButton() {
+  const { redirectToPlanSelection } = usePlanService();
+
+  const handleClick = async () => {
+    try {
+      await redirectToPlanSelection();
+    } catch (error) {
+      console.error('Failed to redirect to plan selection:', error);
+    }
+  };
+
+  return <button onClick={handleClick}>Manage plan</button>;
+}
+```
+
+You can also use `planService.redirectToPlanSelection(config, accessToken)` directly if you have config and token available.
+
 ## Configuration
 
 ### Getting Config Values
@@ -555,7 +585,7 @@ All these settings have sensible defaults and are optional:
 
 | Variable Name | Description | Default Value |
 |---------------|-------------|---------------|
-| `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL` | Base URL for bridge auth services | `https://auth.nblocks.cloud` |
+| `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL` | Base URL for bridge auth services | `https://api.thebridge.dev/auth` |
 | `NEXT_PUBLIC_BRIDGE_CALLBACK_URL` | Custom OAuth callback URL | Auto-determined from origin |
 | `NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE` | Route to redirect to after login | `/` |
 | `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` | Route for login page | `/login` |
@@ -576,7 +606,7 @@ NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 
 # Optional: Custom auth base URL
-NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=https://auth.nblocks.cloud
+NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=https://api.thebridge.dev/auth
 
 # Optional: Custom callback URL
 NEXT_PUBLIC_BRIDGE_CALLBACK_URL=/auth/oauth-callback
@@ -588,7 +618,7 @@ NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/dashboard
 NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login
 
 # Optional: Team management portal URL
-NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL=https://backendless.nblocks.cloud/user-management-portal/users
+NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL=https://api.thebridge.dev/cloud-views/user-management-portal/users
 
 # Optional: Enable debug mode for detailed logging
 NEXT_PUBLIC_BRIDGE_DEBUG=true
