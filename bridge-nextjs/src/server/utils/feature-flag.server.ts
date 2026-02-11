@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { logger } from '../../shared/logger';
 import { getCachedFlags, isFeatureEnabled, loadFeatureFlags } from '../../shared/services/feature-flag.service';
 import { BridgeConfig } from '../../shared/types/config';
 import { getConfig } from './get-config';
@@ -47,7 +48,7 @@ export class FeatureFlagServer {
     }
     
     if (!this.config?.appId) {
-      console.error('FeatureFlagServer - No appId available. Make sure to properly initialize with a valid config.');
+      logger.error('FeatureFlagServer - No appId available. Make sure to properly initialize with a valid config.');
       return false;
     }
     
@@ -57,14 +58,20 @@ export class FeatureFlagServer {
     const accessToken = tokenService.getAccessTokenServer(cookieString);
     
     if (!accessToken) {
-      console.warn(`FeatureFlagServer - No access token available for flag check: ${flagName}`);
+      logger.warn(`FeatureFlagServer - No access token available for flag check: ${flagName}`);
       return false;
     }
-    
+
     try {
-      return await isFeatureEnabled(flagName, this.config.appId, accessToken, forceLive);
+      return await isFeatureEnabled(
+        flagName,
+        this.config.appId,
+        accessToken,
+        forceLive,
+        this.config.cloudViewsUrl
+      );
     } catch (error) {
-      console.error(`FeatureFlagServer - Error checking feature flag ${flagName}:`, error);
+      logger.error(`FeatureFlagServer - Error checking feature flag ${flagName}:`, error);
       return false;
     }
   }
@@ -81,25 +88,25 @@ export class FeatureFlagServer {
     }
     
     if (!this.config?.appId) {
-      console.error('FeatureFlagServer - No appId available. Make sure to properly initialize with a valid config.');
+      logger.error('FeatureFlagServer - No appId available. Make sure to properly initialize with a valid config.');
       return {};
     }
-    
+
     // Get access token from request
     const tokenService = TokenServiceServer.getInstance();
     const cookieString = request.headers.get('cookie') || '';
     const accessToken = tokenService.getAccessTokenServer(cookieString);
-    
+
     if (!accessToken) {
-      console.warn('FeatureFlagServer - No access token available for loading flags');
+      logger.warn('FeatureFlagServer - No access token available for loading flags');
       return {};
     }
-    
+
     try {
-      await loadFeatureFlags(this.config.appId, accessToken);
+      await loadFeatureFlags(this.config.appId, accessToken, this.config.cloudViewsUrl);
       return getCachedFlags();
     } catch (error) {
-      console.error('FeatureFlagServer - Error loading feature flags:', error);
+      logger.error('FeatureFlagServer - Error loading feature flags:', error);
       return {};
     }
   }

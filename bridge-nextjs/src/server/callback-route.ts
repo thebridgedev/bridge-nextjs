@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger, setDebug } from '../shared/logger';
 import { getConfig } from './utils/get-config';
 import { initServices } from './utils/init-services';
 
 export interface CallbackRouteOptions {
   redirectPath?: string;
   errorRedirectPath?: string;
+  /** Query param names to preserve on success redirect (e.g. payment). Default: ['payment'] */
+  preserveQueryParams?: string[];
 }
 
 /**
@@ -23,31 +26,38 @@ export interface CallbackRouteOptions {
  * });
  */
 export function createBridgeCallbackRoute(options: CallbackRouteOptions = {}) {
+  const preserveParams = options.preserveQueryParams ?? ['payment'];
+
   return async function GET(request: NextRequest) {
+    const config = getConfig();
+    setDebug(!!config.debug);
+
     try {
-      console.log('🔑 createBridgeCallbackRoute: Starting callback route');
+      logger.debug('createBridgeCallbackRoute: Starting callback route');
       const searchParams = request.nextUrl.searchParams;
       const code = searchParams.get('code');
-      
+
       if (!code) {
-        console.error('No authorization code found in callback');
+        logger.error('No authorization code found in callback');
         const errorPath = options.errorRedirectPath || '/?error=no_code';
         return NextResponse.redirect(new URL(errorPath, request.url));
       }
-      
-      // Get the configuration from environment variables
-      const config = getConfig();      
-      
+
       // Initialize services with the configuration
       const { authService } = await initServices(config);
-      
+
       const redirectPath = options.redirectPath || '/';
-      const response = NextResponse.redirect(new URL(redirectPath, request.url));
+      const redirectUrl = new URL(redirectPath, request.url);
+      for (const name of preserveParams) {
+        const value = searchParams.get(name);
+        if (value != null) redirectUrl.searchParams.set(name, value);
+      }
+      const response = NextResponse.redirect(redirectUrl);
       await authService.handleCallbackServer(code, response);
-      
+
       return response;
     } catch (error) {
-      console.error('Error handling callback:', error);
+      logger.error('Error handling callback:', error);
       const errorPath = options.errorRedirectPath || '/?error=auth_failed';
       return NextResponse.redirect(new URL(errorPath, request.url));
     }

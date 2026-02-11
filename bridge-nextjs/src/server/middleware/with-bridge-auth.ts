@@ -30,7 +30,7 @@ export interface WithBridgeAuthOptions {
   appId?: string;
   /** 
    * Auth base URL (optional - automatically reads from NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL env var)
-   * Defaults to https://auth.nblocks.cloud
+   * Defaults to https://api.thebridge.dev/auth
    */
   authBaseUrl?: string;
   /** 
