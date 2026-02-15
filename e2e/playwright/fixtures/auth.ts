@@ -73,6 +73,20 @@ export async function loginViaBridgeAuth(
     { timeout: LONG_TIMEOUT }
   );
 
+  await page.waitForLoadState('domcontentloaded');
+
+  const bodyText = await page.locator('body').textContent().catch(() => '');
+  if (
+    bodyText.includes('NBLOCKS_APP_UNAUTHORIZED_EXCEPTION') ||
+    bodyText.includes('App is unauthenticated')
+  ) {
+    throw new Error(
+      `Bridge auth returned "App is unauthenticated" (invalid APP ID or auth backend not accepting this app). ` +
+        `Ensure bridge-api is running (LOCAL_TEST_DATA_API_URL), the test app is registered, and the demo uses the same app (pre-setup writes NEXT_PUBLIC_BRIDGE_APP_ID). ` +
+        `URL: ${page.url()}`
+    );
+  }
+
   const emailInput = page.locator('#email, input[name="username"], input[type="email"]').first();
   await emailInput.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
   await emailInput.fill(email);

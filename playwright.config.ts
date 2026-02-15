@@ -7,6 +7,13 @@ dotenv.config({
   override: false,
 });
 
+function getDemoEnvFile(): string {
+  const project = process.env.PLAYWRIGHT_PROJECT_NAME || '';
+  if (project.includes('prod')) return '.env.test.prod';
+  if (project.includes('stage')) return '.env.test.stage';
+  return '.env.test.local';
+}
+
 export default defineConfig({
   testDir: './e2e/playwright/tests',
   timeout: 60_000,
@@ -34,7 +41,7 @@ export default defineConfig({
   ],
   outputDir: 'test-reports/test-results',
   webServer: {
-    command: 'cd demo && npx dotenv -e .env.test.local -- npx next dev -p 3001',
+    command: `cd demo && npx dotenv -e ${getDemoEnvFile()} -- npx next dev -p 3001`,
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

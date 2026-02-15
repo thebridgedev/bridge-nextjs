@@ -45,7 +45,9 @@ test.describe('Auth login and logout', () => {
     await logoutButton.click();
     await page.waitForLoadState('networkidle');
 
+    // After logout: home may show login link, or we're on /login with Login button
+    const loginLink = page.getByRole('link', { name: /Start authentication flow|Login/i });
     const loginButton = page.locator('button:has-text("Login"), button:has-text("login")').first();
-    await expect(loginButton).toBeVisible({ timeout: MED_TIMEOUT });
+    await expect(loginLink.or(loginButton).first()).toBeVisible({ timeout: MED_TIMEOUT });
   });
 });
