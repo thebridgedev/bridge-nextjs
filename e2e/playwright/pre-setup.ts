@@ -18,7 +18,9 @@ const APP_URL = `http://localhost:${DEMO_PORT}`;
 
 async function preSetup() {
   const mode = process.argv[2] || 'test.local';
-  const envFile = path.resolve(rootDir, 'demo/.env.test.local');
+  const envFileName =
+    mode === 'test.stage' ? '.env.test.stage' : mode === 'test.prod' ? '.env.test.prod' : '.env.test.local';
+  const envFile = path.resolve(rootDir, 'demo', envFileName);
 
   console.log('[pre-setup] Mode:', mode);
   console.log('[pre-setup] Demo env file:', envFile);
@@ -46,10 +48,19 @@ async function preSetup() {
   const ownerEmail = process.env.TEST_OWNER_EMAIL || 'playwright-e2e@thebridge.io';
   const ownerPassword = process.env.TEST_OWNER_PASSWORD || 'helloworld';
 
-  const healthRes = await fetch(`${testDataApiUrl}/account/test/playwright/health`, {
-    method: 'GET',
-    headers: { 'x-playwright-api-key': apiKey },
-  });
+  let healthRes: Response;
+  try {
+    healthRes = await fetch(`${testDataApiUrl}/account/test/playwright/health`, {
+      method: 'GET',
+      headers: { 'x-playwright-api-key': apiKey },
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const cause = err instanceof Error && err.cause ? ` (${String((err.cause as Error).message)})` : '';
+    throw new Error(
+      `Test data API health check failed: ${msg}${cause}. URL: ${testDataApiUrl}/account/test/playwright/health`
+    );
+  }
   if (!healthRes.ok) {
     throw new Error(`Test data API health check failed (${healthRes.status}). Is bridge-api running?`);
   }
@@ -85,19 +96,47 @@ async function preSetup() {
     throw new Error(`Demo directory not found: ${demoDir}`);
   }
 
+  let authBaseUrl = '';
+  const callbackUrl = `${APP_URL}/auth/oauth-callback`;
+  if (mode === 'test.local') {
+    authBaseUrl = process.env.LOCAL_AUTH_BASE_URL || `${testDataApiUrl.replace(/\/$/, '')}/auth`;
+  } else if (mode === 'test.stage' && process.env.STAGE_AUTH_BASE_URL) {
+    authBaseUrl = process.env.STAGE_AUTH_BASE_URL;
+  }
+
   let envContent: string;
   if (fs.existsSync(envFile)) {
     envContent = fs.readFileSync(envFile, 'utf-8');
-    envContent = envContent.replace(
-      /^NEXT_PUBLIC_BRIDGE_APP_ID=.*$/m,
-      `NEXT_PUBLIC_BRIDGE_APP_ID=${appId}`
-    );
+    envContent = envContent.replace(/^NEXT_PUBLIC_BRIDGE_APP_ID=.*$/m, `NEXT_PUBLIC_BRIDGE_APP_ID=${appId}`);
+    if (authBaseUrl) {
+      if (/^NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=/m.test(envContent)) {
+        envContent = envContent.replace(
+          /^NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=.*$/m,
+          `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=${authBaseUrl}`
+        );
+      } else {
+        envContent += `\nNEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=${authBaseUrl}`;
+      }
+    }
+    if (callbackUrl) {
+      if (/^NEXT_PUBLIC_BRIDGE_CALLBACK_URL=/m.test(envContent)) {
+        envContent = envContent.replace(
+          /^NEXT_PUBLIC_BRIDGE_CALLBACK_URL=.*$/m,
+          `NEXT_PUBLIC_BRIDGE_CALLBACK_URL=${callbackUrl}`
+        );
+      } else {
+        envContent += `\nNEXT_PUBLIC_BRIDGE_CALLBACK_URL=${callbackUrl}`;
+      }
+    }
   } else {
     envContent = `# E2E test env — written by pre-setup\nNEXT_PUBLIC_BRIDGE_APP_ID=${appId}\n`;
+    if (authBaseUrl) envContent += `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL=${authBaseUrl}\n`;
+    envContent += `NEXT_PUBLIC_BRIDGE_CALLBACK_URL=${callbackUrl}\n`;
   }
 
   fs.writeFileSync(envFile, envContent);
-  console.log('[pre-setup] Updated', envFile, 'with NEXT_PUBLIC_BRIDGE_APP_ID');
+  const authNote = authBaseUrl ? `, auth + callback for ${mode}` : '';
+  console.log('[pre-setup] Updated', envFile, 'with NEXT_PUBLIC_BRIDGE_APP_ID' + authNote);
   console.log('[pre-setup] Done.\n');
 }
 
