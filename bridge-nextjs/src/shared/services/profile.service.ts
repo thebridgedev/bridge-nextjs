@@ -93,7 +93,7 @@ export class ProfileService {
       this.config = config;
       
       // Use default authBaseUrl if not provided
-      this.expectedIssuer = config.authBaseUrl || 'https://auth.nblocks.cloud';
+      this.expectedIssuer = config.authBaseUrl || 'https://api.thebridge.dev/auth';
       
       if (!config.appId) {
         console.error('ProfileService - No appId in config');

@@ -182,7 +182,7 @@ export class AuthService {
     }
     
     try {
-      const authBaseUrl = this.config.authBaseUrl || 'https://auth.nblocks.cloud';
+      const authBaseUrl = this.config.authBaseUrl || 'https://api.thebridge.dev/auth';
       const url = `${authBaseUrl}/token`;
       
       // Log the start time of the refresh

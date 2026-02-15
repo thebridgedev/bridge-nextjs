@@ -30,7 +30,7 @@ export interface WithBridgeAuthOptions {
   appId?: string;
   /** 
    * Auth base URL (optional - automatically reads from NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL env var)
-   * Defaults to https://auth.nblocks.cloud
+   * Defaults to https://api.thebridge.dev/auth
    */
   authBaseUrl?: string;
   /** 
@@ -134,9 +134,10 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
   return async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Handle OAuth callback automatically
+    // Let OAuth callback be handled by the App Router route (Node.js runtime).
+    // Handling it here would run in Edge and fetch() to stage can fail.
     if (pathname === callbackPath) {
-      return handleOAuthCallback(request);
+      return NextResponse.next();
     }
 
     // Apply route rules
@@ -163,33 +164,6 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
     // Use the auth middleware for protected routes
     return authMiddleware(request);
   };
-}
-
-/**
- * Handle OAuth callback automatically
- */
-async function handleOAuthCallback(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const code = searchParams.get('code');
-    
-    if (!code) {
-      console.error('No authorization code found in callback');
-      return NextResponse.redirect(new URL('/?error=no_code', request.url));
-    }
-    
-    // Import the callback handler dynamically to avoid circular dependencies
-    const { createBridgeCallbackRoute } = await import('../callback-route');
-    const callbackHandler = createBridgeCallbackRoute({
-      redirectPath: '/',
-      errorRedirectPath: '/?error=auth_failed'
-    });
-    
-    return callbackHandler(request);
-  } catch (error) {
-    console.error('Error handling OAuth callback:', error);
-    return NextResponse.redirect(new URL('/?error=auth_failed', request.url));
-  }
 }
 
 /**
