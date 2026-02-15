@@ -1,14 +1,16 @@
 'use client';
 
-import { createContext, FC, ReactNode } from 'react';
+import { createContext, FC, ReactNode, useEffect } from 'react';
+import { setDebug } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 
 /**
  * Default configuration values for bridge
  */
 const DEFAULT_CONFIG: Partial<BridgeConfig> = {
-  authBaseUrl: 'https://auth.nblocks.cloud',
-  teamManagementUrl: 'https://backendless.nblocks.cloud/user-management-portal/users',
+  authBaseUrl: 'https://api.thebridge.dev/auth',
+  teamManagementUrl: 'https://api.thebridge.dev/cloud-views/user-management-portal/users',
+  cloudViewsUrl: 'https://api.thebridge.dev/cloud-views',
   defaultRedirectRoute: '/',
   loginRoute: '/login',
   debug: false
@@ -29,6 +31,7 @@ const getConfigFromEnv = (): Partial<BridgeConfig> => {
   const defaultRedirectRoute = process.env.NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE;
   const loginRoute = process.env.NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE;
   const teamManagementUrl = process.env.NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL;
+  const cloudViewsUrl = process.env.NEXT_PUBLIC_BRIDGE_CLOUD_VIEWS_URL;
   const debug = process.env.NEXT_PUBLIC_BRIDGE_DEBUG;
 
   if (appId) envConfig.appId = appId;
@@ -37,6 +40,7 @@ const getConfigFromEnv = (): Partial<BridgeConfig> => {
   if (defaultRedirectRoute) envConfig.defaultRedirectRoute = defaultRedirectRoute;
   if (loginRoute) envConfig.loginRoute = loginRoute;
   if (teamManagementUrl) envConfig.teamManagementUrl = teamManagementUrl;
+  if (cloudViewsUrl) envConfig.cloudViewsUrl = cloudViewsUrl;
   if (debug !== undefined) envConfig.debug = debug === 'true';
 
   return envConfig;
@@ -84,6 +88,10 @@ export const BridgeConfigProvider: FC<BridgeConfigProviderProps> = ({ config, ch
     ...config,
     ...envConfig // Environment variables take highest priority
   } as BridgeConfig;
+
+  useEffect(() => {
+    setDebug(!!mergedConfig.debug);
+  }, [mergedConfig.debug]);
 
   return (
     <BridgeConfigContext.Provider value={mergedConfig}>
