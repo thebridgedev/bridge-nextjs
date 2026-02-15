@@ -1,10 +1,10 @@
-# bridge Next.js Demo & Library Documentation
+# Bridge Next.js Demo & Library Documentation
 
-This repository contains both the bridge Next.js library and a demo application showcasing its features.
+This repository contains both the Bridge Next.js library and a demo application showcasing its features.
 
 ## Quick Links
-- [Quickstart Guide](learning/quickstart.md) - Get started quickly with bridge in your Next.js application
-- [Examples](learning/examples.md) - Detailed examples of bridge features
+- [Quickstart Guide](learning/quickstart/quickstart.md) - Get started quickly with Bridge in your Next.js application
+- [Examples](learning/examples/examples.md) - Detailed examples of Bridge features
 
 ## Table of Contents
 
@@ -20,32 +20,32 @@ This repository contains both the bridge Next.js library and a demo application 
 ## Installation
 
 ```bash
-npm install @bridge/nextjs
+npm install @nebulr-group/bridge-nextjs
 ```
 
 ## Configuration
 
-For detailed configuration instructions, see the [Quickstart Guide](learning/quickstart.md).
+For detailed configuration instructions, see the [Quickstart Guide](learning/quickstart/quickstart.md).
 
 
 ## Authentication
 
 For authentication examples and implementation details, see:
-- [Quickstart Guide - Authentication](learning/quickstart.md#authentication)
-- [Examples - Authentication](learning/examples.md#authentication)
+- [Quickstart Guide - Authentication](learning/quickstart/quickstart.md#authentication)
+- [Examples - Authentication](learning/examples/examples.md#authentication)
 
 ## Feature Flags
 
 For feature flag examples and implementation details, see:
-- [Examples - Feature Flags](learning/examples.md#feature-flags)
+- [Examples - Feature Flags](learning/examples/examples.md#feature-flags)
 
 ## Payments & Subscriptions
 
-The library supports redirecting users to Bridge's plan selection and subscription portal (e.g. via a plan service). See the [Examples](learning/examples.md) for subscription and payment patterns.
+The library supports redirecting users to Bridge's plan selection and subscription portal (e.g. via a plan service). See the [Examples](learning/examples/examples.md) for subscription and payment patterns.
 
 ## Demo Application
 
-The demo application in this repository contains runnable examples of the usage patterns found in the [examples](learning/examples.md) documentation.
+The demo application in this repository contains runnable examples of the usage patterns found in the [examples](learning/examples/examples.md) documentation.
 
 ## E2E Tests
 
