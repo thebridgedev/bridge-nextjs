@@ -1,4 +1,4 @@
-# bridge Next.js Examples
+# Bridge Next.js Examples
 
 ## Table of Contents
 - [Authentication](#authentication)
@@ -57,7 +57,7 @@ export default function LoginButton() {
 
 ### Route Protection
 
-bridge provides several ways to protect routes in your Next.js application:
+Bridge provides several ways to protect routes in your Next.js application:
 
 #### Middleware Protection (Recommended)
 
@@ -93,11 +93,13 @@ This approach:
 
 #### Component-Based Protection
 
-For more granular control, you can use the `ProtectedRoute` component:
+For more granular control in client components, you can use the `ProtectedRoute` component:
 
 ```tsx
 // app/dashboard/page.tsx
-import { ProtectedRoute } from '@nebulr/bridge-nextjs';
+'use client';
+
+import { ProtectedRoute } from '@nebulr-group/bridge-nextjs/client';
 
 export default function DashboardPage() {
   return (
@@ -111,25 +113,7 @@ export default function DashboardPage() {
 }
 ```
 
-#### Server-Side Protection
-
-For server components, you can use the `ServerAuthCheck` component:
-
-```tsx
-// app/dashboard/page.tsx
-import { ServerAuthCheck } from '@nebulr/bridge-nextjs/server';
-
-export default function DashboardPage() {
-  return (
-    <ServerAuthCheck redirectTo="/login">
-      <div>
-        <h1>Dashboard</h1>
-        <p>This content is only visible to authenticated users</p>
-      </div>
-    </ServerAuthCheck>
-  );
-}
-```
+For server-rendered pages, rely on the `withBridgeAuth` middleware to protect routes; it runs before the page is rendered.
 
 ### Advanced Route Configuration
 
@@ -194,7 +178,7 @@ bridge automatically handles token renewal for you. The token service will refre
 ```tsx
 // The token service handles renewal automatically
 // You can monitor token status with the useAuth hook
-import { useAuth } from '@nebulr/bridge-nextjs';
+import { useAuth } from '@nebulr-group/bridge-nextjs/client';
 
 function TokenStatus() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -214,7 +198,7 @@ function TokenStatus() {
 You can use the `useAuth` hook to check if a user is currently logged in:
 
 ```tsx
-import { useAuth } from '@nebulr/bridge-nextjs';
+import { useAuth } from '@nebulr-group/bridge-nextjs/client';
 
 function AuthStatus() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -238,7 +222,7 @@ function AuthStatus() {
 Access the current user's profile information using the `useAuth` hook:
 
 ```tsx
-import { useAuth } from '@nebulr/bridge-nextjs';
+import { useAuth } from '@nebulr-group/bridge-nextjs/client';
 
 function UserProfile() {
   const { user, isLoading } = useAuth();
@@ -262,7 +246,7 @@ function UserProfile() {
 
 ### Bulk Fetching vs Live
 
-bridge provides two ways to work with feature flags:
+Bridge provides two ways to work with feature flags:
 
 1. **Bulk Fetching (Recommended)**: Get all feature flags at once and use them throughout your application. This approach uses a 5-minute cache to improve performance.
 2. **Live Updates**: Check feature flags individually with real-time updates, bypassing the cache.
@@ -271,7 +255,7 @@ The recommended approach is to use bulk fetching with caching for better perform
 
 ```tsx
 // Bulk fetching example - RECOMMENDED APPROACH
-import { useFeatureFlagsContext } from '@nebulr/bridge-nextjs';
+import { useFeatureFlagsContext } from '@nebulr-group/bridge-nextjs/client';
 
 function FeatureFlagsPanel() {
   const { flags, refreshFlags } = useFeatureFlagsContext();
@@ -295,7 +279,7 @@ When using the `FeatureFlag` component without the `forceLive` prop, it will use
 
 ```tsx
 // Using cached feature flags (recommended for better performance)
-import { FeatureFlag } from '@nebulr/bridge-nextjs';
+import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 
 function CachedFeatureExample() {
   return (
@@ -319,7 +303,7 @@ For cases where you need real-time updates, you can use the `forceLive` prop:
 
 ```tsx
 // Live feature flag example (bypasses cache)
-import { FeatureFlag } from '@nebulr/bridge-nextjs';
+import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 
 function LiveFeatureExample() {
   return (
@@ -344,7 +328,7 @@ function LiveFeatureExample() {
 Use the `FeatureFlag` component with the `negate` prop to show content when a flag is disabled:
 
 ```tsx
-import { FeatureFlag } from '@nebulr/bridge-nextjs';
+import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 
 function ConditionalContent() {
   return (
@@ -364,7 +348,7 @@ function ConditionalContent() {
 You can also use the `fallback` prop to provide alternative content:
 
 ```tsx
-import { FeatureFlag } from '@nebulr/bridge-nextjs';
+import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 
 function FeatureWithFallback() {
   return (
@@ -384,7 +368,7 @@ Protect entire routes with feature flags using middleware:
 
 ```tsx
 // middleware.ts
-import { withFeatureFlags } from '@nebulr/bridge-nextjs/server';
+import { withFeatureFlags } from '@nebulr-group/bridge-nextjs/server';
 import { NextRequest } from 'next/server';
 
 // Define feature flag protections
@@ -424,18 +408,12 @@ Use feature flags in server-side code, including API routes:
 ```tsx
 // app/api/premium/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { isFeatureEnabledServer } from '@nebulr/bridge-nextjs/server';
+import { FeatureFlagServer } from '@nebulr-group/bridge-nextjs/server';
 
 export async function GET(request: NextRequest) {
-  // Get the access token from the request
-  const accessToken = request.headers.get('Authorization')?.replace('Bearer ', '');
-  
-  if (!accessToken) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  
-  // Check if the premium feature is enabled for this user
-  const isPremiumEnabled = await isFeatureEnabledServer('premium-feature', accessToken);
+  // Token is read from request cookies (set by auth middleware)
+  const featureFlagServer = FeatureFlagServer.getInstance();
+  const isPremiumEnabled = await featureFlagServer.isFeatureEnabledServer('premium-feature', request);
   
   if (!isPremiumEnabled) {
     return NextResponse.json(
@@ -459,17 +437,12 @@ You can customize error handling for feature flag checks:
 ```tsx
 // app/api/feature/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { isFeatureEnabledServer } from '@nebulr/bridge-nextjs/server';
+import { FeatureFlagServer } from '@nebulr-group/bridge-nextjs/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const accessToken = request.headers.get('Authorization')?.replace('Bearer ', '');
-    
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    const isFeatureEnabled = await isFeatureEnabledServer('my-feature', accessToken);
+    const featureFlagServer = FeatureFlagServer.getInstance();
+    const isFeatureEnabled = await featureFlagServer.isFeatureEnabledServer('my-feature', request);
     
     if (!isFeatureEnabled) {
       // Custom error response
@@ -501,7 +474,7 @@ For feature flags in server components:
 
 ```tsx
 // app/premium/page.tsx
-import { ServerFeatureFlag } from '@nebulr/bridge-nextjs/server';
+import { ServerFeatureFlag } from '@nebulr-group/bridge-nextjs/server';
 
 export default function PremiumPage() {
   return (
@@ -553,14 +526,14 @@ You can also use `planService.redirectToPlanSelection(config, accessToken)` dire
 Access configuration values in your application:
 
 ```tsx
-import { useBridgeConfig } from '@nebulr/bridge-nextjs';
+import { useBridgeConfig } from '@nebulr-group/bridge-nextjs/client';
 
 function ConfigDisplay() {
   const config = useBridgeConfig();
   
   return (
     <div>
-      <h2>bridge Configuration</h2>
+      <h2>Bridge Configuration</h2>
       <p>App ID: {config.appId}</p>
       <p>Auth Base URL: {config.authBaseUrl}</p>
       <p>Callback URL: {config.callbackUrl}</p>
@@ -571,13 +544,13 @@ function ConfigDisplay() {
 
 ### Environment Variables
 
-bridge configuration is primarily set through environment variables in your `.env.local` file. 
+Bridge configuration is primarily set through environment variables in your `.env.local` file. 
 
 #### Required Configuration
 
 | Variable Name | Description |
 |---------------|-------------|
-| `NEXT_PUBLIC_BRIDGE_APP_ID` | Your bridge application ID (get this from the Control Center → Keys) |
+| `NEXT_PUBLIC_BRIDGE_APP_ID` | Your Bridge application ID (get this from the Control Center → Keys) |
 
 #### Optional Configuration
 
@@ -585,11 +558,11 @@ All these settings have sensible defaults and are optional:
 
 | Variable Name | Description | Default Value |
 |---------------|-------------|---------------|
-| `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL` | Base URL for bridge auth services | `https://api.thebridge.dev/auth` |
+| `NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL` | Base URL for Bridge auth services | `https://api.thebridge.dev/auth` |
 | `NEXT_PUBLIC_BRIDGE_CALLBACK_URL` | Custom OAuth callback URL | Auto-determined from origin |
 | `NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE` | Route to redirect to after login | `/` |
 | `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` | Route for login page | `/login` |
-| `NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL` | URL for team management portal | bridge default portal |
+| `NEXT_PUBLIC_BRIDGE_TEAM_MANAGEMENT_URL` | URL for team management portal | Bridge default portal |
 | `NEXT_PUBLIC_BRIDGE_DEBUG` | Enable debug logging | `false` |
 
 #### Example Configuration Files

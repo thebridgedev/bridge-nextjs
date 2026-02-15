@@ -73,4 +73,4 @@ export const config = {
 
 You have now set up a complete authentication flow with bridge in your Next.js application!
 
-There is a lot more the bridge-nextjs plugin can do. See [examples](examples.md) for advanced configuration, feature flags, and more.
+There is a lot more the Bridge Next.js plugin can do. See the [examples](../examples/examples.md) for advanced configuration, feature flags, and more.
