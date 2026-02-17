@@ -1,0 +1,51 @@
+# Test that the packed package installs cleanly with Next 15 and Next 16
+# (catches peer dependency / ERESOLVE issues before publish)
+name: Test install
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  install-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        next-version: ['15', '16']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install and build package
+        env:
+          NODE_ENV: development
+        run: |
+          npm ci
+          npx turbo run build --filter=@nebulr-group/bridge-nextjs
+
+      - name: Pack package
+        id: pack
+        run: |
+          cd bridge-nextjs
+          PACKED=$(npm pack)
+          echo "Packed: $PACKED"
+          mv "$PACKED" "../install-test-pkg.tgz"
+          cd ..
+
+      - name: Install with Next ${{ matrix.next-version }}
+        run: |
+          mkdir -p install-test
+          cd install-test
+          npm init -y
+          npm install next@${{ matrix.next-version }} react@^18 react-dom@^18
+          npm install ../install-test-pkg.tgz
+          echo "Install with next@${{ matrix.next-version }} succeeded"
