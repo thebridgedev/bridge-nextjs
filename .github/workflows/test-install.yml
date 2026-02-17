@@ -26,9 +26,11 @@ jobs:
           cache: 'npm'
 
       - name: Install and build package
+        env:
+          NODE_ENV: development
         run: |
           npm ci
-          npm run build
+          npx turbo run build
 
       - name: Pack package
         id: pack
