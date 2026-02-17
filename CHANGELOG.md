@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Install test: `pnpm run test:install` and CI workflow to verify the packed package installs with Next 15 and Next 16 (catches peer dependency / ERESOLVE issues before publish).
+- Install test: `npm run test:install` and CI workflow to verify the packed package installs with Next 15 and Next 16 (catches peer dependency / ERESOLVE issues before publish).
 
 ### Changed
 
@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - ERESOLVE when installing in apps using Next 16.
+- CI and install test use npm only (removed pnpm) to avoid Turborepo "multiple package managers" error.
 
 ## [0.2.0] - 2025-02-15
 

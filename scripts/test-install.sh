@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # Test that the packed package installs cleanly with Next 15 and Next 16.
-# Run from repo root: pnpm run test:install (or ./scripts/test-install.sh)
+# Run from repo root: npm run test:install (or ./scripts/test-install.sh)
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> Installing dependencies..."
-pnpm install
+npm ci
 
-echo "==> Building package (library only, no turbo)..."
-cd bridge-nextjs
-pnpm run build
+echo "==> Building package..."
+npm run build
 echo "==> Packing package..."
 PACKED=$(npm pack)
 mv "$PACKED" "$ROOT/install-test-pkg.tgz"

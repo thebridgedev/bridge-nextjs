@@ -28,7 +28,7 @@ yarn-error.log
 !.vscode/extensions.json
 .history/*
 
-# Install test (pnpm run test:install)
+# Install test (npm run test:install)
 install-test-tmp/
 install-test-pkg.tgz
 
