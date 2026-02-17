@@ -30,7 +30,7 @@ jobs:
           NODE_ENV: development
         run: |
           npm ci
-          npx turbo run build
+          npx turbo run build --filter=@nebulr-group/bridge-nextjs
 
       - name: Pack package
         id: pack
