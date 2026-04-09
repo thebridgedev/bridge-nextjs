@@ -23,6 +23,5 @@ jobs:
       install-command: pnpm install
       build-command: pnpm run build && pnpm run copy-files
     secrets:
-      npm-token: ${{ secrets.NPM_TOKEN }}
       docs-sync-key: ${{ secrets.DOCS_SYNC_KEY }}
 
