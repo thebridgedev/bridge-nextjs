@@ -217,6 +217,7 @@ export function LoginForm({
           <a
             href={magicLinkHref}
             className="bridge-btn bridge-btn-secondary bridge-sso-btn"
+            data-bridge-magic-link
           >
             <span className="bridge-sso-btn-inner">Sign in with Magic Link</span>
           </a>

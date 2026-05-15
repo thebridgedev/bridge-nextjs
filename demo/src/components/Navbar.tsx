@@ -12,9 +12,11 @@ export default function Navbar() {
 
   const isLoading = authLoading || profileLoading;
   
-  const handleLogout = () => {
-    logout();
-    // Redirect to main page after logout
+  const handleLogout = async () => {
+    // Await the auth-core logout (clears tokens, fires auth:logout, resets store)
+    // before navigating, so the unauthenticated nav state is in place by the
+    // time we land on `/`.
+    await logout();
     router.push('/');
   };
   

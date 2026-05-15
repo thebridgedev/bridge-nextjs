@@ -58,7 +58,7 @@ test.describe('SDK Set Password', () => {
 
       await page.locator('button:has-text("Set a password")').click();
 
-      const errorAlert = page.locator('[role="alert"]');
+      const errorAlert = page.locator('[data-bridge-alert]');
       await errorAlert.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
       expect(await errorAlert.textContent()).toContain('do not match');
     } finally {

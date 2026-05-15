@@ -81,7 +81,7 @@ test.describe('SDK Auth Alternatives', () => {
     await magicLinkBtn.first().click();
 
     // Should show a confirmation message or navigate to magic-link step
-    const confirmation = page.locator('[role="alert"], [data-bridge-auth-form]');
+    const confirmation = page.locator('[data-bridge-alert], [data-bridge-auth-form]');
     await expect(confirmation.first()).toBeVisible({ timeout: LONG_TIMEOUT });
   });
 

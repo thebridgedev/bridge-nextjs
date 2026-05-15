@@ -56,12 +56,22 @@ async function preSetup() {
   }
 
   const mode = process.argv[2] || 'test.local';
+  // All env files live in `config/`. Demo runtime for tests is one of:
+  //   - `.env.demo.test.local`  (test.local)
+  //   - `.env.demo.test.stage`  (test.stage)
+  //   - `.env.demo.test.prod`   (test.prod)
+  // The playwright webServer command injects the matching file via dotenv-cli
+  // before `next dev` runs, so the demo never reads from `demo/.env.*`.
   const envFileName =
-    mode === 'test.stage' ? '.env.test.stage' : mode === 'test.prod' ? '.env.test.prod' : '.env.test.local';
-  const envFile = path.resolve(rootDir, 'demo', envFileName);
+    mode === 'test.stage'
+      ? '.env.demo.test.stage'
+      : mode === 'test.prod'
+      ? '.env.demo.test.prod'
+      : '.env.demo.test.local';
+  const envFile = path.resolve(rootDir, 'config', envFileName);
 
   console.log('[pre-setup] Mode:', mode);
-  console.log('[pre-setup] Demo env file:', envFile);
+  console.log('[pre-setup] Demo runtime env file:', envFile);
 
   if (!process.env.PLAYWRIGHT_TEST_API_KEY) {
     throw new Error(
@@ -129,9 +139,9 @@ async function preSetup() {
 
   console.log('[pre-setup] Test app ready, App ID:', appId);
 
-  const demoDir = path.resolve(rootDir, 'demo');
-  if (!fs.existsSync(demoDir)) {
-    throw new Error(`Demo directory not found: ${demoDir}`);
+  const configDir = path.resolve(rootDir, 'config');
+  if (!fs.existsSync(configDir)) {
+    throw new Error(`Config directory not found: ${configDir}`);
   }
 
   const callbackUrl = `${APP_URL}/auth/oauth-callback`;

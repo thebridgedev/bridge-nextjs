@@ -33,7 +33,7 @@ test.describe('SDK Login', () => {
     await page.locator('button[type="submit"]:has-text("Sign in")').click();
 
     // Should show error alert
-    const alert = page.locator('[role="alert"]');
+    const alert = page.locator('[data-bridge-alert]');
     await alert.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
     expect(await alert.textContent()).toBeTruthy();
   });

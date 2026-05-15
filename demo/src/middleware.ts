@@ -1,24 +1,27 @@
 import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
 
+/**
+ * Demo middleware — fully permissive (`defaultAccess: 'public'`).
+ *
+ * `withBridgeAuth` is a server-side guard that reads tokens from cookies. The
+ * demo's primary flow is SDK auth, which stores tokens in `localStorage`
+ * (`bridge_tokens`) — invisible to the middleware. Letting it gate routes
+ * would redirect SDK-authenticated users away from their pages.
+ *
+ * Note: `match: '/:path*'` would NOT work here — `withBridgeAuth`'s matcher
+ * uses exact/prefix string equality (no path-parameter parsing). Use
+ * `defaultAccess: 'public'` to make every route public.
+ *
+ * Mirrors bridge-svelte's demo, which has no equivalent server middleware:
+ * route gating is done client-side by the SDK components (TeamManagementPanel,
+ * PlanSelector, etc. bail out gracefully when the user isn't authenticated).
+ *
+ * Consuming apps that use the hosted-redirect flow (cookies set by
+ * `createBridgeCallbackRoute`) should replace this with rules listing their
+ * protected routes explicitly.
+ */
 export default withBridgeAuth({
-  rules: [
-    { match: '/', public: true },
-    // Auth pages must be reachable before sign-in
-    { match: '/auth/login', public: true },
-    { match: '/auth/signup', public: true },
-    { match: '/auth/forgot-password', public: true },
-    { match: '/auth/magic-link', public: true },
-    { match: '/auth/set-password', public: true },
-    { match: '/auth/set-password/:token*', public: true },
-    { match: '/auth/setup-passkey', public: true },
-    { match: '/auth/setup-passkey/:token*', public: true },
-    { match: '/auth/oauth-callback', public: true },
-    // Server-side flag demos can render without an authenticated user
-    { match: '/feature-flag-example', public: true },
-    { match: '/server-feature-flag-example', public: true },
-    { match: '/api/feature-flag-example', public: true },
-    // Everything else (/team-panel, /protected, /subscription/*, /workspaces, /beta) is protected.
-  ],
+  defaultAccess: 'public',
 });
 
 export const config = {

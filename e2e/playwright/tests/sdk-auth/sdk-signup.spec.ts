@@ -16,7 +16,7 @@ test.describe('SDK Signup', () => {
     await page.locator('button:has-text("Sign up")').click();
 
     // Either success heading ("Check your email") or error alert (signup disabled, etc.)
-    const response = page.locator('[role="alert"], h2:has-text("Check your email")');
+    const response = page.locator('[data-bridge-alert], h2.bridge-success-heading');
     await response.first().waitFor({ state: 'visible', timeout: MED_TIMEOUT });
     const text = await response.first().textContent();
     expect(text).toBeTruthy();

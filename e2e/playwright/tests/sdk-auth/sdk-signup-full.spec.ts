@@ -49,7 +49,7 @@ test.describe('SDK Signup', () => {
     await page.locator('button:has-text("Sign up")').click();
 
     // Either success heading ("Check your email") or error alert
-    const response = page.locator('[role="alert"], h2:has-text("Check your email")');
+    const response = page.locator('[data-bridge-alert], h2.bridge-success-heading');
     await response.first().waitFor({ state: 'visible', timeout: LONG_TIMEOUT });
     const text = await response.first().textContent();
     expect(text).toBeTruthy();
@@ -81,7 +81,7 @@ test.describe('SDK Signup', () => {
     await page.locator('button:has-text("Sign up")').click();
 
     // Wait for success confirmation (success shows h2, not an alert)
-    await page.locator('h2:has-text("Check your email"), [role="alert"]').first()
+    await page.locator('h2.bridge-success-heading, [data-bridge-alert]').first()
       .waitFor({ state: 'visible', timeout: LONG_TIMEOUT });
 
     // Step 2: Get the verification link from the test data API

@@ -5,7 +5,7 @@
   "license": "MIT",
   "author": "Iman Pouya",
   "scripts": {
-    "dev": "next dev",
+    "dev": "dotenv -e ../config/.env.local -- next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

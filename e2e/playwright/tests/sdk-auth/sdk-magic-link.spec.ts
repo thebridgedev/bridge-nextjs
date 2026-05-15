@@ -13,7 +13,7 @@ test.describe('SDK Magic Link', () => {
     await page.locator('button:has-text("Send magic link")').click();
 
     // Should show success or error alert
-    const alert = page.locator('[role="alert"]');
+    const alert = page.locator('[data-bridge-alert]');
     await alert.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
     const text = await alert.textContent();
     expect(text).toBeTruthy();

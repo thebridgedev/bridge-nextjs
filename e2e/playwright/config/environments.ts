@@ -67,10 +67,16 @@ export function getEnvironmentConfig(environment: 'local' | 'stage' | 'prod'): E
       const testDataApiUrl = isContainer
         ? getServiceUrl('bridge-api', 3000, 3200, isContainer)
         : process.env.LOCAL_TEST_DATA_API_URL || 'http://localhost:3200';
+      // apiBaseUrl is the auth-core root (without /auth or /cloud-views).
+      // Subscription / feature-flag specs use it as the base for `page.route(...)` mocks.
+      const apiBaseUrl = isContainer
+        ? getServiceUrl('bridge-api', 3000, 3200, isContainer)
+        : process.env.LOCAL_API_BASE_URL || 'http://localhost:3200';
 
       return {
         name: 'local',
         baseUrl,
+        apiBaseUrl,
         authBaseUrl,
         cloudViewsUrl,
         testDataApiUrl,
@@ -84,8 +90,9 @@ export function getEnvironmentConfig(environment: 'local' | 'stage' | 'prod'): E
       return {
         name: 'stage',
         baseUrl,
-        authBaseUrl: requireEnv('STAGE_AUTH_BASE_URL'),
-        cloudViewsUrl: requireEnv('STAGE_CLOUD_VIEWS_URL'),
+        apiBaseUrl: requireEnv('STAGE_API_BASE_URL'),
+        authBaseUrl: process.env.STAGE_AUTH_BASE_URL,
+        cloudViewsUrl: process.env.STAGE_CLOUD_VIEWS_URL,
         testDataApiUrl: requireEnv('STAGE_TEST_DATA_API_URL'),
         testDataApiKey,
         appId,
@@ -96,6 +103,7 @@ export function getEnvironmentConfig(environment: 'local' | 'stage' | 'prod'): E
       return {
         name: 'prod',
         baseUrl,
+        apiBaseUrl: requireEnv('PROD_API_BASE_URL'),
         testDataApiUrl: requireEnv('PROD_TEST_DATA_API_URL'),
         testDataApiKey,
         appId,

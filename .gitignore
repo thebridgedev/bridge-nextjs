@@ -39,8 +39,12 @@ install-test-pkg.tgz
 /coverage
 test-reports/
 e2e/playwright/.auth/
-config/.env.test.local
-demo/.env.test.local
+# All .env*.local files in config/ (test infra, dev runtime, demo test runtime).
+# Only `.example` templates are committed.
+config/.env*.local
+# Legacy demo/.env paths — kept ignored in case anyone re-creates one. The
+# canonical home for env files is now `config/`.
+demo/.env*
 /libpeerconnection.log
 testem.log
 /typings

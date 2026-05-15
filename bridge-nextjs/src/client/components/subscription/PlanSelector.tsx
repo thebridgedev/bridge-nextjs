@@ -60,7 +60,15 @@ export function PlanSelector({
     return 'select-plan';
   }, [status]);
 
-  const currentPlanKey = status?.plan ?? null;
+  // auth-core's `SubscriptionStatus.plan` is typed as `string` in 0.1.2 but
+  // the actual API and bridge-svelte's runtime use shape `{ key, name, ... }`.
+  // Handle both: object form (current API) and string fallback (older deployments).
+  const planField = status?.plan as unknown as
+    | { key: string }
+    | string
+    | undefined;
+  const currentPlanKey =
+    typeof planField === 'string' ? planField : planField?.key ?? null;
 
   useEffect(() => {
     if (!status && !loading) {
@@ -135,6 +143,20 @@ export function PlanSelector({
               <Alert variant="error">
                 Your last payment failed. Please update your payment method to continue.
               </Alert>
+              <button
+                type="button"
+                className="bridge-btn-primary bridge-plan-portal-btn"
+                onClick={() => {
+                  // auth-core 0.1.2 doesn't expose a billing portal URL;
+                  // svelte's `getBridgeAuth().getPortalUrl()` is the future API.
+                  // Surfacing the action so consumers can wire their own flow.
+                  setPickError(
+                    'Billing portal not yet wired — implement getPortalUrl on auth-core.'
+                  );
+                }}
+              >
+                Manage billing
+              </button>
             </div>
           )}
 

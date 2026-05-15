@@ -7,13 +7,6 @@ dotenv.config({
   override: false,
 });
 
-function getDemoEnvFile(): string {
-  const project = process.env.PLAYWRIGHT_PROJECT_NAME || '';
-  if (project.includes('prod')) return '.env.test.prod';
-  if (project.includes('stage')) return '.env.test.stage';
-  return '.env.test.local';
-}
-
 export default defineConfig({
   testDir: './e2e/playwright/tests',
   timeout: 60_000,
@@ -45,7 +38,13 @@ export default defineConfig({
   ],
   outputDir: 'test-reports/test-results',
   webServer: {
-    command: `cd demo && npx dotenv -e ${getDemoEnvFile()} -- npx next dev -p 3010`,
+    // All env files live in `bridge-nextjs/config/` (see `.gitignore`).
+    // `config/.env.demo.test.local` is auto-written by `pre-setup.ts` with the
+    // fresh test appId + apiBaseUrl + callback. `dotenv-cli` injects it into
+    // process.env before `next dev` runs, so the demo never depends on any
+    // file in its own directory — keeping the developer's `config/.env.local`
+    // (their own appId for `npm run dev`) cleanly separated from test runs.
+    command: `cd demo && dotenv -e ../config/.env.demo.test.local -- next dev -p 3010`,
     url: 'http://localhost:3010',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

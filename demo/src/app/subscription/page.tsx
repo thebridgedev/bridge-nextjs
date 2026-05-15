@@ -1,9 +1,9 @@
 'use client';
 
-import { PlanSelector } from '@nebulr-group/bridge-nextjs/client';
+import { PlanSelector, ProtectedRoute } from '@nebulr-group/bridge-nextjs/client';
 import { useEffect, useState } from 'react';
 
-export default function SubscriptionPage() {
+function SubscriptionContent() {
   // window.location.origin is client-only; defer until mount to avoid SSR mismatch
   const [origin, setOrigin] = useState('');
   useEffect(() => setOrigin(window.location.origin), []);
@@ -20,5 +20,13 @@ export default function SubscriptionPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function SubscriptionPage() {
+  return (
+    <ProtectedRoute redirectTo="/auth/login">
+      <SubscriptionContent />
+    </ProtectedRoute>
   );
 }

@@ -1,5 +1,7 @@
 'use client';
 
+'use client';
+
 import type { AuthState } from '@nebulr-group/bridge-auth-core';
 import { useCallback } from 'react';
 import { getBridgeAuth, useBridgeStore } from '../../core/bridge-instance';
@@ -60,8 +62,20 @@ export function useAuth(): UseAuthReturn {
   }, []);
 
   const logout = useCallback(async () => {
+    // auth-core's `logout()` does `window.location.href = createLogoutUrl()` —
+    // a hard redirect to bridge-api's hosted logout endpoint, which doesn't fit
+    // an SDK-auth flow. Use `clearSession()` to drop tokens locally and reset
+    // the bridge store manually so subscribed hooks re-render immediately.
+    // (auth-core 0.1.2's logout signature takes no options.)
     try {
-      await getBridgeAuth().logout();
+      getBridgeAuth().clearSession();
+      useBridgeStore.setState({
+        tokens: null,
+        profile: null,
+        flags: {},
+        authState: 'unauthenticated',
+        tenantUsers: [],
+      });
     } catch (err) {
       logger.error('[useAuth] logout failed:', err);
       throw err;
