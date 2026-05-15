@@ -77,6 +77,36 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Inline step machine — mirrors bridge-svelte. Forgot-password renders in
+  // place of the credentials form (not a separate route) so the spec's
+  // "click forgot → no email/password inputs → click back-to-login → email
+  // input visible again" round-trip works without a navigation.
+  const [step, setStep] = useState<'credentials' | 'forgot-password'>('credentials');
+  const [fpEmailSent, setFpEmailSent] = useState(false);
+  const [fpLoading, setFpLoading] = useState(false);
+
+  function goBackToCredentials() {
+    setStep('credentials');
+    setFpEmailSent(false);
+    setError(null);
+  }
+
+  async function handleForgotSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (fpLoading) return;
+    setError(null);
+    setFpLoading(true);
+    try {
+      await getBridgeAuth().sendResetPasswordLink(email);
+      setFpEmailSent(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset link.');
+      onError?.(err);
+    } finally {
+      setFpLoading(false);
+    }
+  }
+
   const effectiveSso =
     ssoConnections.length > 0 ? ssoConnections : buildSsoConnections(appConfig);
   const effectiveShowMagicLink = showMagicLink ?? appConfig?.magicLinkEnabled ?? false;
@@ -131,6 +161,54 @@ export function LoginForm({
   if (authState === 'mfa-required') return <MfaChallenge onError={onError} />;
   if ((authState as any) === 'mfa-setup-required') return <MfaSetup onError={onError} />;
   if (authState === 'tenant-selection') return <TenantSelector onError={onError} />;
+
+  if (step === 'forgot-password') {
+    return (
+      <AuthFormWrapper heading="Reset your password" className={className} style={style} {...rest}>
+        {error && <Alert variant="error">{error}</Alert>}
+
+        {fpEmailSent ? (
+          <>
+            <Alert variant="success">Check your email for a password reset link.</Alert>
+            <div className="bridge-form-footer">
+              <button type="button" className="bridge-link" onClick={goBackToCredentials}>
+                Back to login
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <form onSubmit={handleForgotSubmit}>
+              <div className="bridge-form-group">
+                <label htmlFor="forgot-email">Email</label>
+                <input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={fpLoading}
+                />
+              </div>
+              <button
+                type="submit"
+                className="bridge-btn bridge-btn-primary"
+                disabled={fpLoading || !email.trim()}
+              >
+                {fpLoading ? <Spinner size={16} /> : 'Send reset link'}
+              </button>
+            </form>
+            <div className="bridge-form-footer">
+              <button type="button" className="bridge-link" onClick={goBackToCredentials}>
+                Back to login
+              </button>
+            </div>
+          </>
+        )}
+      </AuthFormWrapper>
+    );
+  }
 
   return (
     <AuthFormWrapper heading={heading} className={className} style={style} {...rest}>
@@ -190,9 +268,16 @@ export function LoginForm({
 
         {effectiveShowForgotPassword && (
           <div className="bridge-forgot-row">
-            <a href={forgotPasswordHref} className="bridge-link">
+            <button
+              type="button"
+              className="bridge-link"
+              onClick={() => {
+                setStep('forgot-password');
+                setError(null);
+              }}
+            >
               Forgot password?
-            </a>
+            </button>
           </div>
         )}
       </form>
