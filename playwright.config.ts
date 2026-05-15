@@ -28,7 +28,11 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: process.env.LOCAL_BASE_URL || 'http://localhost:3001',
+    // Hard-coded :3010 so `npm run test:e2e` runs without any env override.
+    // :3000 is reserved for `next dev` (developer-facing demo start), :3001 is
+    // bridge-svelte's test harness. :3010 keeps the bridge-nextjs test harness
+    // isolated from both. LOCAL_BASE_URL is still respected as an escape hatch.
+    baseURL: process.env.LOCAL_BASE_URL || 'http://localhost:3010',
     trace: process.env.PLAYWRIGHT_RECORD_ALL === 'true' ? 'on' : 'retain-on-failure',
     screenshot: process.env.PLAYWRIGHT_RECORD_ALL === 'true' ? 'on' : 'only-on-failure',
     headless: process.env.PLAYWRIGHT_HEADED !== 'true',
@@ -41,8 +45,8 @@ export default defineConfig({
   ],
   outputDir: 'test-reports/test-results',
   webServer: {
-    command: `cd demo && npx dotenv -e ${getDemoEnvFile()} -- npx next dev -p 3001`,
-    url: 'http://localhost:3001',
+    command: `cd demo && npx dotenv -e ${getDemoEnvFile()} -- npx next dev -p 3010`,
+    url: 'http://localhost:3010',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

@@ -21,9 +21,9 @@ async function globalSetup() {
   const testDataClient = createTestDataClientFromEnv();
   const testAppDomain = process.env.APP_DOMAIN || 'BRIDGE_NEXTJS_TEST_DASHBOARD';
   const testAppName = process.env.TEST_APP_NAME || 'Bridge Next.js Test Dashboard';
-  const ownerEmail = process.env.TEST_OWNER_EMAIL || 'playwright-e2e@thebridge.io';
+  const ownerEmail = process.env.TEST_OWNER_EMAIL || 'playwright-e2e@example.com';
   const ownerPassword = process.env.TEST_OWNER_PASSWORD || 'helloworld';
-  const appUrl = process.env.LOCAL_BASE_URL || 'http://localhost:3001';
+  const appUrl = process.env.LOCAL_BASE_URL || 'http://localhost:3010';
 
   try {
     const result = await testDataClient.setupTestApp(

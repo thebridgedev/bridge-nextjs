@@ -1,94 +1,30 @@
 'use client';
 
-import { FeatureFlag, useBridgeConfig } from '@nebulr-group/bridge-nextjs/client';
+import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 import Link from 'next/link';
-import { Component, ReactNode } from 'react';
-import FeatureFlagAPIExample from '../components/FeatureFlagAPIExample';
+import { ConfigStatus } from '../components/ConfigStatus';
 import './page.css';
 
-// Simple Hello component to demonstrate feature flags
-function HelloComponent() {
-  return (
-    <div className="feature-status active">
-      <p>Feature flag "demo-flag" is active</p>
-    </div>
-  );
-}
-
-// Error boundary component to catch errors from useBridgeConfig
-class ConfigErrorBoundary extends Component<
-  { children: ReactNode; fallback: (error: Error) => ReactNode },
-  { error: Error | null }
-> {
-  constructor(props: { children: ReactNode; fallback: (error: Error) => ReactNode }) {
-    super(props);
-    this.state = { error: null };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  render() {
-    if (this.state.error) {
-      return this.props.fallback(this.state.error);
-    }
-
-    return this.props.children;
-  }
-}
-
-// Component that uses the hook
-function ConfigDisplay() {
-  const config = useBridgeConfig();
-  
-  return (
-    <div className="feature-status active">
-      <p className="font-bold">Success</p>
-      <p>bridge configuration initialized with appId: {config.appId}</p>
-    </div>
-  );
-}
-
-// Error display component
-function ConfigError({ error }: { error: Error }) {
-  return (
-    <div className="feature-status">
-      <p className="font-bold">Error</p>
-      <p>{error.message}</p>
-      <p className="mt-2 text-sm">
-        {error.message.includes('appId is required') ? (
-          <>
-            Please set the <code>NEXT_PUBLIC_BRIDGE_APP_ID</code> environment variable or provide an appId in the BridgeConfigProvider.
-          </>
-        ) : (
-          <>
-            Make sure the BridgeConfigProvider is properly initialized in your app.
-          </>
-        )}
-      </p>
-    </div>
-  );
-}
-
+/**
+ * Mirrors bridge-svelte's `routes/+page.svelte`. The Svelte source includes a
+ * commented-out FeatureFlagAPIExample block and a commented-out link to the
+ * server-side flag demo — we preserve those as live links here since the
+ * nextjs demo is the only place those nextjs-specific endpoints exist.
+ */
 export default function Home() {
   return (
-    <div className="page-container">      
+    <div className="page-container">
       <div className="container">
         <div className="content">
           <div className="hero">
             <h1 className="heading-xl">Welcome to the bridge Next.js Demo</h1>
             <p className="text-lead">
-              This demo showcases the integration of bridge features in a Next.js application.
+              This demo showcases the integration of Bridge features in a Next.js application.
             </p>
           </div>
 
-          <ConfigErrorBoundary
-            fallback={(error) => <ConfigError error={error} />}
-          >
-            <ConfigDisplay />
-          </ConfigErrorBoundary>
-          
+          <ConfigStatus />
+
           <div className="features-overview">
             <h2 className="heading-lg">The code demonstrates the following features</h2>
             <div className="features-grid">
@@ -105,7 +41,7 @@ export default function Home() {
               <div className="feature-group">
                 <h3 className="heading-md">👥 Team Management</h3>
                 <ul>
-                  <li>Team members overview</li>
+                  <li><Link href="/team-panel">Team Panel (Native SDK)</Link></li>
                   <li>Role management</li>
                   <li>Invite system</li>
                   <li>Permissions handling</li>
@@ -113,12 +49,32 @@ export default function Home() {
               </div>
 
               <div className="feature-group">
-                <h3 className="heading-md">🔐 Authentication</h3>
+                <h3 className="heading-md">🔐 Authentication (OAuth Redirect)</h3>
                 <ul>
-                  <li>Login & logout flow</li>
+                  <li>Login & logout via hosted page</li>
                   <li>Protected routes</li>
                   <li>Automatic token renewal</li>
                   <li>Profile information</li>
+                </ul>
+              </div>
+
+              <div className="feature-group">
+                <h3 className="heading-md">🔑 Authentication (SDK Auth)</h3>
+                <ul>
+                  <li><Link href="/auth/login">Login</Link> — email, password, MFA, tenant</li>
+                  <li><Link href="/auth/signup">Signup</Link> — registration form</li>
+                  <li><Link href="/auth/forgot-password">Forgot Password</Link> — reset link</li>
+                  <li><Link href="/auth/magic-link">Magic Link</Link> — passwordless</li>
+                </ul>
+              </div>
+
+              <div className="feature-group">
+                <h3 className="heading-md">💳 Subscriptions</h3>
+                <ul>
+                  <li><Link href="/subscription">Plan Selector</Link> — pick/change plan</li>
+                  <li>Free plan activation (no Stripe)</li>
+                  <li>Stripe Checkout for paid plans</li>
+                  <li>Billing portal redirect</li>
                 </ul>
               </div>
 
@@ -133,64 +89,70 @@ export default function Home() {
               </div>
             </div>
           </div>
-          
+
           <div className="feature-examples">
             <h2 className="heading-lg">Feature Flag Examples</h2>
-            
+
             <div className="feature-examples-grid">
               <div className="feature-example">
                 <h3 className="heading-md">Cached Feature Flag</h3>
                 <div className="card">
                   <p className="note">Uses cached values (5-minute cache)</p>
-                  <FeatureFlag 
-                    flagName="demo-flag"
-                    fallback={<div className="feature-status">Create a feature flag called "demo-flag"</div>}
-                  >
+                  <FeatureFlag flagName="demo-flag">
                     <div className="feature-status active">
                       <p>Feature flag "demo-flag" is active</p>
                     </div>
                   </FeatureFlag>
+                  <FeatureFlag flagName="demo-flag" negate>
+                    <div className="feature-status">
+                      Create a feature flag called "demo-flag"
+                    </div>
+                  </FeatureFlag>
                 </div>
               </div>
-              
+
               <div className="feature-example">
                 <h3 className="heading-md">Live Feature Flag</h3>
                 <div className="card">
                   <p className="note">Direct API call on each load</p>
-                  <FeatureFlag 
-                    flagName="demo-flag"
-                    forceLive={true}
-                    fallback={<div className="feature-status">Create a feature flag called "demo-flag"</div>}
-                  >
+                  <FeatureFlag flagName="demo-flag" forceLive>
                     <div className="feature-status active">
                       <p>Feature flag "demo-flag" is active</p>
+                    </div>
+                  </FeatureFlag>
+                  <FeatureFlag flagName="demo-flag" forceLive negate>
+                    <div className="feature-status">
+                      Create a feature flag called "demo-flag"
                     </div>
                   </FeatureFlag>
                 </div>
               </div>
             </div>
-            
+
+            {/*
+              The two cards below are NEXT.JS-SPECIFIC demos (no bridge-svelte
+              equivalent). svelte's home page comments these out; we leave them
+              live because the server-side flag and API-route-with-middleware
+              patterns only exist in Next.
+            */}
             <div className="feature-examples-grid">
               <div className="feature-example">
                 <h3 className="heading-md">Client-Side API Feature Flag</h3>
                 <div className="card">
-                  <FeatureFlagAPIExample />
+                  <p className="note">
+                    The Next.js-only <Link href="/feature-flag-example">/feature-flag-example</Link>{' '}
+                    page calls an API route gated by the demo-flag.
+                  </p>
                 </div>
               </div>
-              
+
               <div className="feature-example">
                 <h3 className="heading-md">Server-Side Feature Flag</h3>
                 <div className="card">
-                  <p className="mb-4">
-                    Server-side feature flags are rendered on the server and cannot be directly embedded in client components.
-                    Click the link below to see the server-side feature flag example:
+                  <p className="note">
+                    See the Next.js-only <Link href="/server-feature-flag-example">/server-feature-flag-example</Link>{' '}
+                    for the SSR-evaluated flag pattern.
                   </p>
-                  <Link 
-                    href="/server-feature-flag-example" 
-                    className="nav-link"
-                  >
-                    View Server-Side Feature Flag Example
-                  </Link>
                 </div>
               </div>
             </div>

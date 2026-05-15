@@ -1,114 +1,55 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Profile, ProfileService } from '../../shared/services/profile.service';
-import { useBridgeConfig } from './use-bridge-config';
-import { useBridgeToken } from './use-bridge-token';
+import type { Profile } from '@nebulr-group/bridge-auth-core';
+import { useCallback } from 'react';
+import { getBridgeAuth, useBridgeStore } from '../../core/bridge-instance';
+import { logger } from '../../shared/logger';
+
+interface UseProfileReturn {
+  /** Current user profile. `undefined` = still loading; `null` = no profile available. */
+  profile: Profile | null | undefined;
+  /** True while bridge is still loading the profile. */
+  isLoading: boolean;
+  /** Last profile error message, if any. */
+  error: string | null;
+  /** Re-fetch the profile from auth-core. */
+  updateProfile: () => Promise<Profile | null>;
+  /** Whether the current user has completed onboarding. */
+  isOnboarded: boolean;
+  /** Whether the current user has access to multiple tenants. */
+  hasMultiTenantAccess: boolean;
+}
 
 /**
- * Hook for profile functionality
- * 
- * @returns Profile data and functions
- * 
- * @example
- * import { useProfile } from 'bridge-nextjs';
- * 
- * function MyComponent() {
- *   const { 
- *     profile, 
- *     isLoading, 
- *     error,
- *     updateProfile
- *   } = useProfile();
- *   
- *   if (isLoading) return <div>Loading...</div>;
- *   if (error) return <div>Error: {error}</div>;
- *   
- *   return (
- *     <div>
- *       <h1>Welcome, {profile?.name}</h1>
- *       <p>Email: {profile?.email}</p>
- *     </div>
- *   );
- * }
+ * Reactive profile data, backed by the auth-core singleton.
+ *
+ * Mirrors bridge-svelte's `profileStore` + the convenience derived stores
+ * `isOnboarded` / `hasMultiTenantAccess`. Updates automatically when auth-core
+ * fires `auth:profile`, `auth:login`, `auth:logout`, or `auth:workspace-changed`.
  */
-export function useProfile() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const config = useBridgeConfig();
-  const { isAuthenticated } = useBridgeToken();
-  
-  // Initialize profile service
-  useEffect(() => {
-    const profileService = ProfileService.getInstance();
-    profileService.init(config);
-  }, [config]);
-  
-  // Update profile when authentication state changes
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!isAuthenticated) {
-        setProfile(null);
-        setIsLoading(false);
-        return;
-      }
-      
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const profileService = ProfileService.getInstance();
-        await profileService.updateProfile();
-        const currentProfile = profileService.getCurrentProfile();
-        setProfile(currentProfile);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to fetch profile';
-        setError(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchProfile();
-  }, [isAuthenticated]);
-  
-  // Update profile function
+export function useProfile(): UseProfileReturn {
+  const profile = useBridgeStore((s) => s.profile);
+  const isLoading = useBridgeStore((s) => s.isLoading);
+  const error = useBridgeStore((s) => s.error);
+
   const updateProfile = useCallback(async (): Promise<Profile | null> => {
-    setIsLoading(true);
-    setError(null);
-    
     try {
-      const profileService = ProfileService.getInstance();
-      await profileService.updateProfile();
-      const currentProfile = profileService.getCurrentProfile();
-      setProfile(currentProfile);
-      return currentProfile;
+      const p = await getBridgeAuth().getProfile();
+      // The auth-core call updates the store via the auth:profile event;
+      // returning here so callers can await the resolved value if needed.
+      return p ?? null;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update profile';
-      setError(errorMessage);
+      logger.error('[useProfile] updateProfile failed:', err);
       return null;
-    } finally {
-      setIsLoading(false);
     }
   }, []);
-  
-  // Utility functions
-  const isOnboarded = useCallback((): boolean => {
-    return profile?.onboarded || false;
-  }, [profile]);
-  
-  const hasMultiTenantAccess = useCallback((): boolean => {
-    return profile?.multiTenantAccess || false;
-  }, [profile]);
-  
+
   return {
     profile,
     isLoading,
     error,
     updateProfile,
-    isOnboarded,
-    hasMultiTenantAccess
+    isOnboarded: profile?.onboarded ?? false,
+    hasMultiTenantAccess: profile?.multiTenantAccess ?? false,
   };
-} 
+}

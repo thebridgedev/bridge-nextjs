@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@nebulr-group/bridge-nextjs": "file:../bridge-nextjs",
+    "@stripe/stripe-js": "^9.5.0",
     "next": "15.2.4",
     "react": "^18",
     "react-dom": "^18"

@@ -1,127 +1,90 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { AuthService } from '../../shared/services/auth.service';
-import { useBridgeConfig } from './use-bridge-config';
+import type { AuthState } from '@nebulr-group/bridge-auth-core';
+import { useCallback } from 'react';
+import { getBridgeAuth, useBridgeStore } from '../../core/bridge-instance';
+import { logger } from '../../shared/logger';
+
+interface UseAuthReturn {
+  /** Whether the current user has a valid access token. */
+  isAuthenticated: boolean;
+  /** True while bridge is still initializing the auth state. */
+  isLoading: boolean;
+  /** Last auth error message, if any. */
+  error: string | null;
+  /** Current auth state machine value. */
+  authState: AuthState;
+  /** Redirect to the hosted bridge login. */
+  login: (options?: { redirectUri?: string }) => Promise<void>;
+  /** Clear tokens and reset auth state. */
+  logout: () => Promise<void>;
+  /** Exchange an OAuth callback `code` for tokens. */
+  handleCallback: (code: string) => Promise<void>;
+}
 
 /**
- * Hook for authentication functionality
- * 
- * @returns Authentication functions and state
- * 
+ * Reactive auth state and actions, backed by the auth-core singleton.
+ *
+ * Mirrors bridge-svelte's `auth` + `isAuthenticated` + `authState` exports as a
+ * single hook return value. Updates automatically when auth-core emits events.
+ *
  * @example
- * import { useAuth } from 'bridge-nextjs';
- * 
- * function MyComponent() {
- *   const { 
- *     isAuthenticated, 
- *     login, 
- *     logout 
- *   } = useAuth();
- *   
- *   return (
- *     <div>
- *       {isAuthenticated ? (
- *         <button onClick={logout}>Logout</button>
- *       ) : (
- *         <button onClick={() => login()}>Login</button>
- *       )}
- *     </div>
- *   );
+ * ```tsx
+ * import { useAuth } from '@nebulr-group/bridge-nextjs/client';
+ *
+ * function Header() {
+ *   const { isAuthenticated, login, logout } = useAuth();
+ *   return isAuthenticated
+ *     ? <button onClick={logout}>Logout</button>
+ *     : <button onClick={() => login()}>Login</button>;
  * }
+ * ```
  */
-export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const config = useBridgeConfig();
-  
-  // Initialize auth service
-  useEffect(() => {
-    const authService = AuthService.getInstance();
-    authService.init(config);
-  }, [config]);
-  
-  // Check authentication status
-  useEffect(() => {
-    const checkAuth = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const authService = AuthService.getInstance();
-        const authenticated = await authService.isAuthenticatedClient();
-        setIsAuthenticated(authenticated);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to check authentication status';
-        setError(errorMessage);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
+export function useAuth(): UseAuthReturn {
+  const tokens = useBridgeStore((s) => s.tokens);
+  const isLoading = useBridgeStore((s) => s.isLoading);
+  const error = useBridgeStore((s) => s.error);
+  const authState = useBridgeStore((s) => s.authState);
+
+  const login = useCallback(async (options?: { redirectUri?: string }) => {
+    try {
+      const bridge = getBridgeAuth();
+      const loginUrl = bridge.createLoginUrl(options);
+      if (typeof window !== 'undefined') {
+        window.location.href = loginUrl;
       }
-    };
-    
-    checkAuth();
-  }, []);
-  
-  // Login function
-  const login = useCallback(async (options?: { redirectUri?: string }): Promise<void> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const authService = AuthService.getInstance();
-      await authService.loginClient(options);
-      // Note: This will redirect the user, so the code below won't execute
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to login';
-      setError(errorMessage);
-      setIsLoading(false);
+      logger.error('[useAuth] login failed:', err);
+      throw err;
     }
   }, []);
-  
-  // Logout function
-  const logout = useCallback((): void => {
-    setIsLoading(true);
-    setError(null);
-    
+
+  const logout = useCallback(async () => {
     try {
-      const authService = AuthService.getInstance();
-      authService.logoutClient();
-      setIsAuthenticated(false);
+      await getBridgeAuth().logout();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to logout';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
+      logger.error('[useAuth] logout failed:', err);
+      throw err;
     }
   }, []);
-  
-  // Handle callback function
-  const handleCallback = useCallback(async (code: string): Promise<void> => {
-    setIsLoading(true);
-    setError(null);
-    
+
+  const handleCallback = useCallback(async (code: string) => {
+    if (!code) throw new Error('No authorization code provided');
     try {
-      const authService = AuthService.getInstance();
-      await authService.handleCallbackClient(code);
-      setIsAuthenticated(true);
+      await getBridgeAuth().handleCallback(code);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to handle callback';
-      setError(errorMessage);
-      setIsAuthenticated(false);
-    } finally {
-      setIsLoading(false);
+      logger.error('[useAuth] handleCallback failed:', err);
+      throw err;
     }
   }, []);
-  
+
   return {
-    isAuthenticated,
+    isAuthenticated: !!tokens?.accessToken,
     isLoading,
     error,
+    authState,
     login,
     logout,
-    handleCallback
+    handleCallback,
   };
-} 
+}

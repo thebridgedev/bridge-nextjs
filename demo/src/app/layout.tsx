@@ -1,4 +1,5 @@
 import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
+import '@nebulr-group/bridge-nextjs/styles';
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from '../components/Navbar';
