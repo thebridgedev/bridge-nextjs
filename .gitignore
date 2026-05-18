@@ -69,7 +69,7 @@ bridge-plugins/*
 bridge-angular-reference/*
 **/.turbo
 .bash_history
-*workspace*
+*.code-workspace
 
 
 # Project descriptions
