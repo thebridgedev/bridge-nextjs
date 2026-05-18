@@ -12,8 +12,10 @@ npm ci
 echo "==> Building package..."
 npm run build
 echo "==> Packing package..."
-PACKED=$(npm pack)
-mv "$PACKED" "$ROOT/install-test-pkg.tgz"
+# Pack the @nebulr-group/bridge-nextjs workspace — NOT the bridge-nextjs-monorepo
+# root wrapper. The wrapper is private and would produce an empty tarball.
+PACKED=$(npm pack -w bridge-nextjs --pack-destination "$ROOT" | tail -1)
+mv "$ROOT/$PACKED" "$ROOT/install-test-pkg.tgz"
 cd "$ROOT"
 
 TEST_DIR="$ROOT/install-test-tmp"
