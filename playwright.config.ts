@@ -7,13 +7,6 @@ dotenv.config({
   override: false,
 });
 
-function getDemoEnvFile(): string {
-  const project = process.env.PLAYWRIGHT_PROJECT_NAME || '';
-  if (project.includes('prod')) return '.env.test.prod';
-  if (project.includes('stage')) return '.env.test.stage';
-  return '.env.test.local';
-}
-
 export default defineConfig({
   testDir: './e2e/playwright/tests',
   timeout: 60_000,
@@ -28,7 +21,11 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: process.env.LOCAL_BASE_URL || 'http://localhost:3001',
+    // Hard-coded :3010 so `npm run test:e2e` runs without any env override.
+    // :3000 is reserved for `next dev` (developer-facing demo start), :3001 is
+    // bridge-svelte's test harness. :3010 keeps the bridge-nextjs test harness
+    // isolated from both. LOCAL_BASE_URL is still respected as an escape hatch.
+    baseURL: process.env.LOCAL_BASE_URL || 'http://localhost:3010',
     trace: process.env.PLAYWRIGHT_RECORD_ALL === 'true' ? 'on' : 'retain-on-failure',
     screenshot: process.env.PLAYWRIGHT_RECORD_ALL === 'true' ? 'on' : 'only-on-failure',
     headless: process.env.PLAYWRIGHT_HEADED !== 'true',
@@ -41,8 +38,14 @@ export default defineConfig({
   ],
   outputDir: 'test-reports/test-results',
   webServer: {
-    command: `cd demo && npx dotenv -e ${getDemoEnvFile()} -- npx next dev -p 3001`,
-    url: 'http://localhost:3001',
+    // All env files live in `bridge-nextjs/config/` (see `.gitignore`).
+    // `config/.env.demo.test.local` is auto-written by `pre-setup.ts` with the
+    // fresh test appId + apiBaseUrl + callback. `dotenv-cli` injects it into
+    // process.env before `next dev` runs, so the demo never depends on any
+    // file in its own directory — keeping the developer's `config/.env.local`
+    // (their own appId for `npm run dev`) cleanly separated from test runs.
+    command: `cd demo && dotenv -e ../config/.env.demo.test.local -- next dev -p 3010`,
+    url: 'http://localhost:3010',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

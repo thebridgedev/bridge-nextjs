@@ -1,18 +1,29 @@
 import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
 
-// Export the middleware function using the new simplified approach
+/**
+ * Demo middleware — fully permissive (`defaultAccess: 'public'`).
+ *
+ * `withBridgeAuth` is a server-side guard that reads tokens from cookies. The
+ * demo's primary flow is SDK auth, which stores tokens in `localStorage`
+ * (`bridge_tokens`) — invisible to the middleware. Letting it gate routes
+ * would redirect SDK-authenticated users away from their pages.
+ *
+ * Note: `match: '/:path*'` would NOT work here — `withBridgeAuth`'s matcher
+ * uses exact/prefix string equality (no path-parameter parsing). Use
+ * `defaultAccess: 'public'` to make every route public.
+ *
+ * Mirrors bridge-svelte's demo, which has no equivalent server middleware:
+ * route gating is done client-side by the SDK components (TeamManagementPanel,
+ * PlanSelector, etc. bail out gracefully when the user isn't authenticated).
+ *
+ * Consuming apps that use the hosted-redirect flow (cookies set by
+ * `createBridgeCallbackRoute`) should replace this with rules listing their
+ * protected routes explicitly.
+ */
 export default withBridgeAuth({
-  rules: [
-    { match: '/', public: true },
-    { match: '/login', public: true },
-    { match: '/auth/oauth-callback', public: true },
-    // All other routes are protected by default
-  ]
+  defaultAccess: 'public',
 });
 
-// Configure which paths the middleware should run on
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ]
-}; 
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};

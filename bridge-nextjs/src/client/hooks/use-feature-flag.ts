@@ -1,55 +1,49 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useBridgeStore } from '../../core/bridge-instance';
+import { isFeatureEnabled } from '../../shared/feature-flag';
 import { logger } from '../../shared/logger';
-import { isFeatureEnabled } from '../../shared/services/feature-flag.service';
-import { useBridgeConfig } from './use-bridge-config';
-import { useBridgeToken } from './use-bridge-token';
 
 interface UseFeatureFlagOptions {
   forceLive?: boolean;
 }
 
-const useFeatureFlag = (flagName: string, options: UseFeatureFlagOptions = {}): boolean => {
+/**
+ * Reactive feature flag check — mirrors bridge-svelte's `<FeatureFlag>` evaluation.
+ *
+ * Returns `false` until the flag is fetched. Re-runs when auth state changes
+ * (login, token refresh, workspace switch) so flags reflect the current user.
+ *
+ * `forceLive: true` bypasses auth-core's cache.
+ */
+const useFeatureFlag = (
+  flagName: string,
+  options: UseFeatureFlagOptions = {}
+): boolean => {
   const { forceLive = false } = options;
-  const [isEnabled, setIsEnabled] = useState<boolean>(false);
-  const config = useBridgeConfig();
-  const { getAccessToken, isAuthenticated } = useBridgeToken();
+  const tokens = useBridgeStore((s) => s.tokens);
+  const ready = useBridgeStore((s) => s.ready);
+  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    const checkFeatureFlag = async () => {
+    if (!ready) return;
+    let mounted = true;
+    (async () => {
       try {
-        const accessToken = getAccessToken();
-        
-        if (!accessToken) {
-          setIsEnabled(false);
-          return;
-        }
-        
-        if (!config.appId) {
-          logger.error('appId is required for feature flag checking');
-          setIsEnabled(false);
-          return;
-        }
-
-        const enabled = await isFeatureEnabled(
-          flagName,
-          config.appId,
-          accessToken,
-          forceLive,
-          config.cloudViewsUrl
-        );
-        setIsEnabled(enabled);
-      } catch (error) {
-        logger.error(`Failed to check feature flag ${flagName}:`, error);
-        setIsEnabled(false);
+        const result = await isFeatureEnabled(flagName, forceLive);
+        if (mounted) setEnabled(result);
+      } catch (err) {
+        logger.error(`[useFeatureFlag] flag "${flagName}" failed:`, err);
+        if (mounted) setEnabled(false);
       }
+    })();
+    return () => {
+      mounted = false;
     };
+  }, [flagName, forceLive, ready, tokens?.accessToken]);
 
-    checkFeatureFlag();
-  }, [flagName, config.appId, getAccessToken, isAuthenticated, forceLive]);
-
-  return isEnabled;
+  return enabled;
 };
 
-export default useFeatureFlag; 
+export default useFeatureFlag;

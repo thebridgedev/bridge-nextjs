@@ -3,12 +3,18 @@ type LogMethod = (...args: unknown[]) => void;
 let debugEnabled = false;
 
 /**
- * Set whether debug logging is enabled (e.g. from config.debug).
- * Call this from server code with getConfig().debug or from client when config is available.
+ * Set whether debug logging is enabled (driven by config.debug).
+ *
+ * Public name: matches bridge-svelte's `setLoggerDebug` so feature ports translate
+ * 1:1. The legacy `setDebug` alias is kept for backward compatibility with code
+ * that was written against the pre-port nextjs API.
  */
-export function setDebug(enabled: boolean): void {
+export function setLoggerDebug(enabled: boolean): void {
   debugEnabled = enabled;
 }
+
+/** @deprecated Use `setLoggerDebug` — kept for backward compatibility. */
+export const setDebug = setLoggerDebug;
 
 function createPrefixed(method: LogMethod, prefix: string): LogMethod {
   return (...args: unknown[]) => method(prefix, ...args);

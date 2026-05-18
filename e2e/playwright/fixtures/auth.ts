@@ -41,8 +41,10 @@ export const test = base.extend<AuthFixtures>({
     }
   },
 
-  authenticatedPage: async ({ page, testUser, envConfig }, use) => {
-    await loginViaBridgeAuth(page, testUser.email, testUser.password, envConfig);
+  // Uses the in-app SDK auth flow (mirrors bridge-svelte). The hosted-redirect
+  // helper `loginViaBridgeAuth` remains exported for tests that need it.
+  authenticatedPage: async ({ page, testUser }, use) => {
+    await loginViaSdkAuth(page, testUser.email, testUser.password);
     await use(page);
   },
 });
@@ -131,4 +133,52 @@ export async function loginViaBridgeAuth(
   if (!hasTokens) {
     throw new Error(`Login appeared to succeed but no bridge_access_token in localStorage. URL: ${page.url()}`);
   }
+}
+
+/**
+ * Login via the in-app SDK auth flow (the `<LoginForm>` rendered on `/auth/login`).
+ * Mirrors `bridge-svelte/e2e/playwright/fixtures/auth.ts::loginViaSdkAuth`.
+ *
+ * Unlike `loginViaBridgeAuth` (which redirects to hosted auth), SDK auth posts
+ * credentials directly to auth-core and stores `bridge_tokens` in localStorage.
+ */
+export async function loginViaSdkAuth(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
+  console.log(`[sdk-login] Starting SDK login for ${email}`);
+
+  await page.goto('/auth/login');
+  await page.waitForLoadState('networkidle');
+
+  const emailInput = page.locator('#login-email');
+  await emailInput.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
+  await emailInput.fill(email);
+
+  const passwordInput = page.locator('#login-password');
+  await passwordInput.fill(password);
+
+  const signInBtn = page.locator('button[type="submit"]:has-text("Sign in")');
+  await signInBtn.click();
+
+  await page.waitForFunction(
+    () => {
+      const raw = localStorage.getItem('bridge_tokens');
+      if (!raw) return false;
+      try {
+        const tokens = JSON.parse(raw);
+        return !!tokens?.accessToken;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: LONG_TIMEOUT },
+  );
+
+  await page.waitForURL('**/protected', { timeout: MED_TIMEOUT }).catch(() => {
+    /* may not redirect to /protected in all configurations */
+  });
+
+  console.log(`[sdk-login] SDK login complete for ${email}. Current URL: ${page.url()}`);
 }

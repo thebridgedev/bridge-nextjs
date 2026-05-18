@@ -1,6 +1,6 @@
 'use client';
 
-import { Login, useAuth, useProfile } from '@nebulr-group/bridge-nextjs/client';
+import { useAuth, useProfile } from '@nebulr-group/bridge-nextjs/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import '../app/globals.css';
@@ -12,9 +12,11 @@ export default function Navbar() {
 
   const isLoading = authLoading || profileLoading;
   
-  const handleLogout = () => {
-    logout();
-    // Redirect to main page after logout
+  const handleLogout = async () => {
+    // Await the auth-core logout (clears tokens, fires auth:logout, resets store)
+    // before navigating, so the unauthenticated nav state is in place by the
+    // time we land on `/`.
+    await logout();
     router.push('/');
   };
   
@@ -39,8 +41,16 @@ export default function Navbar() {
               Home
             </Link>
             
-            <Link href="/team" className="nav-link">
+            <Link href="/team-panel" className="nav-link">
               Team Management
+            </Link>
+
+            <Link href="/subscription" className="nav-link">
+              Subscription
+            </Link>
+
+            <Link href="/workspaces" className="nav-link">
+              Workspaces
             </Link>
             
             <Link href="/protected" className="nav-link">
@@ -53,9 +63,9 @@ export default function Navbar() {
           </div>
         ) : (
           <div className="nav-links">
-            <div className="nav-login">
-              <Login />
-            </div>
+            <Link href="/auth/login" className="nav-link nav-link--login">
+              Login
+            </Link>
             <Link href="/protected" className="nav-link">
               Protected Page
             </Link>
