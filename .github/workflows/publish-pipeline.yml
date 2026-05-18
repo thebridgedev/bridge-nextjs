@@ -19,9 +19,9 @@ jobs:
     with:
       working-directory: bridge-nextjs
       setup-bun: false
-      setup-pnpm: true
-      install-command: pnpm install
-      build-command: pnpm run build && pnpm run copy-files
+      setup-pnpm: false
+      install-command: npm ci
+      build-command: npm run build && npm run copy-files
     secrets:
       docs-sync-key: ${{ secrets.DOCS_SYNC_KEY }}
 
