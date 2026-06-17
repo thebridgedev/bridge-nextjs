@@ -8,7 +8,8 @@ export default function BetaPage() {
       <h1>Beta features</h1>
       <p>This page is gated by the <code>beta</code> feature flag.</p>
       <FeatureFlag
-        flagName="beta"
+        flagKey="beta"
+        defaultValue={false}
         fallback={
           <div className="feature-status">
             The <code>beta</code> flag is off for your user. Toggle it in the

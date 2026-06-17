@@ -149,8 +149,10 @@ export async function loginViaSdkAuth(
 ): Promise<void> {
   console.log(`[sdk-login] Starting SDK login for ${email}`);
 
-  await page.goto('/auth/login');
-  await page.waitForLoadState('networkidle');
+  // The demo keeps a persistent live-channel WebSocket open, so 'networkidle'
+  // can never fire and would hang here. Wait for DOM readiness instead and rely
+  // on the explicit element waits below.
+  await page.goto('/auth/login', { waitUntil: 'domcontentloaded' });
 
   const emailInput = page.locator('#login-email');
   await emailInput.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
@@ -164,7 +166,7 @@ export async function loginViaSdkAuth(
 
   await page.waitForFunction(
     () => {
-      const raw = localStorage.getItem('bridge_tokens');
+      const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
       if (!raw) return false;
       try {
         const tokens = JSON.parse(raw);
@@ -176,9 +178,16 @@ export async function loginViaSdkAuth(
     { timeout: LONG_TIMEOUT },
   );
 
-  await page.waitForURL('**/protected', { timeout: MED_TIMEOUT }).catch(() => {
-    /* may not redirect to /protected in all configurations */
-  });
+  // Wait for the post-login navigation to leave /auth/login. The demo's LoginForm
+  // pushes to '/' on success; with a paywall configured the user is then bounced
+  // to '/welcome'. Either way we just need to be off the login page before the
+  // caller proceeds. Don't pin a specific destination (it varies by config) and
+  // don't wait on 'networkidle' (the live WS keeps the network busy).
+  await page
+    .waitForURL((url) => !url.pathname.startsWith('/auth/login'), { timeout: MED_TIMEOUT })
+    .catch(() => {
+      /* some configs render the authed view in place without a route change */
+    });
 
   console.log(`[sdk-login] SDK login complete for ${email}. Current URL: ${page.url()}`);
 }

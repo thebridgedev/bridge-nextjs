@@ -132,7 +132,7 @@ test.describe('SDK Signup', () => {
     // Wait for tokens to appear in localStorage
     await page.waitForFunction(
       () => {
-        const raw = localStorage.getItem('bridge_tokens');
+        const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
         if (!raw) return false;
         try {
           const tokens = JSON.parse(raw);
@@ -145,7 +145,7 @@ test.describe('SDK Signup', () => {
     );
 
     const hasTokens = await page.evaluate(() => {
-      const raw = localStorage.getItem('bridge_tokens');
+      const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
       const tokens = JSON.parse(raw ?? '{}');
       return !!tokens?.accessToken;
     });

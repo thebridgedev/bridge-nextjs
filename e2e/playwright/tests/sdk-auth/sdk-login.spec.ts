@@ -11,7 +11,7 @@ test.describe('SDK Login', () => {
 
     // Verify tokens exist
     const hasTokens = await page.evaluate(() => {
-      const raw = localStorage.getItem('bridge_tokens');
+      const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
       if (!raw) return false;
       const tokens = JSON.parse(raw);
       return !!tokens?.accessToken && !!tokens?.refreshToken && !!tokens?.idToken;

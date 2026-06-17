@@ -1,7 +1,9 @@
 /* Page styles inspired by the Angular reference project */
 
-/* Import Inter font from Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Inter is provided (self-hosted) by next/font/google in layout.tsx — no external
+   @import here. An external Google Fonts @import is render-blocking and stalls in
+   offline/sandboxed environments (e.g. e2e), and a public demo shouldn't depend on
+   a third-party host at runtime. */
 
 /* Variables */
 :root {

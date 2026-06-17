@@ -41,7 +41,7 @@ test.describe('Login & Logout Flow', () => {
       await loginViaSdkAuth(page, testUser.email, testUser.password);
 
       const tokenData = await page.evaluate(() => {
-        const raw = localStorage.getItem('bridge_tokens');
+        const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
         return raw ? JSON.parse(raw) : null;
       });
 
@@ -95,7 +95,7 @@ test.describe('Login & Logout Flow', () => {
 
     // Tokens should be cleared
     const hasTokens = await page.evaluate(() => {
-      const raw = localStorage.getItem('bridge_tokens');
+      const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
       if (!raw) return false;
       try {
         return !!JSON.parse(raw)?.accessToken;

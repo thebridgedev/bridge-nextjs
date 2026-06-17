@@ -347,6 +347,47 @@ export class TestDataClient {
   }
 
   /**
+   * Ensures a plan exists (create-if-absent), idempotently.
+   *
+   * Unlike {@link createPlan}, this returns the EXISTING plan untouched when one
+   * with the same key is already present — it does NOT re-create it or re-trigger
+   * bridge-api's Stripe price-sync/archive sweep. Use this for stable, reused test
+   * plans (e.g. `e2e-paywall-pro`) so the Stripe price is created+synced exactly
+   * once and stays checkout-ready across runs, instead of racing a fresh sync on
+   * every run. See TBP-408.
+   *
+   * @param planData - Plan configuration (key required)
+   * @returns Plan details + whether it was created on this call
+   */
+  async ensurePlan(planData: {
+    key: string;
+    name?: string;
+    description?: string;
+    trial?: boolean;
+    trialDays?: number;
+    prices?: Array<{ amount: number; currency: string; recurrenceInterval: string }>;
+  }): Promise<{ planId: string; key: string; name: string; created: boolean }> {
+    const response = await fetch(`${this.baseUrl}/account/test/playwright/ensure-plan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-playwright-api-key': this.apiKey,
+      },
+      body: JSON.stringify({
+        appDomain: this.appDomain,
+        ...planData,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to ensure plan: ${response.status} ${error}`);
+    }
+
+    return response.json();
+  }
+
+  /**
    * Deletes a plan by key for test cleanup.
    *
    * @param planKey - Plan key to delete

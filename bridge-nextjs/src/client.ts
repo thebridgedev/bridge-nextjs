@@ -18,22 +18,92 @@ export {
 // ── Provider ──────────────────────────────────────────────────────────────────
 export { BridgeProvider } from './client/providers/bridge-provider';
 
+// ── Unified bridge surface (Live Channel Unification) ─────────────────────────
+// Single scoped read surface: `bridge.app` / `bridge.tenant` / `bridge.user` /
+// `bridge.attributes` / `bridge.events`. Populated from `session.snapshot` on the
+// live channel. Mirrors bridge-svelte's `bridge` export.
+export { bridge } from './core/bridge';
+export { useBridge } from './client/hooks/use-bridge';
+export type {
+  BridgeSurface,
+  BridgeAppSurface,
+  BridgeTenantSurface,
+  BridgeReadable,
+} from './core/bridge';
+export type { LazySlice } from './core/lazy-slice';
+export type {
+  BrandingSnapshot,
+  SubscriptionSnapshot,
+  UserSnapshot,
+  SessionSnapshotData,
+} from './core/snapshot-stores';
+export {
+  BridgeEventsDispatcher,
+  type BridgeEventHandlers,
+} from './core/events';
+// Reactive realtime connection status — surface offline indicators / retry banners.
+export { realtimeStatus, useRealtimeStatus } from './core/realtime-status';
+export type { ConnectionState } from '@nebulr-group/bridge-auth-core';
+
 // ── Reactive hooks (auth-core-backed) ─────────────────────────────────────────
 export { useAppConfig } from './client/hooks/use-app-config';
 export { useAuth } from './client/hooks/use-auth';
 export { useAuthState } from './client/hooks/use-auth-state';
 export { useBridgeReady } from './client/hooks/use-bridge-ready';
 export { useBridgeTokens } from './client/hooks/use-bridge-tokens';
-export { default as useFeatureFlag } from './client/hooks/use-feature-flag';
-export { useFlagsStore } from './client/hooks/use-flags-store';
 export { useHasMultiTenantAccess } from './client/hooks/use-has-multi-tenant-access';
 export { useIsOnboarded } from './client/hooks/use-is-onboarded';
 export { useProfile } from './client/hooks/use-profile';
 export { useSubscription } from './client/hooks/use-subscription';
 export { useTenantUsers } from './client/hooks/use-tenant-users';
 
-// ── Feature flags (auth-core wrapper, mirrors bridge-svelte) ──────────────────
-export { featureFlags, isFeatureEnabled, loadFeatureFlags } from './shared/feature-flag';
+// ── Feature Flags 2.0 (folded into ./client — no separate ./flags subpath) ────
+// React reactive access + declarative component + advanced bootstrap + registry
+// helpers + auth-core FF 2.0 re-exports. Mirrors bridge-svelte's flags barrel.
+export {
+  // Bootstrap + browser storage
+  createBridgeFlags,
+  BrowserIdentityStorage,
+  type CreateBridgeFlagsConfig,
+  type BridgeFlagsBundle,
+  // Reactive helpers
+  useFlag,
+  flagStore,
+  type FlagStore,
+  // Component props type (the component itself is exported below alongside the
+  // other client components)
+  type FeatureFlagProps,
+  // Non-React registry surface
+  evaluateFlag,
+  setBridgeFlagsInstance,
+  getBridgeFlagsInstance,
+  notifyFlagChanged,
+  notifyAllFlagsChanged,
+  subscribeToFlagChanges,
+  // Auth-core FF 2.0 re-exports
+  BridgeFlags,
+  MemoryIdentityStorage,
+  attachIdentity,
+  generateAnonymousId,
+  BRIDGE_CONTEXT_HEADER,
+  serializeContext,
+  deserializeContext,
+  serverInstanceId,
+  type CachedFlag,
+  type FlagValueType,
+  type FlagEvalResult,
+  type EvalTelemetry,
+  type DiscoveryTelemetry,
+  type BridgeFlagsHooks,
+  type DeclaredAttributeType,
+  type AttributeDeclaration,
+  type BridgeFlagsMode,
+  type EvalContext,
+  type IdentityStorage,
+  type AnonymousTrackingMode,
+  type BridgeIdentity,
+  type RealtimeMessage,
+} from './flags';
 
 // ── Route guards (auth-core wrapper, mirrors bridge-svelte) ───────────────────
 export {
@@ -88,6 +158,58 @@ export { Spinner } from './client/components/sdk-auth/shared/Spinner';
 
 // ── Subscription ──────────────────────────────────────────────────────────────
 export { PlanSelector } from './client/components/subscription/PlanSelector';
+
+// ── Billing 2.0 — canonical-model drop-ins (TBP-248/263) ──────────────────────
+// Parallel to PlanSelector (Stripe-direct path); these coexist until REF-1
+// (post-feature) consolidates them. Mirrors bridge-svelte's index.ts.
+export {
+  BridgeSubscriptionStatus,
+  type BridgeSubscriptionStatusProps,
+} from './client/components/subscription/BridgeSubscriptionStatus';
+export {
+  BridgeBillingNotice,
+  type BridgeBillingNoticeProps,
+} from './client/components/subscription/BridgeBillingNotice';
+export {
+  BridgePaywall,
+  type BridgePaywallProps,
+} from './client/components/subscription/BridgePaywall';
+export {
+  BridgeQuotaBanner,
+  type BridgeQuotaBannerProps,
+} from './client/components/subscription/BridgeQuotaBanner';
+// Generic BridgeReadable → React adapter the Billing 2.0 components are built on.
+export {
+  useBridgeReadable,
+  useBridgeSnapshot,
+  type ReadableLike,
+} from './client/hooks/use-bridge-readable';
+// Auth-core Billing 2.0 surface re-exports — the reactive billing factory + the
+// pure notice-state derivations + their types. Consumers wiring custom billing
+// UI (or the realtime provider wiring) read these. Mirrors the auth-core surface
+// bridge-svelte's components rely on.
+export {
+  useBridge as useBridgeBilling,
+  deriveNoticeState,
+  deriveSeverity,
+} from '@nebulr-group/bridge-auth-core';
+export type {
+  UseBridgeApi,
+  UseBridgeEntitlementsApi,
+  BillingEventHandlers,
+  BillingGateState,
+  BillingSubscriptionStatus as BillingSubscriptionStatusType,
+  BillingSeverity,
+  PastDueReason,
+  BillingPlanRef,
+  BillingSubscriptionState,
+  BillingSubscriptionSnapshot,
+  BillingNoticeState,
+  BillingLockedPayload,
+  MountOptions,
+  QuotaSnapshot,
+  EntitlementSnapshot,
+} from '@nebulr-group/bridge-auth-core';
 
 // ── Developer ─────────────────────────────────────────────────────────────────
 export { ApiTokenManagement } from './client/components/developer/ApiTokenManagement';
