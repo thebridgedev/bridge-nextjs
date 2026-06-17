@@ -14,7 +14,7 @@ test.describe('Token Persistence', () => {
 
     // Get tokens before reload
     const tokensBefore = await page.evaluate(() => {
-      const raw = localStorage.getItem('bridge_tokens');
+      const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
       return raw ? JSON.parse(raw) : null;
     });
 
@@ -27,7 +27,7 @@ test.describe('Token Persistence', () => {
 
     // Get tokens after reload
     const tokensAfter = await page.evaluate(() => {
-      const raw = localStorage.getItem('bridge_tokens');
+      const raw = (() => { const __k = Object.keys(localStorage).find((x) => x === 'bridge_tokens' || x.startsWith('bridge_tokens:')); return __k ? localStorage.getItem(__k) : null; })();
       return raw ? JSON.parse(raw) : null;
     });
 

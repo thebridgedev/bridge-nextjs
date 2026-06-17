@@ -95,19 +95,15 @@ export function PlanSelector({
           cancelUrl,
         });
         if (!session.sessionId) {
+          // Stripe not configured — plan was set directly on the backend
           await loadSubscription();
           onSelect?.({ plan, price });
         } else {
-          // `@stripe/stripe-js` is an optional peer dep. Consumers using
-          // hosted Stripe Checkout must install it themselves.
-          // @ts-ignore — module resolved at runtime in the consuming app
-          const { loadStripe } = await import('@stripe/stripe-js');
-          const stripe = await loadStripe(session.publicKey);
-          if (!stripe) throw new Error('Failed to load Stripe');
-          // `redirectToCheckout` is deprecated in Stripe types ≥ v8 but still
-          // works at runtime. Cast to bypass the type-deprecation while we keep
-          // session-id flow compatibility with auth-core's startCheckout shape.
-          await (stripe as any).redirectToCheckout({ sessionId: session.sessionId });
+          // Redirect to the Stripe-hosted Checkout URL returned by auth-core.
+          // (Stripe.js removed `redirectToCheckout({ sessionId })` on
+          // 2025-09-30 — use the checkout URL directly, mirroring bridge-svelte.)
+          if (!session.checkoutUrl) throw new Error('Checkout session URL missing');
+          window.location.href = session.checkoutUrl;
         }
       }
     } catch (err) {

@@ -1,6 +1,6 @@
 {
   "name": "@nebulr-group/bridge-nextjs",
-  "version": "0.3.3",
+  "version": "0.4.0-beta.4",
   "description": "bridge integration for Next.js applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -53,7 +53,7 @@
     "react-dom": "^18.0.0"
   },
   "dependencies": {
-    "@nebulr-group/bridge-auth-core": "0.1.2",
+    "@nebulr-group/bridge-auth-core": "0.4.0-beta.5",
     "jwt-decode": "^4.0.0",
     "zustand": "^4.5.0",
     "jose": "^6.0.10"

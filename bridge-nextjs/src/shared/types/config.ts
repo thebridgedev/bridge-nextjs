@@ -29,6 +29,25 @@ export interface BridgeConfig extends BridgeAuthConfig {
    */
   signupRoute?: string;
 
+  /**
+   * Billing paywall configuration. When set, Bridge redirects authenticated
+   * users that still have to pick a plan (`shouldSelectPlan === true` and the
+   * app has not opted out via `paymentsAutoRedirect: false`) to `paywallRoute`
+   * before the page renders. Mirrors bridge-svelte's `billing` config.
+   */
+  billing?: {
+    /**
+     * Route to redirect to when the tenant has no plan selected.
+     * e.g. `/welcome`, `/onboarding/plan`, or `/subscription`.
+     */
+    paywallRoute?: string;
+    /**
+     * Route to redirect to when a Stripe checkout confirmation fails.
+     * Defaults to `/payment-error`.
+     */
+    paymentErrorRoute?: string;
+  };
+
   // ── Legacy fields (pre-auth-core era) — kept for backward compatibility ──
   // New code should prefer `apiBaseUrl` (inherited from BridgeAuthConfig),
   // which auth-core uses to derive all needed endpoint URLs internally.

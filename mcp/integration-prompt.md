@@ -198,3 +198,80 @@ export async function fetchUserData() {
 5. Click "Sign out" — `isAuthenticated` should flip back to `false`.
 
 If `useAuth` returns the wrong state, check the browser console for `[BridgeProvider]` debug logs (set `NEXT_PUBLIC_BRIDGE_DEBUG=true`).
+
+## Unified `bridge` surface (Live Channel Unification — recommended for new code)
+
+The Live Channel Unification surface introduces a single scoped read surface. **Use this for new code instead of reaching for individual hooks like `useSubscription`, `getBridgeAuth().getProfile()`, etc.** The existing hooks still work and read from the same internal state.
+
+### Three scopes, one object
+
+```ts
+'use client';
+import { useBridge } from '@nebulr-group/bridge-nextjs/client';
+
+const bridge = useBridge();
+
+// app — anything tied to the app config (whitelabel, plan catalog, flag defs)
+bridge.app.branding              // readable of BrandingSnapshot | null
+bridge.app.plans                 // LazySlice<Plan[]>  ← await it, or .load()
+
+// tenant — anything tied to the workspace/tenant
+bridge.tenant.id                 // readable of string | null
+bridge.tenant.name               // readable of string | null
+bridge.tenant.subscription       // readable of SubscriptionSnapshot | null
+bridge.tenant.entitlements       // { can(key): boolean, snapshot: readable<...> }
+
+// user — anything tied to the authenticated user
+bridge.user                      // readable of UserSnapshot | null  // { id, email, role, tenantId }
+```
+
+Each readable exposes `subscribe(fn)` — `fn` is called immediately with the current value and again on every change, returning an unsubscribe function. In a component, wire them in `useEffect`:
+
+```tsx
+'use client';
+import { useEffect, useState } from 'react';
+import { useBridge, type UserSnapshot } from '@nebulr-group/bridge-nextjs/client';
+
+export function Greeting() {
+  const bridge = useBridge();
+  const [user, setUser] = useState<UserSnapshot | null>(null);
+  useEffect(() => bridge.user.subscribe(setUser), [bridge]);
+  return <p>Hello {user?.email}</p>;
+}
+```
+
+### How data lands
+
+- **Snapshot slices** (`app.branding`, `tenant.{id,name,subscription,entitlements}`, `user`) are pushed by the server in a single `session.snapshot` message the moment the per-user channel subscribes. First paint reflects real state — no flicker, no per-slice REST hydrate.
+- **Lazy slices** (`app.plans` today) start `null` and populate on first `.load()` or `await`:
+
+  ```ts
+  const plans = await bridge.app.plans;             // thenable sugar
+  const plans = await bridge.app.plans.load();      // explicit
+  ```
+
+- **Reconnect** re-emits the snapshot; lazy slices that were loaded keep their values and update via channel deltas (no automatic refetch).
+
+### Reading entitlements
+
+```ts
+if (bridge.tenant.entitlements.can('ai_completions')) {
+  // render the feature
+}
+```
+
+`can()` is synchronous and reflects the latest snapshot or `entitlements.changed` push.
+
+### Live events & connection status
+
+`bridge.events.handle({...})` is the one API for reacting to channel events (analytics, audit, alerting). `useRealtimeStatus()` exposes the connection state for offline indicators. See `learning/live-updates/live-updates.md` for the full event-kind list and attribute write surface (`bridge.attributes`).
+
+### Mapping from existing hooks
+
+| Existing | Unified surface |
+|---|---|
+| `useSubscription()` (status) | `bridge.tenant.subscription` |
+| `getBridgeAuth().getProfile()` | `bridge.user` (snapshot) — full Profile via `getBridgeAuth().getProfile()` still works for fields outside the snapshot |
+| `getBridgeAuth().getPlans()` | `bridge.app.plans.load()` — lazy + cached |
+
+Both surfaces are fed by the same internal state and can be used side by side.

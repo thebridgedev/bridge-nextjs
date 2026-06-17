@@ -3,6 +3,7 @@
 import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 import Link from 'next/link';
 import { ConfigStatus } from '../components/ConfigStatus';
+import { BridgeSurfaceStatus } from '../components/BridgeSurfaceStatus';
 import './page.css';
 
 /**
@@ -24,6 +25,8 @@ export default function Home() {
           </div>
 
           <ConfigStatus />
+
+          <BridgeSurfaceStatus />
 
           <div className="features-overview">
             <h2 className="heading-lg">The code demonstrates the following features</h2>
@@ -95,35 +98,45 @@ export default function Home() {
 
             <div className="feature-examples-grid">
               <div className="feature-example">
-                <h3 className="heading-md">Cached Feature Flag</h3>
+                <h3 className="heading-md">Simple on/off flag</h3>
                 <div className="card">
-                  <p className="note">Uses cached values (5-minute cache)</p>
-                  <FeatureFlag flagName="demo-flag">
-                    <div className="feature-status active">
-                      <p>Feature flag "demo-flag" is active</p>
-                    </div>
-                  </FeatureFlag>
-                  <FeatureFlag flagName="demo-flag" negate>
-                    <div className="feature-status">
-                      Create a feature flag called "demo-flag"
-                    </div>
+                  <p className="note">
+                    Live — toggling <code>demo-flag</code> in the admin UI updates
+                    this box instantly (no refresh).
+                  </p>
+                  {/* FF 2.0: `flagKey` + `defaultValue`, children + fallback.
+                      React reserves `key`, so the flag key is passed as `flagKey`. */}
+                  <FeatureFlag flagKey="demo-flag" defaultValue={false}>
+                    {() => (
+                      <div className="feature-status active" data-testid="demo-flag-on">
+                        <p>Feature flag "demo-flag" is active</p>
+                      </div>
+                    )}
                   </FeatureFlag>
                 </div>
               </div>
 
               <div className="feature-example">
-                <h3 className="heading-md">Live Feature Flag</h3>
+                <h3 className="heading-md">Flag with fallback</h3>
                 <div className="card">
-                  <p className="note">Direct API call on each load</p>
-                  <FeatureFlag flagName="demo-flag" forceLive>
-                    <div className="feature-status active">
-                      <p>Feature flag "demo-flag" is active</p>
-                    </div>
-                  </FeatureFlag>
-                  <FeatureFlag flagName="demo-flag" forceLive negate>
-                    <div className="feature-status">
-                      Create a feature flag called "demo-flag"
-                    </div>
+                  <p className="note">
+                    The <code>fallback</code> renders when the flag is off / no
+                    rule matched.
+                  </p>
+                  <FeatureFlag
+                    flagKey="demo-flag"
+                    defaultValue={false}
+                    fallback={
+                      <div className="feature-status" data-testid="demo-flag-off">
+                        Create a feature flag called "demo-flag"
+                      </div>
+                    }
+                  >
+                    {() => (
+                      <div className="feature-status active">
+                        <p>Feature flag "demo-flag" is active</p>
+                      </div>
+                    )}
                   </FeatureFlag>
                 </div>
               </div>
@@ -137,11 +150,12 @@ export default function Home() {
             */}
             <div className="feature-examples-grid">
               <div className="feature-example">
-                <h3 className="heading-md">Client-Side API Feature Flag</h3>
+                <h3 className="heading-md">Client Feature Flag (hook + component)</h3>
                 <div className="card">
                   <p className="note">
-                    The Next.js-only <Link href="/feature-flag-example">/feature-flag-example</Link>{' '}
-                    page calls an API route gated by the demo-flag.
+                    The <Link href="/feature-flag-example">/feature-flag-example</Link>{' '}
+                    page demonstrates the FF 2.0 <code>useFlag</code> hook and{' '}
+                    <code>&lt;FeatureFlag&gt;</code> component.
                   </p>
                 </div>
               </div>

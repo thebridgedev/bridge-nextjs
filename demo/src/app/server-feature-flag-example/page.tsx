@@ -19,16 +19,15 @@ export default async function ServerFeatureFlagExamplePage() {
             <div className="feature-example">
               <div className="card">
                 <p className="note">Rendered on the server at build time or request time</p>
-                <ServerFeatureFlag 
+                <ServerFeatureFlag
                   flagName="demo-flag"
-                  forceLive={true}
                   fallback={
-                    <div className="feature-status">
+                    <div className="feature-status" data-testid="server-flag-off">
                       <p>Create a feature flag called "demo-flag"</p>
                     </div>
                   }
                 >
-                  <div className="feature-status active">
+                  <div className="feature-status active" data-testid="server-flag-on">
                     <p>Feature flag "demo-flag" is active</p>
                   </div>
                 </ServerFeatureFlag>
@@ -44,11 +43,13 @@ export default async function ServerFeatureFlagExamplePage() {
             </div>
             
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-              <p className="font-bold text-yellow-800">Important Note About Caching</p>
+              <p className="font-bold text-yellow-800">Note About Caching</p>
               <p className="text-yellow-800">
-                Server-side feature flags use server-side caching (typically 5 minutes). When you enable or disable a flag,
-                you may see a delay before the server-side content updates. For faster updates, consider using the 
-                <code className="ml-1 mr-1">forceLive</code> option in your middleware configuration.
+                FF 2.0 server evaluation reads flag rules from a short-lived
+                pull cache (default 30s TTL) and evaluates them locally per
+                request against the user&apos;s token claims. When you toggle a
+                flag you may see up to one TTL window of delay before the
+                server-rendered content updates.
               </p>
             </div>
           </div>

@@ -1,7 +1,10 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
 import { FC, ReactNode, useEffect, useMemo, useRef } from 'react';
 import { ensureAppConfig, getBridgeAuth, initBridge, markReady } from '../../core/bridge-instance';
+import { startBridgeRuntime, stopBridgeRuntime } from '../../core/bridge-runtime';
+import { createBridgeFlags, type BridgeFlagsBundle } from '../../flags/bootstrap';
 import { logger, setLoggerDebug } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 
@@ -70,7 +73,11 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     } as BridgeConfig;
   }, [appId, config]);
 
+  const router = useRouter();
+  const pathname = usePathname();
+
   const initedRef = useRef(false);
+  const flagsBundleRef = useRef<BridgeFlagsBundle | null>(null);
 
   // Synchronous client-side init. Runs once per provider instance.
   if (typeof window !== 'undefined' && !initedRef.current && mergedConfig.appId) {
@@ -88,8 +95,34 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
 
     initBridge(mergedConfig);
     markReady();
+    // Mount the core Bridge runtime (realtime channel + session.snapshot fanout
+    // + dev-attribute provider). Idempotent; reads appId/apiBaseUrl from the
+    // BridgeAuth API context populated by initBridge() above. Mirrors
+    // bridge-svelte's <BridgeBootstrap /> onMount → startBridgeRuntime().
+    startBridgeRuntime();
+    // Mount Feature Flags 2.0 ON TOP OF the core runtime — must run AFTER
+    // startBridgeRuntime() so the flag cache attaches to the shared realtime
+    // channel (no second websocket). Window-guarded above; createBridgeFlags
+    // registers the global instance used by useFlag / <FeatureFlag>. Guarded so
+    // a missing appId / standalone harness doesn't crash bootstrap.
+    try {
+      flagsBundleRef.current = createBridgeFlags();
+    } catch (err) {
+      logger.debug('[BridgeProvider] feature flags bootstrap skipped:', err);
+    }
     logger.debug('[BridgeProvider] bootstrap complete', mergedConfig);
   }
+
+  // Flush the realtime client + token subscription on provider unmount.
+  useEffect(() => {
+    return () => {
+      if (flagsBundleRef.current) {
+        void flagsBundleRef.current.stop();
+        flagsBundleRef.current = null;
+      }
+      void stopBridgeRuntime();
+    };
+  }, []);
 
   // Background tasks deferred to useEffect (won't block initial paint).
   useEffect(() => {
@@ -111,6 +144,51 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     })();
     void ensureAppConfig();
   }, [mergedConfig]);
+
+  // Paywall redirect — the CSR analogue of bridge-svelte's BridgeBootstrap
+  // step 2b. Runs after bootstrap resolves auth. Redirects to the configured
+  // paywall route only when:
+  //   - billing.paywallRoute is configured
+  //   - the current path is not already the paywall route (no redirect loop)
+  //   - the tenant is authenticated but has not selected a plan
+  //   - the app has not opted out via paymentsAutoRedirect: false
+  // getSubscriptionStatus() self-heals after a Stripe round-trip: when a
+  // checkout session_id is present (URL or sessionStorage), auth-core syncs the
+  // completed session server-side first, so shouldSelectPlan reads false and a
+  // freshly-paid user is NOT bounced back to the paywall.
+  // Depend on PRIMITIVE values (paywallRoute, appId, pathname), NOT the
+  // mergedConfig object. mergedConfig is recomputed whenever the `config` prop
+  // identity changes (a consumer passing an inline object literal re-creates it
+  // every render); depending on the object would re-fire this effect — and its
+  // getSubscriptionStatus() network call — on every render. The primitives are
+  // stable across renders, so the paywall check runs once per route.
+  const paywallRoute = mergedConfig.billing?.paywallRoute;
+  const paywallAppId = mergedConfig.appId;
+  useEffect(() => {
+    if (!paywallRoute || pathname === paywallRoute) return;
+    if (typeof window === 'undefined' || !paywallAppId) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const bridge = getBridgeAuth();
+        if (!bridge.isAuthenticated()) return;
+        const status = await bridge.getSubscriptionStatus();
+        if (cancelled) return;
+        if (status?.shouldSelectPlan === true && status?.paymentsAutoRedirect !== false) {
+          logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
+          router.push(paywallRoute);
+        }
+      } catch (err) {
+        // Non-fatal — fail open if the subscription fetch errors.
+        logger.debug('[BridgeProvider] paywall check skipped:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, paywallRoute, paywallAppId, router]);
 
   return <>{children}</>;
 };

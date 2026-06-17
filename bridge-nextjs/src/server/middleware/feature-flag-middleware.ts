@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { BRIDGE_CONTEXT_HEADER } from '@nebulr-group/bridge-auth-core';
+import { logger } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 import { FeatureFlagServer } from '../utils/feature-flag.server';
 import { getConfig } from '../utils/get-config';
@@ -23,35 +25,46 @@ export interface WithFeatureFlagOptions {
   errorMessage?: string;
 }
 
-/**
- * Determines if a request is an API request
- * @param request The NextRequest object
- * @returns boolean indicating if the request is an API request
- */
+/** Determines if a request is an API request. */
 function isApiRequest(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
-  
-  // Check if the path starts with /api/
   if (pathname.startsWith('/api/')) {
     return true;
   }
-  
-  // Check if the request accepts JSON
   const acceptHeader = request.headers.get('accept');
   if (acceptHeader && acceptHeader.includes('application/json')) {
     return true;
   }
-  
   return false;
 }
 
 /**
+ * Propagate the eval context to downstream Bridge backends. Mirrors nestjs's
+ * `BridgeContextInterceptor` wire contract: the serialized context rides the
+ * `x-bridge-context` header so nestjs/express services bucket the same identity.
+ *
+ * Next.js middleware can forward request headers to the downstream handler via
+ * `NextResponse.next({ request: { headers } })`, so the propagated context is
+ * available to API route handlers / server components in the same app, and to
+ * any backend the app proxies to.
+ */
+function withContextHeader(request: NextRequest): NextResponse {
+  const featureFlagServer = FeatureFlagServer.getInstance();
+  const serialized = featureFlagServer.serializeContextForRequest(request);
+  if (!serialized) {
+    return NextResponse.next();
+  }
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(BRIDGE_CONTEXT_HEADER, serialized);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
+/**
  * Creates a middleware function that protects multiple routes with feature flags
- * @param protections Array of feature flag protections
- * @returns Middleware function
+ * (FF 2.0 — local backend-mode eval via `FeatureFlagServer`). Export name kept
+ * stable (§0 hard-rule 6).
  */
 export function withFeatureFlags(protections: FeatureFlagProtection[]) {
-  // Initialize feature flag server with default config
   const defaultConfig = getConfig();
   const featureFlagServer = FeatureFlagServer.getInstance();
   featureFlagServer.init(defaultConfig);
@@ -59,24 +72,21 @@ export function withFeatureFlags(protections: FeatureFlagProtection[]) {
   return async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Find any protection that matches the current path
-    const matchingProtection = protections.find(protection => 
-      protection.paths.some(path => {
-        // Handle wildcard paths
+    const matchingProtection = protections.find((protection) =>
+      protection.paths.some((path) => {
         if (path.endsWith('/*')) {
           const basePath = path.slice(0, -1);
           return pathname.startsWith(basePath);
         }
-        // Exact match
         return pathname === path;
-      })
+      }),
     );
 
     if (!matchingProtection) {
-      return NextResponse.next();
+      // No protection matches — still propagate context downstream.
+      return withContextHeader(request);
     }
 
-    // Initialize feature flag server with protection-specific config if provided
     if (matchingProtection.config) {
       const mergedConfig: BridgeConfig = {
         ...defaultConfig,
@@ -86,80 +96,75 @@ export function withFeatureFlags(protections: FeatureFlagProtection[]) {
       featureFlagServer.init(mergedConfig);
     }
 
-    // Check if the feature flag is enabled
-    const isEnabled = await featureFlagServer.isFeatureEnabledServer(matchingProtection.flag, request);
+    const isEnabled = await featureFlagServer.isFeatureEnabledServer(
+      matchingProtection.flag,
+      request,
+    );
 
     if (!isEnabled) {
-      // Determine if this is an API request
       const isApi = isApiRequest(request);
-      
-      // Get response type from protection or default to 'redirect' for backward compatibility
       const responseType = matchingProtection.responseType || 'redirect';
-      
-      // For API requests or when responseType is 'error', return an error response
+
       if (isApi || responseType === 'error') {
         const status = matchingProtection.errorStatus || 403;
-        const message = matchingProtection.errorMessage || `Feature flag "${matchingProtection.flag}" is not enabled`;
-        
-        console.info(`Feature flag "${matchingProtection.flag}" not enabled, returning ${status} error`);
-        return NextResponse.json(
-          { error: message },
-          { status }
-        );
+        const message =
+          matchingProtection.errorMessage ||
+          `Feature flag "${matchingProtection.flag}" is not enabled`;
+        logger.info(`Feature flag "${matchingProtection.flag}" not enabled, returning ${status} error`);
+        return NextResponse.json({ error: message }, { status });
       }
-      
-      // For page requests with redirect response type, redirect to the specified route
-      const redirectRoute = matchingProtection.redirectTo || defaultConfig.defaultRedirectRoute || '/';
-      console.info(`Feature flag "${matchingProtection.flag}" not enabled, redirecting to ${redirectRoute}`);
+
+      const redirectRoute =
+        matchingProtection.redirectTo || defaultConfig.defaultRedirectRoute || '/';
+      logger.info(`Feature flag "${matchingProtection.flag}" not enabled, redirecting to ${redirectRoute}`);
       const redirectUrl = new URL(redirectRoute, request.url);
       return NextResponse.redirect(redirectUrl);
     }
 
-    return NextResponse.next();
+    // Flag passed — continue, propagating the eval context downstream.
+    return withContextHeader(request);
   };
 }
 
-// Keep the old functions for backward compatibility
+/** Single-flag middleware (paths set by the matcher). Export name kept stable. */
 export function withFeatureFlag(flagName: string, options: WithFeatureFlagOptions = {}) {
-  return withFeatureFlags([{
-    flag: flagName,
-    paths: ['/'], // Default path, will be overridden by the matcher
-    redirectTo: options.config?.redirectRoute,
-    config: options.config,
-    responseType: options.responseType,
-    errorStatus: options.errorStatus,
-    errorMessage: options.errorMessage
-  }]);
+  return withFeatureFlags([
+    {
+      flag: flagName,
+      paths: ['/'],
+      redirectTo: options.config?.redirectRoute,
+      config: options.config,
+      responseType: options.responseType,
+      errorStatus: options.errorStatus,
+      errorMessage: options.errorMessage,
+    },
+  ]);
 }
 
-export function requireFeatureFlag(flagName: string, redirectUrl: string = '/') {
+/** Page-route flag guard with redirect. Export name kept stable. */
+export function requireFeatureFlag(flagName: string, redirectUrl = '/') {
   return withFeatureFlag(flagName, {
     config: {
-      redirectRoute: redirectUrl
-    }
+      redirectRoute: redirectUrl,
+    },
   });
 }
 
-/**
- * Creates a middleware function that protects API routes with feature flags
- * @param flagName The feature flag name
- * @param options Additional options
- * @returns Middleware function
- */
+/** API-route flag guard returning a JSON error. Export name kept stable. */
 export function requireApiFeatureFlag(
-  flagName: string, 
-  options: { 
+  flagName: string,
+  options: {
     errorStatus?: number;
     errorMessage?: string;
     config?: Partial<BridgeConfig>;
-  } = {}
+  } = {},
 ) {
   return withFeatureFlag(flagName, {
     responseType: 'error',
     errorStatus: options.errorStatus || 403,
     errorMessage: options.errorMessage || `Feature flag "${flagName}" is not enabled`,
-    config: options.config
+    config: options.config,
   });
 }
 
-export default requireFeatureFlag; 
+export default requireFeatureFlag;

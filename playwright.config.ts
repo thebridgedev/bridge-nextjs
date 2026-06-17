@@ -44,7 +44,12 @@ export default defineConfig({
     // process.env before `next dev` runs, so the demo never depends on any
     // file in its own directory — keeping the developer's `config/.env.local`
     // (their own appId for `npm run dev`) cleanly separated from test runs.
-    command: `cd demo && dotenv -e ../config/.env.demo.test.local -- next dev -p 3010`,
+    // Use the demo-local Next binary (15.2.4, webpack dev) explicitly. The
+    // workspace root hoists a newer Next (16.x) whose `next dev` defaults to
+    // Turbopack, which panics on the edge middleware bundle
+    // (incrementalCacheHandler invariant). `./node_modules/.bin/next` pins the
+    // demo's own webpack-based compiler and sidesteps that panic.
+    command: `cd demo && dotenv -e ../config/.env.demo.test.local -- ./node_modules/.bin/next dev -p 3010`,
     url: 'http://localhost:3010',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
