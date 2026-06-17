@@ -213,6 +213,166 @@ const unsubscribe = useBridgeBilling().handle({
 
 Multiple handlers can register for the same kind; one throwing handler never blocks the others.
 
+### Defining quotas and entitlements
+
+Quotas (e.g. "100 AI completions per month") and entitlements (e.g. "advanced analytics enabled") are attached to plans **in the admin, not in code**. Open the Bridge admin → **Plans → [plan name]** and configure, per metered resource:
+
+- **Quotas** per metric (e.g. `ai_completions`): a limit per billing period + a policy — `metered` (bills overage via a Stripe metered price) or `hard` (the entitlement flips off at the cap).
+- **Entitlements** per feature key (e.g. `advanced_analytics`): on/off per plan.
+
+The app never hard-codes metric names or entitlement keys — the admin owns them. `useBridgeBilling().quota(metric)` returns `undefined` and `entitlements.can(key)` returns `false` for unconfigured keys.
+
+### Composing your own reactive hooks
+
+The drop-in components above cover most UIs. When you need a fully custom React component bound to live billing state, wrap each `useBridgeBilling()` accessor once with `useState` + `useEffect` and reuse it. `useBridgeBilling()` returns a memoized singleton — it is a plain accessor, not a React hook, so it does not subscribe React to anything on its own:
+
+```ts
+// src/lib/bridge-hooks.ts
+'use client';
+import { useEffect, useState } from 'react';
+import { useBridgeBilling } from '@nebulr-group/bridge-nextjs/client';
+import type {
+  BillingSubscriptionSnapshot,
+  QuotaSnapshot,
+  EntitlementSnapshot,
+} from '@nebulr-group/bridge-auth-core';
+
+export function useBridgeSubscription(): BillingSubscriptionSnapshot | null {
+  const [snap, setSnap] = useState<BillingSubscriptionSnapshot | null>(null);
+  useEffect(() => useBridgeBilling().subscription.subscribe(setSnap), []);
+  return snap;
+}
+
+export function useBridgeQuota(metric: string): QuotaSnapshot | undefined {
+  const [snap, setSnap] = useState<QuotaSnapshot | undefined>(undefined);
+  useEffect(() => {
+    const billing = useBridgeBilling();
+    setSnap(billing.quota(metric));
+    return billing.quotas.subscribe((m) => {
+      if (m === metric) setSnap(billing.quota(metric));
+    });
+  }, [metric]);
+  return snap;
+}
+
+export function useBridgeEntitlement(key: string): boolean {
+  const [can, setCan] = useState(false);
+  useEffect(() => {
+    const billing = useBridgeBilling();
+    setCan(billing.entitlements.can(key));
+    return billing.entitlementsStore.subscribe(() => setCan(billing.entitlements.can(key)));
+  }, [key]);
+  return can;
+}
+```
+
+These follow the canonical subscribe-immediately-then-on-change contract — `subscribe(fn)` fires `fn` with the current value right away and again on every change, returning an unsubscribe function.
+
+### Subscription snapshot fields
+
+`useBridgeBilling().subscription` carries a `BillingSubscriptionSnapshot`:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `plan` | `BillingPlanRef` | Active plan reference |
+| `status` | `'active' \| 'trial_active' \| 'cancel_at_period_end' \| 'past_due' \| 'canceled' \| ...` | Lifecycle state |
+| `pastDueReason` | `PastDueReason \| undefined` | When `status === 'past_due'` |
+| `daysLeft` | `number \| undefined` | Days left in trial or until dunning final retry |
+| `endsAt`, `renewsAt`, `nextRetryAt`, `finalRetryAt` | `string \| undefined` | Lifecycle boundary ISO timestamps |
+| `cardLast4`, `hasCardOnFile` | `string` / `boolean` | For "update payment method" CTAs |
+| `gateEngaged` | `boolean` | Workspace locked due to billing |
+| `recoveryUrl` | `string \| undefined` | Direct link to resolve the current state |
+
+### Quota snapshot fields
+
+`useBridgeBilling().quota(metric)` carries a `QuotaSnapshot` (or `undefined` when no quota is configured for the metric):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `metric` | `string` | Metric key from admin |
+| `used` / `limit` / `remaining` | `number` | Current period totals |
+| `percent_used` | `number` | Rounded percentage |
+| `warningLevel` | `null \| 'approaching' \| 'critical'` | `null` < 80%, `approaching` 80–94%, `critical` ≥ 95% |
+| `policy` | `'hard' \| 'metered'` | From admin: `metered` bills overage, `hard` flips the entitlement off at cap |
+| `label` | `string` | Human label for the metric |
+
+The counter ticks live as usage is reported — no polling.
+
+### Reporting usage
+
+Report metered usage from anywhere — client component, Server Action, route handler, or background job:
+
+```ts
+import { getBridgeAuth } from '@nebulr-group/bridge-nextjs/client';
+
+export async function generateCompletion(prompt: string) {
+  const result = await callOpenAI(prompt);
+
+  // Fire-and-forget. SDK queues durably; survives crashes / offline.
+  getBridgeAuth().usage.report('ai_completions', 1);
+
+  return result;
+}
+```
+
+Signature:
+
+```ts
+usage.report(metric: string, value?: number, idempotencyKey?: string): void
+```
+
+- `value` defaults to `1`. Pass a positive integer for multi-unit events.
+- `idempotencyKey` is auto-generated at enqueue. Only pass one when reconciling against an external system's ID.
+- Do **not** `await` it — it returns synchronously, fire-and-forget. The SDK handles batching, retries, and dedup.
+- Reporting to a metric not configured in admin is accepted server-side but ticks no counter.
+
+Inspect the durable queue (debug only):
+
+```ts
+const status = await getBridgeAuth().usage.getQueueStatus();
+// { queueDepth, retryCount, lastFlushTimestamp, lastFlushError }
+```
+
+**Cap-vs-policy behavior:** reporting usage that exceeds the cap **always succeeds server-side**. The decision is downstream — `metered` bills overage, `hard` flips the entitlement off. React via the entitlement check, never by refusing to call `report`.
+
+### Entitlement vs feature flag
+
+| Decision driver | Use |
+|---|---|
+| "This feature belongs to a paid plan" | **Entitlement** (`entitlements.can(...)`) |
+| "I'm A/B-testing this with 10% of users" | **Feature flag** (`useFlag(...)`) |
+| "Plan-X-only AND 10% rollout" | **Both** — entitlement says "allowed", flag says "exposed" |
+
+Entitlements describe what the user *bought*; flags describe what's *exposed*. The recommended gating pattern is a feature flag targeting `bridge:billing.entitlement.<key>`, which combines both.
+
+### Gate state (workspace lock)
+
+When a workspace is locked due to dunning, `useBridgeBilling().isLocked()` returns `true` and `useBridgeBilling().gateState()` returns the structured payload. Short-circuit your app's normal UI with a guard:
+
+```tsx
+'use client';
+import { useEffect, useState } from 'react';
+import { useBridgeBilling } from '@nebulr-group/bridge-nextjs/client';
+
+function useIsLocked(): boolean {
+  const [locked, setLocked] = useState(false);
+  useEffect(() => {
+    const billing = useBridgeBilling();
+    setLocked(billing.isLocked());
+    return billing.subscription.subscribe(() => setLocked(billing.isLocked()));
+  }, []);
+  return locked;
+}
+
+export function GateGuard({ children }: { children: React.ReactNode }) {
+  const locked = useIsLocked();
+  if (locked) return <LockedScreen />;
+  return <>{children}</>;
+}
+```
+
+Or call `useBridgeBilling().assertNotLocked()` from a Server Action to fail fast. (The drop-in `<BridgeBillingNotice mode="hard" />` covers the common full-screen lockscreen case without writing a guard.)
+
 ### Environment variables
 
 The components need no env vars of their own — they read live state through `<BridgeProvider>`, which is configured by `NEXT_PUBLIC_BRIDGE_APP_ID` (the same var the rest of the SDK uses).

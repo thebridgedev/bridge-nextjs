@@ -1,379 +1,185 @@
-# Bridge Next.js — Billing 2.0 Runtime Prompt  *(Step 2 of 2 — make your app react to billing state)*
+# Bridge Next.js — Billing
 
-You are adding the **Billing 2.0 runtime layer** to a Next.js 15+ App Router project using **`@nebulr-group/bridge-nextjs`**.
+You are wiring **billing UI** into a Next.js 15+ App Router application that uses The Bridge with **`@nebulr-group/bridge-nextjs`**. Plans and Stripe are configured elsewhere — this guide covers the frontend only: the subscription page, lifecycle notices, the plan-selection paywall, quota/entitlement UI, and the billing portal. The SDK renders plans directly inside the app — there is **no handover redirect** to a separate plan-selection portal.
 
-After step 1 (`payments-prompt.md`), the app can accept money — plans exist in the admin, `/subscription` works, Stripe Checkout works. This prompt wires up the runtime layer that makes the app **aware** of who's on what plan, how much of their quota they've used, which features they're entitled to, and what's happening in their billing lifecycle.
-
-You will add:
-
-- **Subscription state reads** — `useSubscription()` (Phase 1.0 status shape) and `useBridge().subscription` (Billing 2.0 lifecycle snapshot)
-- **Live quota counters** — composed from `useBridge().quota("metric")` + `useEffect` / `useState`
-- **Entitlement checks** — `useBridge().entitlements.can("key")` flips reactively
-- **Usage reporting** — `getBridgeAuth().usage.report(metric, n)`, fire-and-forget, durable queue
-- **Lifecycle event subscriptions** — `useBridge().handle({ "payment.failed": fn, ... })`
-
-**Important: bridge-nextjs does not yet ship the drop-in Billing 2.0 UI components** that bridge-svelte has (`<BridgeBillingNotice />`, `<BridgeQuotaBanner />`, `<BridgeSubscriptionStatus />`). The hook surface is fully there; this prompt walks through composing equivalent UI from `useBridge()` reads. The Bridge team will port the components in a follow-up; this prompt will gain them as drop-ins when they land.
+> `<BridgeProvider>` (in your root layout) auto-bootstraps the billing surface — it reads `NEXT_PUBLIC_BRIDGE_APP_ID`, connects the live channel, and wires the reactive billing stores. The drop-in components below need no extra setup beyond being rendered inside the provider.
 
 ## Prerequisites
 
-- `payments-prompt.md` is complete — at least one plan exists in the admin, `/subscription` works.
-- `BridgeProvider` is mounted at the root of the App Router tree (handled by the integration prompt).
-- `@nebulr-group/bridge-nextjs` and `@nebulr-group/bridge-auth-core` are installed at a version that ships the Billing 2.0 surface (`useBridge`, `QuotaSnapshot`, lifecycle messages). If imports below fail, bump both packages and re-run `npm install`.
+- The integration prompt is complete (`<BridgeProvider>` in `app/layout.tsx`, OAuth callback route, `NEXT_PUBLIC_BRIDGE_APP_ID` set).
+- The Bridge app has at least one plan. If a plan has a price, Stripe must be connected, or `<PlanSelector>` silently fails when a user picks a paid plan. Free-only setups can skip the Stripe check.
+- For Stripe Checkout flows, install the optional peer:
 
-`useBridge` is imported from **`@nebulr-group/bridge-auth-core`**, not from `bridge-nextjs/client`. The accessor is framework-agnostic.
-
-If payments isn't set up yet, run `payments-prompt.md` first. The runtime layer is meaningless without a plan to be on.
-
-## Define quotas and entitlements per plan in the admin
-
-Quotas (e.g. "100 AI completions per month") and entitlements (e.g. "advanced analytics enabled") are attached to plans in the admin, **not in code**. Pause and have the developer do this first:
-
-> Open the Bridge admin → **Plans → [plan name]** and configure for each metered resource:
->
-> - **Quotas** per metric (e.g. `ai_completions`): a limit per billing period + a policy — `metered` (bills overage via Stripe metered price) or `hard` (entitlement flips off at cap)
-> - **Entitlements** per feature key (e.g. `advanced_analytics`): on/off per plan
-
-**Do not generate code below until the developer confirms at least one quota or entitlement exists.** `useBridge().quota(metric)` returns `undefined` and `entitlements.can(key)` returns `false` for unconfigured keys — the integration can't be verified.
-
-The dev never hard-codes metric names or entitlement keys — the admin owns them.
-
-## The model — snapshots vs events
-
-| Layer | Question | API |
-|-------|----------|-----|
-| **Snapshot accessors** | "What's true *right now*?" | `useBridge().subscription`, `.quota(metric)`, `.entitlements` |
-| **Lifecycle handlers** | "What just *happened*?" | `useBridge().handle({ ... })` |
-
-Use **snapshots** to render state. Use **events** for one-off side effects on a transition (toasts, analytics, emails). Snapshots always converge after disconnect; events can be missed — never rely on an event for state.
-
-## Helper hooks — wrap useBridge once
-
-`useBridge()` returns a memoized singleton — it's a plain accessor, not a React hook (the `use` prefix matches the Bridge convention but it does not subscribe React to anything). To make it reactive in components, wrap each accessor once and reuse:
-
-```ts
-// src/lib/bridge-hooks.ts
-'use client';
-import { useEffect, useState } from 'react';
-import {
-  useBridge,
-  type BillingSubscriptionSnapshot,
-  type QuotaSnapshot,
-  type EntitlementSnapshot,
-} from '@nebulr-group/bridge-auth-core';
-
-export function useBridgeSubscription(): BillingSubscriptionSnapshot | null {
-  const [snap, setSnap] = useState<BillingSubscriptionSnapshot | null>(null);
-  useEffect(() => useBridge().subscription.subscribe(setSnap), []);
-  return snap;
-}
-
-export function useBridgeQuota(metric: string): QuotaSnapshot | undefined {
-  const [snap, setSnap] = useState<QuotaSnapshot | undefined>(undefined);
-  useEffect(() => {
-    const bridge = useBridge();
-    setSnap(bridge.quota(metric));
-    return bridge.quotas.subscribe((m) => {
-      if (m === metric) setSnap(bridge.quota(metric));
-    });
-  }, [metric]);
-  return snap;
-}
-
-export function useBridgeEntitlement(key: string): boolean {
-  const [can, setCan] = useState(false);
-  useEffect(() => {
-    const bridge = useBridge();
-    setCan(bridge.entitlements.can(key));
-    return bridge.entitlementsStore.subscribe(() => setCan(bridge.entitlements.can(key)));
-  }, [key]);
-  return can;
-}
-
-export function useBridgeEntitlements(): EntitlementSnapshot {
-  const [all, setAll] = useState<EntitlementSnapshot>({});
-  useEffect(() => {
-    const bridge = useBridge();
-    setAll(bridge.entitlements.all());
-    return bridge.entitlementsStore.subscribe(setAll);
-  }, []);
-  return all;
-}
+```bash
+npm install @stripe/stripe-js
 ```
 
-These four hooks are the canonical Next.js integration pattern. Generate this file once; reuse across the app.
+(Not needed if all your plans are free.)
 
-## Reading subscription state
+## Migration check
+
+If the codebase still calls `planService.redirectToPlanSelection()`, remove it. The new SDK pattern replaces that handover redirect with `<PlanSelector />` mounted inline.
+
+## Step 1 — Subscription page
+
+Create `app/subscription/page.tsx`:
 
 ```tsx
 'use client';
-import { useBridgeSubscription } from '@/lib/bridge-hooks';
+import { PlanSelector } from '@nebulr-group/bridge-nextjs/client';
 
-export function PlanBadge() {
-  const sub = useBridgeSubscription();
-  return <span>Plan: {sub?.plan?.name ?? '—'}</span>;
-}
-```
-
-```tsx
-'use client';
-import { useBridgeSubscription } from '@/lib/bridge-hooks';
-
-export function PastDueBanner() {
-  const sub = useBridgeSubscription();
-  if (sub?.status !== 'past_due') return null;
+export default function SubscriptionPage() {
   return (
-    <div className="banner banner-error">
-      Payment failed. <a href={sub.recoveryUrl ?? '/billing/portal'}>Update billing</a>
-    </div>
+    <PlanSelector
+      successUrl={`${window.location.origin}/subscription/success`}
+      cancelUrl={`${window.location.origin}/subscription/cancel`}
+    />
   );
 }
 ```
 
-**Snapshot fields** (`BillingSubscriptionSnapshot`):
+`<PlanSelector>` handles everything: loads plans + status, shows the current plan, routes free-plan selection directly (`selectFreePlan`), switches active subscribers in-app (`changePlan`), and launches Stripe Checkout for new paid plans (`startCheckout` + `@stripe/stripe-js`).
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `plan` | `BillingPlanRef` | Active plan reference |
-| `status` | `'active' \| 'trial_active' \| 'cancel_at_period_end' \| 'past_due' \| 'canceled' \| ...` | Lifecycle state |
-| `pastDueReason` | `PastDueReason \| undefined` | When `status === 'past_due'` |
-| `daysLeft` | `number \| undefined` | Days left in trial or until dunning final retry |
-| `endsAt`, `renewsAt`, `nextRetryAt`, `finalRetryAt` | `string \| undefined` | Lifecycle boundary ISO timestamps |
-| `cardLast4`, `hasCardOnFile` | `string` / `boolean` | For "update payment method" CTAs |
-| `gateEngaged` | `boolean` | Workspace locked due to billing |
-| `recoveryUrl` | `string \| undefined` | Direct link to resolve current state |
+**`<PlanSelector>` props:**
 
-For the Phase 1.0 status shape (`paymentsEnabled`, `shouldSelectPlan`, `trial`), the existing `useSubscription()` hook from `bridge-nextjs/client` still works — use whichever fits the call site.
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `successUrl` | `string` | required | Absolute URL Stripe returns to after a successful payment |
+| `cancelUrl` | `string` | required | Absolute URL Stripe returns to on cancel |
+| `onSelect` | `({ plan, price }) => void` | — | Called after free-plan selection or plan change |
+| `planCard` | `(ctx) => ReactNode` | — | Override the default plan card layout |
 
-## Live quota counters
-
-```tsx
-'use client';
-import { useBridgeQuota } from '@/lib/bridge-hooks';
-
-export function AICounter() {
-  const snap = useBridgeQuota('ai_completions');
-  if (!snap) return null; // no quota configured for this plan
-
-  return (
-    <div>
-      <p>{snap.used} / {snap.limit} {snap.label} ({snap.percent_used}%)</p>
-      {snap.warningLevel === 'approaching' && (
-        <p className="warning">Approaching limit — {snap.remaining} left.</p>
-      )}
-      {snap.warningLevel === 'critical' && (
-        <p className="critical">Critical — {snap.remaining} left.</p>
-      )}
-    </div>
-  );
-}
-```
-
-**`QuotaSnapshot` shape:**
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `metric` | `string` | Metric key from admin |
-| `used` / `limit` / `remaining` | `number` | Current period totals |
-| `percent_used` | `number` | Rounded percentage |
-| `warningLevel` | `null \| 'approaching' \| 'critical'` | `null` < 80%, `approaching` 80–94%, `critical` ≥ 95% |
-| `policy` | `'hard' \| 'metered'` | From admin: `metered` bills overage, `hard` flips entitlement off at cap |
-| `label` | `string` | Human label for the metric |
-
-Returns `undefined` if no quota is configured — render nothing.
-
-The counter ticks live as usage is reported. No polling.
-
-## Reporting usage from your app
-
-```ts
-// Anywhere — client component, Server Action, route handler, background job.
-import { getBridgeAuth } from '@nebulr-group/bridge-nextjs/client';
-
-export async function generateCompletion(prompt: string) {
-  const result = await callOpenAI(prompt);
-
-  // Fire-and-forget. SDK queues durably; survives crashes / offline.
-  getBridgeAuth().usage.report('ai_completions', 1);
-
-  return result;
-}
-```
-
-**Signature:**
-
-```ts
-usage.report(metric: string, value?: number, idempotencyKey?: string): void
-```
-
-- `value` defaults to `1`. Pass a positive integer for multi-unit events.
-- `idempotencyKey` is auto-generated at enqueue. Only pass one when reconciling against an external system's ID.
-- Do not `await` — synchronous-return, fire-and-forget. The SDK handles batching, retries, dedup.
-- Reporting to a metric not configured in admin is accepted server-side but doesn't tick any counter.
-
-**Inspecting the queue (debug only):**
-
-```ts
-const status = await getBridgeAuth().usage.getQueueStatus();
-// { queueDepth, retryCount, lastFlushTimestamp, lastFlushError }
-```
-
-**Cap-vs-policy behavior:** reporting usage that exceeds the cap **always succeeds server-side**. The decision is downstream — `metered` bills overage, `hard` flips the entitlement off. React via the entitlement check, not by refusing to call `report`.
-
-## Gating features by entitlement
-
-```tsx
-'use client';
-import { useBridgeEntitlement } from '@/lib/bridge-hooks';
-
-export function AnalyticsLink() {
-  const canAnalytics = useBridgeEntitlement('advanced_analytics');
-  if (!canAnalytics) return <p>Upgrade to Pro to access advanced analytics.</p>;
-  return <a href="/analytics">Open advanced analytics</a>;
-}
-```
-
-`useBridgeEntitlement` re-renders the moment the entitlement flips (plan change, quota exhaustion on a `hard` metric, payment failure). It returns `false` until hydration completes (fail-closed).
-
-**Decision — entitlement vs feature flag:**
-
-| Decision driver | Use |
-|---|---|
-| "This feature belongs to a paid plan" | **Entitlement** (`useBridgeEntitlement(...)`) |
-| "I'm A/B-testing this with 10% of users" | **Feature flag** (`useFeatureFlag(...)`) |
-| "Plan-X-only AND 10% rollout" | **Both** — entitlement says "allowed", flag says "exposed" |
-
-Entitlements describe what the user *bought*; flags describe what's *exposed*.
-
-## Subscribing to lifecycle events
-
-For transient cross-cutting reactions — toasts, analytics, emails. Mount once in a side-effect-only component at the root layout.
+### Success page — `app/subscription/success/page.tsx`
 
 ```tsx
 'use client';
 import { useEffect } from 'react';
-import { useBridge } from '@nebulr-group/bridge-auth-core';
+import { loadSubscription } from '@nebulr-group/bridge-nextjs/client';
 
-export function BillingEventListeners() {
-  useEffect(() =>
-    useBridge().handle({
-      'payment.failed': (m) => {
-        toast.error(`Payment failed. Next retry: ${m.nextRetryAt}`);
-      },
-      'payment.succeeded': () => {
-        toast.success('Payment received — thanks!');
-      },
-      'subscription.created': (m) => {
-        analytics.track('subscription_created', { plan: m.plan?.key });
-      },
-      'cancel.scheduled': (m) => {
-        analytics.track('cancel_scheduled', { endsAt: m.endsAt });
-      },
-      'quota.updated': (m) => {
-        if (m.warningLevel === 'critical') {
-          toast.warning(`${m.metric} at ${m.used}/${m.limit}`);
-        }
-      },
-      'entitlements.changed': (m) => {
-        console.log('entitlements changed', m.entitlements);
-      },
-    })
-  , []);
-
-  return null;
+export default function SuccessPage() {
+  useEffect(() => { void loadSubscription(); }, []);
+  return <p>Thanks — your subscription is active. <a href="/">Go home</a></p>;
 }
 ```
 
-`handle(...)` returns a single unsubscribe function that detaches *all* registered handlers — return it directly from the `useEffect` cleanup.
-
-Mount the component once in your root layout:
+### Cancel page — `app/subscription/cancel/page.tsx`
 
 ```tsx
-// app/layout.tsx
-import { BillingEventListeners } from './billing-event-listeners';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html>
-      <body>
-        <BillingEventListeners />
-        {children}
-      </body>
-    </html>
-  );
+export default function CancelPage() {
+  return <p>Checkout cancelled. <a href="/subscription">Try again</a></p>;
 }
 ```
 
-**Lifecycle message `kind` values** (subset — full list in `BillingLifecycleMessage`):
+**Stripe Checkout session_id preservation.** When Stripe redirects back to `successUrl`, it appends `?session_id=cs_test_…`. `<BridgeProvider>`'s mount effect persists this before any client-side navigation can strip it; `loadSubscription()` picks it up to trigger the server-side sync. The OAuth callback route also preserves `?payment=` by default (`preserveQueryParams: ['payment']`). Do not strip these params in custom redirects.
 
-| `kind` | When it fires |
-|--------|---------------|
-| `payment.failed` | Stripe invoice failed; dunning starts |
-| `payment.succeeded` | Invoice paid |
-| `subscription.created` | Workspace moved onto a plan |
-| `subscription.changed` | Plan or pricing changed |
-| `cancel.scheduled` | User cancelled; still active until period end |
-| `cancel.effective` | Cancellation took effect at period boundary |
-| `dunning.advanced` | Dunning escalation step |
-| `dunning.exhausted` | Retries exhausted; gate engages |
-| `quota.updated` | Throttled counter push |
-| `entitlements.changed` | One or more entitlements flipped |
+## Step 2 — Billing notice banner
 
-Events can be missed across SDK reconnects. Use them for ephemeral side effects only.
-
-## Reconnection behavior
-
-The Bridge live channel reconnects automatically. On reconnect:
-
-- **Snapshots converge.** All `useBridge*` hooks refetch and re-render. Even after a 6-hour offline window, state catches up within a couple seconds.
-- **Events may be missed.** Anything fired while offline does not replay through `handle(...)`. The snapshot reflects the end state, but the transition itself is lost.
-- **Usage queue drains.** `usage.report(...)` calls made offline are persisted (IndexedDB in browser; JSONL on Node servers) and replayed in order on reconnect, with server-side dedup preventing double-counts.
-
-If you need to *react* to a transition, use both a `handle(...)` callback *and* a snapshot check on reconnect.
-
-## Gate state (advanced)
-
-If a workspace gets locked due to dunning, `useBridge().isLocked()` returns `true` and `useBridge().gateState()` returns the structured payload. Pattern for short-circuiting your app's normal UI:
+Add `<BridgeBillingNotice />` to the root layout (inside `<BridgeProvider>`). It renders nothing when billing is healthy and automatically shows the right message for payment failures, trial endings, dunning retries, and cancellations:
 
 ```tsx
 'use client';
-import { useEffect, useState } from 'react';
-import { useBridge } from '@nebulr-group/bridge-auth-core';
+import { BridgeBillingNotice } from '@nebulr-group/bridge-nextjs/client';
 
-function useIsLocked(): boolean {
-  const [locked, setLocked] = useState(false);
-  useEffect(() => {
-    const bridge = useBridge();
-    setLocked(bridge.isLocked());
-    return bridge.subscription.subscribe(() => setLocked(bridge.isLocked()));
-  }, []);
-  return locked;
-}
+<BridgeBillingNotice />
+```
 
-export function GateGuard({ children }: { children: React.ReactNode }) {
-  const locked = useIsLocked();
-  if (locked) return <LockedScreen />;
-  return <>{children}</>;
+Each state has two role variants: admins get an action CTA ("Update card", "Upgrade"); members get an informational variant. Pass `mode="hard"` to render a full-screen lockscreen when the workspace is billing-locked.
+
+To show the current plan + status badge anywhere (e.g. a header), drop in `<BridgeSubscriptionStatus />` — no props required.
+
+## Step 2b — Plan-selection paywall (default)
+
+Set this up by default: a signed-in tenant with no plan can't use the app until they pick one. Two options.
+
+**Option A — in-layout overlay (recommended for Next.js).** Wrap the app in `<BridgePaywall>`:
+
+```tsx
+'use client';
+import { BridgePaywall } from '@nebulr-group/bridge-nextjs/client';
+
+<BridgePaywall successRedirect="/">
+  {children}
+</BridgePaywall>
+```
+
+`<BridgePaywall>` renders a fullscreen plan-selector overlay when `shouldSelectPlan` is true, then disappears once a plan is chosen. Props:
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `successRedirect` | `string` | `'/'` | Where to send the user after a successful Stripe payment |
+| `cancelRedirect` | `string` | `'/'` | Where to send the user if they cancel checkout |
+| `onSelect` | `({ plan, price }) => void` | — | Side-effect hook after free-plan or direct plan change |
+| `heading` | `ReactNode` | "Choose a plan" | Override the modal heading |
+
+`successRedirect` / `cancelRedirect` are resolved against `window.location.origin` and forwarded to the inner `<PlanSelector>` as `successUrl` / `cancelUrl`.
+
+**Option B — dedicated welcome route.** Create `app/welcome/page.tsx` mounting `<PlanSelector />`, mark `/welcome` public in your route guard, and configure the bootstrap paywall redirect. The redirect is gated by the app-level `paymentsAutoRedirect` flag (`true` by default); set it `false` to turn the whole paywall off.
+
+## Step 3 — Quota and entitlement UI (optional)
+
+Skip if the plans have no per-resource limits or feature differences. (Quotas and entitlements are configured on plans in the admin, not in code.)
+
+To show a live quota counter, drop in `<BridgeQuotaBanner metric="ai_completions" />` — it renders nothing if no quota is configured for the current plan, warns at ≥80%, and goes critical at ≥95% / over cap.
+
+To gate a feature by entitlement, use the auth-core billing surface (re-exported as `useBridgeBilling` to avoid colliding with the unified `useBridge`):
+
+```tsx
+import { useBridgeBilling } from '@nebulr-group/bridge-nextjs/client';
+
+if (useBridgeBilling().entitlements.can('ai_completions')) { /* ... */ }
+```
+
+Returns `false` until hydrated (fail-closed), updates live on plan change or quota exhaustion. The recommended pattern is a feature flag targeting `bridge:billing.entitlement.<key>` — see the Feature Flags prompt.
+
+## Step 4 — Billing portal
+
+To let users manage their payment method or cancel, add a button that calls `getBridgeAuth().getPortalUrl()` and redirects to the returned URL. Import `getBridgeAuth` from `@nebulr-group/bridge-nextjs/client`.
+
+## Reading subscription state
+
+Two surfaces, both reactive:
+
+```tsx
+'use client';
+import { useSubscription, loadSubscription } from '@nebulr-group/bridge-nextjs/client';
+import { useEffect } from 'react';
+
+export function CurrentPlan() {
+  const { status, loading } = useSubscription();
+  useEffect(() => { if (!status && !loading) void loadSubscription(); }, [status, loading]);
+  if (loading || !status) return null;
+  return <p>Current plan: {status.plan ?? 'none'}</p>;
 }
 ```
 
-Or call `useBridge().assertNotLocked()` from Server Actions to fail fast.
+For canonical live billing state (plan + lifecycle status), read `useBridgeBilling().subscription.snapshot()` or subscribe via `useBridgeBilling().subscription.subscribe(fn)`. Report metered usage with `getBridgeAuth().usage.report(metric, n)` (fire-and-forget — do not `await`). Register side-effect handlers with `useBridgeBilling().handle({ 'subscription.plan_changed': fn, ... })`.
 
-## Integration checklist
+Auth-core methods used internally by `<PlanSelector>`: `selectFreePlan(planKey)`, `changePlan(planKey, priceOffer)`, `startCheckout(planKey, priceOffer, { successUrl, cancelUrl })`, `getSubscriptionStatus()`, `getPlans()` (the last two via `loadSubscription()`).
 
-- [ ] `src/lib/bridge-hooks.ts` exports `useBridgeSubscription`, `useBridgeQuota`, `useBridgeEntitlement`, `useBridgeEntitlements`.
-- [ ] `BillingEventListeners` component is mounted once at `app/layout.tsx`.
-- [ ] Any client component needing subscription state imports `useBridgeSubscription` (Phase 2.0 shape) or `useSubscription` from `bridge-nextjs/client` (Phase 1.0 shape).
-- [ ] Usage is reported via `getBridgeAuth().usage.report(metric, value)`.
-- [ ] Feature gates use `useBridgeEntitlement(key)`, not hard-coded plan checks.
+## Billing checklist
+
+- [ ] `@stripe/stripe-js` installed (only required for paid plans with Stripe).
+- [ ] `app/subscription/page.tsx` mounts `<PlanSelector />` with absolute `successUrl` / `cancelUrl`.
+- [ ] `app/subscription/success/page.tsx` and `app/subscription/cancel/page.tsx` exist.
+- [ ] Subscription routes protected by middleware or `<ProtectedRoute>`.
+- [ ] `<BridgeBillingNotice />` added to the root layout (inside `<BridgeProvider>`).
+- [ ] Paywall set up — `<BridgePaywall>` wrapping the app, OR a `/welcome` route + bootstrap paywall config.
+- [ ] Quota/entitlement UI added if plans have limits.
+- [ ] **No legacy `planService.redirectToPlanSelection()` calls remain.**
 
 ## Verify
 
-1. **Subscription snapshot reads correctly.** Add a client component using `useBridgeSubscription()`. Confirm the right plan name and status render.
-2. **Quota counter is live.** Configure a quota in admin → drop `<AICounter />` (using `useBridgeQuota`) → call `getBridgeAuth().usage.report('<metric>')` from a button → counter ticks up. Cross 80% → `warningLevel` flips to `approaching`.
-3. **Entitlement gate works.** Wrap a feature with `useBridgeEntitlement(key)`. Toggle the entitlement in admin — gated UI disappears without a manual refresh.
-4. **Past-due UI renders.** Trigger past_due via Stripe test card or admin override → your `PastDueBanner` (or equivalent) renders.
-5. **Lifecycle handler fires.** Register `'subscription.changed'` in `useBridge().handle({...})` and switch plans via `<PlanSelector />`. Confirm the handler runs.
-6. **Usage queue drains.** DevTools → Application → IndexedDB → confirm the Bridge usage store. Fire `usage.report(...)` offline, come back online, watch queue depth go to 0 via `getBridgeAuth().usage.getQueueStatus()`.
-7. **Run `npm run build`** to confirm no TypeScript or import errors.
+1. Sign in.
+2. Navigate to `/subscription` — plan cards render with correct prices.
+3. Select a free plan — subscription updates immediately, no redirect.
+4. Select a paid plan — Stripe Checkout launches; complete payment — returned to `/subscription/success`, status reflects the new plan.
+5. Cancel payment — returned to `/subscription/cancel`.
+6. Paywall: sign in as a new tenant with no plan — the `<BridgePaywall>` overlay (or `/welcome`) blocks the app until a plan is chosen.
+7. Run `npm run build` — no TypeScript or import errors.
 
-If any verification step fails on an undefined export, the SDK version is too old — bump `@nebulr-group/bridge-nextjs` and `@nebulr-group/bridge-auth-core`, then re-run `npm install`.
+## Going further
+
+This prompt covers the UI layer. For the runtime model behind it — how the live billing surface stays current, the full snapshot/quota field shapes, composing your own reactive hooks, reporting usage durably, entitlement-vs-flag gating, and gate-state handling — see the learning docs:
+
+- **Payments / Billing 2.0:** `learning/payments/payments.md` (the "Billing 2.0 — live, reactive billing UI" section)
+- **Live updates & the Bridge surface:** `learning/live-updates/live-updates.md` (snapshots vs events, connection/reconnection behavior)

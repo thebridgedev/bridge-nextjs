@@ -49,6 +49,17 @@ Every slice is a subscribable readable: `subscribe(fn)` calls `fn` immediately w
 | `bridge.attributes` | write surface | Publish your own attributes into flag targeting (below) |
 | `bridge.events` | dispatcher | Subscribe to every live channel event (below) |
 
+### Snapshots vs events
+
+Two distinct layers ride the live channel, and they answer different questions:
+
+| Layer | Question | API |
+|-------|----------|-----|
+| **Snapshot readables** | "What's true *right now*?" | `bridge.tenant.subscription`, `bridge.tenant.entitlements`, quota readables, … |
+| **Event handlers** | "What just *happened*?" | `bridge.events.handle({ ... })` |
+
+Use **snapshots** to render state — they always converge to the correct value after a disconnect. Use **events** for one-off side effects on a transition (toasts, analytics, emails). Events can be missed across a reconnect, so never derive durable UI state from an event alone.
+
 ### Handling live events
 
 `bridge.events.handle({...})` is the one API for reacting to channel events — use it for side effects like analytics, audit logging, or alerting (UI state updates automatically through the readables above):
@@ -124,6 +135,12 @@ export function ConnectionBadge() {
 ```
 
 While the channel is down, everything keeps working from the last known state — flags evaluate from cache, readables hold their last snapshot. On reconnect the server re-sends a full `session.snapshot`, so every slice updates atomically and nothing is missed.
+
+What this means in practice, even after a long offline window (say 6 hours):
+
+- **Snapshots converge.** Every readable refetches and re-renders; state catches up within a couple of seconds.
+- **Events may be missed.** Anything fired while offline does not replay through `handle(...)`. The snapshot reflects the end state, but the individual transition is lost — so if you need to *react* to a transition, pair a `handle(...)` callback with a snapshot check on reconnect.
+- **Usage reports drain.** `getBridgeAuth().usage.report(...)` calls made offline are persisted (IndexedDB in the browser, JSONL on Node servers) and replayed in order on reconnect, with server-side dedup preventing double-counts.
 
 ### Relationship to the existing hooks
 
