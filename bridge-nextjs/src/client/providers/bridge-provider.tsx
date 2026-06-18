@@ -172,10 +172,13 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     void (async () => {
       try {
         const bridge = getBridgeAuth();
-        if (!bridge.isAuthenticated()) return;
-        const status = await bridge.getSubscriptionStatus();
+        // shouldRedirectToPaywall (auth-core) bundles the auth check + subscription
+        // status fetch + the shouldSelectPlan/paymentsAutoRedirect decision (TBP-369),
+        // shared with bridge-svelte/react/angular. getSubscriptionStatus() still
+        // self-heals after a Stripe round-trip, so a freshly-paid user isn't bounced.
+        const should = await bridge.shouldRedirectToPaywall();
         if (cancelled) return;
-        if (status?.shouldSelectPlan === true && status?.paymentsAutoRedirect !== false) {
+        if (should) {
           logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
           router.push(paywallRoute);
         }
