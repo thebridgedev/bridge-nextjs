@@ -130,8 +130,11 @@ import { BridgeBillingNotice } from '@nebulr-group/bridge-nextjs/client';
 | `mode` | `'soft' \| 'hard'` | `'soft'` | `soft` always renders inline; `hard` renders a full-screen lockscreen when the workspace is billing-locked |
 | `className` | `string` | `''` | Class applied to the root element |
 | `onActionClick` | `(state) => void` | — | Override the default CTA click handler |
+| `actionHref` | `string` | `billing.manageRoute` config → `/billing` | CTA destination for this instance; `onActionClick` takes precedence |
 
 States it covers: trial active, trial ending soon, past due, cancellation scheduled, canceled, dunning retry scheduled, final retry, exhausted (locked). Each state has two role variants: admins get an action CTA ("Update card", "Upgrade"); members get an informational variant pointing them to their workspace owner.
+
+By default the CTA navigates to `billing.manageRoute` from the `<BridgeProvider>` config (falling back to `/billing`) — point it at your plan page, e.g. `billing: { manageRoute: '/subscription' }`.
 
 #### `<BridgeQuotaBanner />`
 
@@ -150,6 +153,7 @@ import { BridgeQuotaBanner } from '@nebulr-group/bridge-nextjs/client';
 | `label` | `string` | metric key | Humanized display label |
 | `className` | `string` | `''` | Class applied to the root element |
 | `onActionClick` | `(snap) => void` | — | Override the default Upgrade CTA handler |
+| `actionHref` | `string` | `billing.manageRoute` config → `/billing` | Upgrade CTA destination for this instance; `onActionClick` takes precedence |
 
 For a fully custom quota UI, read the underlying snapshot directly via the auth-core billing surface (re-exported as `useBridgeBilling` to avoid colliding with the unified `useBridge`):
 

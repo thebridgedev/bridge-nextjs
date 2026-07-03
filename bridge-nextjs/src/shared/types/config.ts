@@ -46,6 +46,12 @@ export interface BridgeConfig extends BridgeAuthConfig {
      * Defaults to `/payment-error`.
      */
     paymentErrorRoute?: string;
+    /**
+     * Route where your plan/billing management page lives — the default
+     * destination of the Upgrade/Manage CTA in `<BridgeQuotaBanner>` and
+     * `<BridgeBillingNotice>`. Defaults to `/billing`.
+     */
+    manageRoute?: string;
   };
 
   // ── Legacy fields (pre-auth-core era) — kept for backward compatibility ──

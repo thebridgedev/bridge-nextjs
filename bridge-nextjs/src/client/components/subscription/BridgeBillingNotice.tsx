@@ -27,7 +27,7 @@ import {
   type BillingNoticeState,
   type BillingSubscriptionState,
 } from '@nebulr-group/bridge-auth-core';
-import { getBridgeAuth } from '../../../core/bridge-instance';
+import { getBridgeAuth, getBridgeConfig } from '../../../core/bridge-instance';
 import { useBridgeSnapshot } from '../../hooks/use-bridge-readable';
 
 type Chassis = 'bar' | 'rail' | 'card';
@@ -45,6 +45,9 @@ export interface BridgeBillingNoticeProps {
   className?: string;
   /** Override the default CTA click handler (links to billing surface). */
   onActionClick?: (state: BillingNoticeState) => void;
+  /** CTA destination for this instance. Overrides `billing.manageRoute`
+   *  config; `onActionClick` takes precedence over both. */
+  actionHref?: string;
 }
 
 export function BridgeBillingNotice({
@@ -52,6 +55,7 @@ export function BridgeBillingNotice({
   mode = 'soft',
   className = '',
   onActionClick,
+  actionHref,
 }: BridgeBillingNoticeProps) {
   const subscription = useBridge().subscription;
 
@@ -103,10 +107,16 @@ export function BridgeBillingNotice({
       onActionClick(noticeState);
       return;
     }
-    // Default: open the existing billing surface. Apps can override via
-    // `onActionClick`.
+    // Default: open the app's billing surface. Destination priority:
+    // `actionHref` prop → `billing.manageRoute` config → '/billing'.
     if (typeof window !== 'undefined') {
-      window.location.href = '/billing';
+      let manageRoute: string | undefined;
+      try {
+        manageRoute = getBridgeConfig().billing?.manageRoute;
+      } catch {
+        // Config not initialized — fall through to the default.
+      }
+      window.location.href = actionHref ?? manageRoute ?? '/billing';
     }
   }
 
