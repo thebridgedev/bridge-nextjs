@@ -1,25 +1,26 @@
+---
+title: Feature Flags
+order: 40
+oneLiner: Ship behind a flag and change who sees what — live from admin, no redeploy.
+related: [live-updates, payments]
+---
+
 # Feature Flags
 
-Conditional rendering and access control driven by Bridge Feature Flags 2.0.
+Bridge Feature Flags evaluates locally — the SDK keeps the flag rules in memory, evaluates against in-process context, and receives rule changes live over a push channel. A flag check is an O(1) lookup: no network call, safe in render paths.
 
-Bridge evaluates flags **locally in the SDK** against a cache of flag rules that
-syncs live from the Bridge API. On the client the cache rides the same realtime
-channel as the rest of Bridge (auth, billing) — toggling a flag in the admin UI
-updates your app without a refresh. On the server, flags evaluate in
-backend-mode against the request's token claims.
+Next.js runs your app on two sides, and flags work on both:
 
-## Define flags
+- **Client Components** read flags reactively with `useFlag` / `<FeatureFlag>` — when an admin flips a flag, the value updates in place over the live channel, no refresh.
+- **Server Components, middleware, and route handlers** evaluate the same flags server-side against the request's token claims — so protected pages and API routes never render before the flag decision is made.
 
-Create flag definitions in the Bridge admin UI. Each flag has:
-- A unique key (e.g. `beta-dashboard`).
-- A state: `off`, `on`, or `on-with-rule`.
-- For `on-with-rule`: a targeting rule (branches of conditions against
-  attributes like `user.role`, `tenant.plan`, or dev-supplied attributes).
+Flags work standalone: an `appId` is all the configuration you need. Bridge auth and billing are optional context sources (see "Bridge-managed attributes" below).
 
-## Setup
+Everything ships from one package with two subpath entries — client code imports from `@nebulr-group/bridge-nextjs/client`, server code from `@nebulr-group/bridge-nextjs/server`. There is no separate `/flags` entry; the flags surface is folded into `./client`.
 
-Feature Flags 2.0 is bootstrapped automatically by `<BridgeProvider>` — no extra
-wiring. Mount the provider once in your root layout (see the integration guide):
+### Setup
+
+`<BridgeProvider>` bootstraps flags for you — mount it once in your root layout and the client cache, live updates, and telemetry are wired automatically:
 
 ```tsx
 // app/layout.tsx
@@ -36,175 +37,182 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-## Client-side: `<FeatureFlag>` component
+No flag-specific init call is needed — the flag SDK reads `appId` + `apiBaseUrl` from the same BridgeAuth config `<BridgeProvider>` already uses (only `appId` is required for flags-only apps). Server-side evaluation reads the same config from the `NEXT_PUBLIC_BRIDGE_*` env vars.
 
-```tsx
-'use client';
-import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
-
-// React reserves the prop name `key`, so the flag key is passed as `flagKey`.
-<FeatureFlag flagKey="beta-dashboard" defaultValue={false} fallback={<p>Stable dashboard</p>}>
-  <p>Beta dashboard preview</p>
-</FeatureFlag>
-```
-
-`children` renders when the rule passes; `fallback` renders when the flag is off
-or no rule matched. Both can be a render-prop that receives the Bridge-decided
-value (useful for non-boolean flags):
-
-```tsx
-<FeatureFlag flagKey="ui-theme" defaultValue="light">
-  {(value) => <App theme={value} />}
-</FeatureFlag>
-```
-
-Pass `context` to evaluate against attributes your app supplies at call time —
-these override server-side values for the same key:
-
-```tsx
-<FeatureFlag flagKey="plan-flag" defaultValue={false} context={{ attributes: { plan } }}>
-  {() => <EnterpriseFeature />}
-</FeatureFlag>
-```
-
-## Client-side: `useFlag` hook
+### useFlag — reactive flag values (client)
 
 ```tsx
 'use client';
 import { useFlag } from '@nebulr-group/bridge-nextjs/client';
 
-export function CTA() {
-  const { value, passed } = useFlag('new-checkout', false);
-  return passed ? <NewCheckout /> : <LegacyCheckout />;
+export function Banner() {
+  const { value } = useFlag('show_banner', false);
+  return value ? <div className="banner">New stuff!</div> : null;
 }
 ```
 
-`useFlag(key, defaultValue, context?)` returns `{ value, passed }` and re-renders
-whenever the flag changes in the cache (live update, hydrate, login/logout). Pass
-`context` for per-call attributes, same as the component:
+`useFlag(key, defaultValue, context?)` returns `{ value, passed }`:
+
+- **`value`** — the evaluated flag value, typed from your default (`boolean` | `string` | `number` | JSON object).
+- **`passed`** — whether a rule branch matched.
+- The result is **reactive**: when an admin changes the flag (or a live rule update arrives), the hook re-renders with the new `value`.
+- The default is mandatory — it's what your app gets when the flag isn't configured or Bridge is unreachable. A flag call can never break your app.
+
+`useFlag` is a React hook, so it only runs inside Client Components (`'use client'`).
+
+### Per-call context
+
+The optional third argument supplies per-call identity/attributes. Per-call attributes win over everything else on key collision:
 
 ```tsx
-const { value } = useFlag('enterprise-feature', false, { attributes: { plan } });
+const checkout = useFlag('new_checkout', false, {
+  attributes: { cart_size: cart.items.length },
+});
 ```
 
-## Dev-supplied attributes
+Unlike bridge-svelte, the context is a plain object — React re-evaluates the hook on every render, so there's no getter function to keep it reactive.
 
-Your app can declare attributes globally via the unified bridge surface so every
-flag eval sees them, without threading `context` through each call:
+### App-wide attributes (`bridge.attributes`)
+
+For attributes that every flag evaluation should see — not just one call site — publish them once on the unified bridge surface:
 
 ```tsx
 'use client';
 import { bridge } from '@nebulr-group/bridge-nextjs/client';
 
-bridge.attributes.set('plan', 'enterprise');
-bridge.attributes.bindMany(() => ({ plan: currentPlan, region: currentRegion }));
+bridge.attributes.set('beta_cohort', true);                    // static value
+bridge.attributes.bind('cart_size', () => cart.items.length);  // re-read on every eval
+bridge.attributes.bindMany(() => ({ theme, locale }));         // bulk getter
 ```
 
-Dev-supplied attributes win on key collision with Bridge-managed providers
-(auth, billing). Per-call `context` attributes win over everything for that one
-eval.
+Precedence on key collision: per-call context > `bridge.attributes` > Bridge-managed providers. The `bridge:` namespace is reserved — writes to it are rejected with a console warning. See [Send context from your code](/feature-flags/targeting/send-context/) for the full pattern.
 
-## Advanced: `createBridgeFlags`
+### FeatureFlag component (client)
 
-`<BridgeProvider>` calls `createBridgeFlags()` for you. Call it directly only for
-standalone-SDK use or tests where you need a second instance:
+Declarative gating with optional fallback content. `children` and `fallback` may each be a node or a render-prop that receives the evaluated value:
 
 ```tsx
-import { createBridgeFlags } from '@nebulr-group/bridge-nextjs/client';
+'use client';
+import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 
-const { bridge, stop } = createBridgeFlags({ registerGlobal: false });
+<FeatureFlag flagKey="new_dashboard" defaultValue={false}>
+  <NewDashboard />
+</FeatureFlag>
+
+// With fallback for the non-matching case:
+<FeatureFlag
+  flagKey="premium_feature"
+  defaultValue={false}
+  fallback={<button disabled title="Upgrade to unlock">Premium (locked)</button>}
+>
+  <button>Use premium feature</button>
+</FeatureFlag>
 ```
 
-## Server-side: `<ServerFeatureFlag>`
+> **Tip:** React reserves the prop name `key` for reconciliation, so the flag key is passed as `flagKey`, not `key`.
 
-For SSR-safe conditional rendering in server components. Evaluates in
-backend-mode against the request's token claims (read from cookies):
+**Props:**
 
-```tsx
-import { ServerFeatureFlag } from '@nebulr-group/bridge-nextjs/server';
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `flagKey` | `string` | **(required)** | The flag key (`key` is reserved by React) |
+| `defaultValue` | `T` | **(required)** | Safe value; also sets the flag's inferred type |
+| `context` | `Partial<EvalContext>` | — | Per-call eval context (attributes win on collision) |
+| `children` | node \| `(value) => node` | — | Rendered when the flag passes |
+| `fallback` | node \| `(value) => node` | — | Rendered when it doesn't |
 
-export default function Page() {
-  return (
-    <ServerFeatureFlag flagName="beta-dashboard" fallback={<StableDashboard />}>
-      <BetaDashboard />
-    </ServerFeatureFlag>
-  );
-}
-```
+### flagStore — subscribe outside React
 
-Supports `negate` and `redirectTo` for access control:
-
-```tsx
-<ServerFeatureFlag flagName="maintenance-mode" negate redirectTo="/">
-  <NormalContent />
-</ServerFeatureFlag>
-```
-
-## Server-side: middleware
-
-Protect page and API routes by flag in `middleware.ts`:
+For non-component code (or tests) that wants to observe a single flag without a hook:
 
 ```ts
-import { withFeatureFlags } from '@nebulr-group/bridge-nextjs/server';
+import { flagStore } from '@nebulr-group/bridge-nextjs/client';
 
-export const middleware = withFeatureFlags([
-  { flag: 'beta-dashboard', paths: ['/beta', '/beta/*'], redirectTo: '/' },
-  { flag: 'beta-api', paths: ['/api/beta/*'], responseType: 'error', errorStatus: 403 },
-]);
-
-export const config = { matcher: ['/beta/:path*', '/api/beta/:path*'] };
+const banner = flagStore('show_banner', false);
+const unsubscribe = banner.subscribe(({ value, passed }) => {
+  // runs immediately and again on every live flag change
+});
 ```
 
-The middleware also serializes the eval context onto the `x-bridge-context`
-request header so any Bridge backend (nestjs / express) the request flows to
-buckets the same identity. Convenience wrappers: `withFeatureFlag`,
-`requireFeatureFlag` (page redirect), `requireApiFeatureFlag` (JSON 403).
+### Multi-type values
 
-## Server-side: API route handlers
+One API for boolean, string, number, and JSON flags — the type is inferred from the default:
 
 ```ts
-import { NextRequest } from 'next/server';
-import { requireFeatureFlagForRoute } from '@nebulr-group/bridge-nextjs/server';
-
-export function GET(request: NextRequest) {
-  return requireFeatureFlagForRoute('beta-api', async () => {
-    return Response.json({ ok: true });
-  })(request);
-}
+const isDark = useFlag('dark_mode', false);
+const cta    = useFlag('checkout_text', 'Submit');
+const limit  = useFlag('max_uploads', 10);
+const cfg    = useFlag('rate_limit', { window: 60, max: 100 });
 ```
 
-When the flag passes, the handler runs and the response carries the
-`x-bridge-context` header for downstream propagation. When it fails, a JSON 403
-is returned.
+A type mismatch (admin stored a different type than your default suggests) returns the default and logs a warning.
 
-## Environment variables
+### Identity & anonymous visitors
 
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_BRIDGE_APP_ID` | Your Bridge app id — the workspace flags evaluate against. |
-| `NEXT_PUBLIC_BRIDGE_API_BASE_URL` | Bridge API root (defaults to `https://api.thebridge.dev`). |
+The SDK manages identity for you:
 
-The flag SDK reads `appId` + `apiBaseUrl` from the BridgeAuth config — no
-separate flag configuration is needed.
+- On first load in the browser, it generates an anonymous ID and persists it (configurable: `persistent` localStorage / `session` sessionStorage / `none` in-memory) — anonymous visitors get stable bucketing for A/B tests and percentage rollouts.
+- With Bridge auth enabled, the session identity (the token's `sub`) is used automatically and pre-login activity links on login.
 
-## Caching & freshness
+### Live connection status
 
-- **Client:** the flag cache hydrates on bootstrap and re-hydrates on every
-  realtime reconnect; live updates push individual flag changes. No TTL — it's a
-  live channel.
-- **Server:** flag rules are read through a short-lived pull cache (default 30s
-  TTL) and evaluated locally per request. Expect up to one TTL window of delay
-  after toggling a flag before server-rendered output changes.
+```tsx
+'use client';
+import { useRealtimeStatus } from '@nebulr-group/bridge-nextjs/client';
 
-## Common pitfalls
+const status = useRealtimeStatus(); // 'connecting' | 'open' | 'closed' …
+```
 
-- **Use `flagKey`, not `key`.** React reserves `key`; the component will never
-  receive a prop named `key`.
-- **Flags before authentication:** anonymous users still get evaluated (the SDK
-  tracks an anonymous identity). Rule-targeted flags that need a logged-in user
-  fall through to the default — always pass a sensible `defaultValue` / `fallback`.
-- **Flag keys must match exactly** what's in the Bridge admin UI. Typos silently
-  return the default.
-- **Backend mode refuses to bucket without identity:** server evals of
-  rolled-out (`rolloutPct < 100`) rules return the safe default when the request
-  has no token — by design.
+When the live channel drops, flags freeze on last-known values and refetch on reconnect — your app keeps working through Bridge outages. Outside React, the same value is available on the `realtimeStatus` store's `.subscribe()`.
+
+### Bridge-managed attributes
+
+With Bridge auth and/or billing enabled, attributes like `user.role`, `tenant.plan`, and `bridge:billing.plan` merge into every evaluation automatically — no app code. Your own (dev-supplied) attributes always win on key collision, and the admin UI surfaces collisions on the flag detail page.
+
+With billing enabled this includes quota and entitlement attributes (`bridge:billing.quota.<metric>.*`, `bridge:billing.entitlement.<name>`) — the recommended way to gate plan-granted features is a flag whose rule targets an entitlement attribute. See [Target by plan or role](/feature-flags/targeting/by-plan-or-role/) and the Payments guide's Entitlements section for the pattern.
+
+### Server-side evaluation
+
+Client hooks are for the browser. In a Server Component, middleware, or route handler, use the server surface instead — it evaluates the same flags against the request's token claims (read from cookies):
+
+- `<ServerFeatureFlag>` — SSR-safe conditional rendering. See [Show or hide UI](/feature-flags/using/show-hide-ui/).
+- `withFeatureFlags` in `middleware.ts` — guard whole page/API routes. See [Guard routes](/feature-flags/using/guard-routes/).
+- `requireFeatureFlagForRoute` — wrap an API route handler. See [Use flags on your backend](/feature-flags/using/backend/).
+
+### Propagating context to your backend
+
+If a backend you control also evaluates flags for the same user, forward the eval context so both sides agree on identity and bucketing. The SDK serializes the context into the `x-bridge-context` header; backend SDKs (e.g. `@nebulr-group/bridge-nestjs/flags` with `BridgeContextInterceptor`) pick it up automatically. The Next.js middleware and route-handler wrappers set this header for you. See [Use flags on your backend](/feature-flags/using/backend/).
+
+Only propagate identity and attributes the backend can't derive itself — never `role`/`plan`-style attributes (the backend reads those from its own verified sources).
+
+### Under the hood
+
+- **No network on read (client)** — `useFlag` / `<FeatureFlag>` evaluate against an in-memory rule cache (an O(1) lookup); there is no request per flag check, so they are safe in render paths.
+- **Live rule updates** arrive over the realtime channel and update values in place — no refresh, no flicker.
+- **Server pull-cache** — server-side evaluation reads flag rules through a short-lived pull cache (default 30s TTL) and evaluates locally per request; expect up to one TTL window of delay after toggling a flag before server-rendered output changes.
+- **Telemetry** evaluations are batched and reported in the background, off the render path.
+
+### Percentage rollout
+
+Roll a feature out to a fraction of users instead of flipping it for everyone. In admin, give the flag a rule with a percentage (say 10%) — the SDK evaluates it against a **stable bucket** derived from the visitor's identity:
+
+```tsx
+'use client';
+import { useFlag } from '@nebulr-group/bridge-nextjs/client';
+
+// No code change for rollout — the percentage lives in the flag rule.
+const newCheckout = useFlag('new_checkout', false);
+```
+
+- **Sticky buckets** — the same identity always lands in the same bucket, so a user who's in the 10% stays in as you ramp to 25%, 50%, 100%. No flicker, no re-rolling.
+- **Anonymous visitors** get a persisted anonymous ID (see Identity above), so they bucket consistently before they ever sign in; on login, pre-login activity links to the authenticated identity.
+- **A/B cohorts** — a multi-variant flag (string/number/JSON) splits traffic into buckets and returns the variant for each, giving you experiment arms with the same sticky guarantee.
+- **Combine with rules** — a rollout can sit behind a segment (e.g. 10% *of users whose `tenant.plan = PRO`*), because the percentage applies after the rule's attribute conditions match.
+
+> **Tip:** Server-side (backend mode) refuses to bucket a rolled-out rule (`rolloutPct < 100`) without identity — a request with no token gets the safe default, by design. Client evals always have an anonymous identity to bucket on.
+
+Because the percentage and segments live in the flag rule, ramping a rollout or killing it is an admin action — your deployed code never changes.
+
+### Route-level flags
+
+Gate entire routes behind flags in `middleware.ts` with `withFeatureFlags` — evaluated server-side before the route renders, independent of the in-component `useFlag` / `<FeatureFlag>` surface. See [Guard routes](/feature-flags/using/guard-routes/).
