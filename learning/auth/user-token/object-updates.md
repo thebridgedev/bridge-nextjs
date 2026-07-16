@@ -7,7 +7,7 @@ sidebar:
 
 # How the user token is updated
 
-Once `<BridgeProvider>` connects, your app is subscribed to a live channel for as long as it's open. When an admin changes something about the signed-in user server-side — their role, their workspace's plan, a permission — Bridge pushes that change down the channel and refreshes the session automatically. `bridge.user` (and every other snapshot slice) updates in place. There's no reload, no polling, and nothing to wire up beyond reading it reactively.
+Once `<BridgeProvider>` connects, your app is subscribed to a live channel (a persistent realtime connection the SDK maintains) for as long as it's open. When an admin changes something about the signed-in user server-side (their role, their workspace's plan, a permission), Bridge pushes that change down the channel and refreshes the session automatically. Your reactive stores update in place. There's no reload, no polling, and nothing to wire up beyond reading `bridge.user` reactively.
 
 ## Example: a role change reaching your UI live
 
@@ -15,55 +15,44 @@ Once `<BridgeProvider>` connects, your app is subscribed to a live channel for a
 'use client';
 import { useBridge, useBridgeReadable } from '@nebulr-group/bridge-nextjs/client';
 
-export function AdminGate({ children }: { children: React.ReactNode }) {
+export function AdminArea() {
   const bridge = useBridge();
   const user = useBridgeReadable(bridge.user);
 
-  if (user?.role !== 'ADMIN') {
-    return <p>You don&apos;t have access to this area.</p>;
-  }
-  return <>{children}</>;
+  if (user?.role === 'ADMIN') return <AdminPanel />;
+  return <p>You don't have access to this area.</p>;
 }
 ```
 
-If an admin changes this user's role from `MEMBER` to `ADMIN` in the Control Center, `user.role` updates on its own and `<AdminGate>` re-renders — no refresh, because the component reads the live `bridge.user` readable rather than a value captured once on mount. Structure your gated UI this way (read via `useBridgeReadable(bridge.user)`, not a snapshot stashed in `useState`) and it stays correct automatically.
+If an admin changes this user's role from `MEMBER` to `ADMIN` in Control Center (your admin dashboard at app.thebridge.dev), `user.role` updates on its own and `<AdminPanel />` appears without a refresh, because the component is driven by the reactive `bridge.user` readable rather than a value read once on mount. Structure your gated UI this way (branch on the live readable, not a snapshot you captured earlier) and it stays correct automatically.
 
 ## Reacting to the exact moment something changes
 
-For a side effect at the moment of change — a toast, an analytics event, an audit log — subscribe on the unified events dispatcher, `bridge.events`:
+For a side effect at the moment of change (a toast, an analytics event, an audit log), subscribe on the unified events dispatcher:
 
 ```ts
 import { bridge } from '@nebulr-group/bridge-nextjs/client';
 
-const unsubscribe = bridge.events.handle({
+bridge.events.handle({
   'user.state_changed': (msg) => toast(`Your access changed: ${msg.reason}`),
   'session.snapshot': (msg) => console.log('Session refreshed', msg.data),
 });
 ```
 
-`bridge.events.handle(...)` returns an `unsubscribe` function — call it (e.g. from a `useEffect` cleanup) when the subscribing component unmounts.
+> **Framework note:** `bridge.events.handle(...)` returns an unsubscribe function; when subscribing from inside a component, call it in your `useEffect` cleanup so the handler doesn't outlive the component.
 
 ## What happens while your app is offline
 
-If the live channel drops (network blip, laptop sleep, server restart), the snapshot slices **freeze at their last-known values** — nothing clears, nothing errors. Bridge doesn't have anything new to tell you, so it doesn't tell you anything.
+If the live channel drops (network blip, laptop sleep, server restart), your stores **freeze at their last-known values**: nothing clears, nothing errors. Bridge doesn't have anything new to tell you, so it doesn't tell you anything.
 
 When the channel reconnects, two things happen automatically:
 
 1. Bridge proactively refreshes your tokens, in case a role/plan change was broadcast while you were disconnected and missed.
-2. The server sends a fresh session snapshot, which atomically overwrites every slice (`bridge.user`, `bridge.tenant`, entitlements) in one update — so you're back in sync even if several things changed while you were offline.
+2. The server sends a fresh session snapshot (the full current state of the session), which atomically overwrites every part of the `bridge` object (`bridge.user`, `bridge.tenant`, subscription, entitlements) in one update, so you're back in sync even if several things changed while you were offline.
 
 You can watch the connection itself if you want to show an offline indicator:
 
-```tsx
-'use client';
+```ts
 import { useRealtimeStatus } from '@nebulr-group/bridge-nextjs/client';
-
-export function ConnectionBanner() {
-  const status = useRealtimeStatus(); // 'idle' | 'connecting' | 'open' | 'closed'
-
-  if (status === 'closed') return <p role="status">You&apos;re offline — reconnecting…</p>;
-  return null;
-}
+// 'idle' | 'connecting' | 'open' | 'closed'
 ```
-
-`useRealtimeStatus()` is the React-idiomatic surface; a Svelte-store-compatible `realtimeStatus.subscribe(...)` is also exported for plain TypeScript code outside components.

@@ -1,6 +1,13 @@
 # Get started
 
-Bridge bootstraps flags automatically when you mount `<BridgeProvider>` — no flag-specific init call. Mount it once in your root layout:
+Flags come with the SDK you already have: as long as `<BridgeProvider>` is
+mounted in your root layout, it wires everything up for you (the rule
+cache, live updates, and telemetry). There is no separate flags client to
+create and no flag-specific init call.
+
+## 1. Set up the SDK
+
+Mount the provider in your root layout so flags are always loaded:
 
 ```tsx
 // app/layout.tsx
@@ -10,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        {/* <BridgeProvider> attaches the rule cache, live updates, and telemetry. */}
         <BridgeProvider>{children}</BridgeProvider>
       </body>
     </html>
@@ -17,29 +25,47 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-The provider wires the client rule cache, live updates, and telemetry. Configuration comes from the same BridgeAuth config the provider already uses — only `appId` is required for flags-only apps. Set it (and, optionally, the API base URL) via env:
+Configuration comes from the same `<BridgeProvider>` config
+you already pass in `app/layout.tsx`. Only `appId` is required for flags-only
+apps.
 
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_BRIDGE_APP_ID` | Your Bridge app id — the workspace flags evaluate against. |
-| `NEXT_PUBLIC_BRIDGE_API_BASE_URL` | Bridge API root (defaults to `https://api.thebridge.dev`). |
+## 2. Create a flag in Control Center
 
-Server-side evaluation (`<ServerFeatureFlag>`, middleware, route handlers) reads the same env vars — no separate setup.
+In Control Center (your admin dashboard at app.thebridge.dev), open Feature
+Flags and create a boolean flag, for example `show_banner`, and leave it off.
 
-## Read your first flag
-
-In a Client Component:
+## 3. Read the flag in a component
 
 ```tsx
 'use client';
 import { useFlag } from '@nebulr-group/bridge-nextjs/client';
 
 export function Banner() {
-  const { value } = useFlag('show_banner', false);
-  return value ? <div className="banner">New stuff!</div> : null;
+  const banner = useFlag('show_banner', false);
+
+  if (!banner.value) return null;
+  return <div className="banner">New stuff!</div>;
 }
 ```
 
-Create the `show_banner` flag in Control Center, flip it on, and the component re-renders live — no refresh, no redeploy.
+The second argument is the default: the value your app uses when the flag
+isn't configured or Bridge is unreachable, so a flag check can never break
+your app.
 
-Next: [How flags work](/feature-flags/how-it-works/).
+## 4. Flip it and watch it change live
+
+With your app open in the browser, go back to Control Center and turn
+`show_banner` on. The banner appears without a refresh, typically within
+seconds: rule changes arrive over the live channel (a persistent realtime
+connection the SDK maintains) and reactive reads like `useFlag` update in
+place. Flip it off again and the banner disappears the same way.
+
+That's the whole loop: create a flag, read it in code with a safe default,
+and control it from Control Center from then on.
+
+## Next steps
+
+- [Show or hide UI](/feature-flags/using/show-hide-ui/) with the declarative `<FeatureFlag>` component
+- [Use flags in your logic](/feature-flags/using/in-logic/) for branching code paths, not just markup
+- [Guard routes](/feature-flags/using/guard-routes/) to gate whole pages behind a flag
+- [Use flags on your backend](/feature-flags/using/backend/) so server and browser agree

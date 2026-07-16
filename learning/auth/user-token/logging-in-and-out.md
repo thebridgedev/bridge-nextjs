@@ -7,62 +7,49 @@ sidebar:
 
 # Logging in and logging out
 
-Bridge auth is **JWT-based**. Signing in gets the browser a token set (`accessToken`, `refreshToken`, `idToken`). Everything else — staying signed in across reloads, staying signed in across tabs, silently refreshing before expiry — follows from that one fact.
-
-bridge-nextjs actually keeps **two** copies of this token set, for two different runtimes:
-
-- **The client session** — held by the auth-core singleton that `<BridgeProvider>` initializes in the browser. This is what `useAuth()`, `useProfile()`, `bridge.user`, and every SDK auth component (`LoginForm`, `SsoButton`, etc.) read and write.
-- **The `bridge_access_token` / `bridge_refresh_token` / `bridge_id_token` cookies** — written by the OAuth callback route (`createBridgeCallbackRoute`, see [Route guards](/auth/securing/route-guards/)) so that `middleware.ts`, Server Components, and `<ServerFeatureFlag>` — which run before any browser JavaScript executes — can check authentication too.
-
-For most apps this is invisible: sign-in and sign-out through the SDK components keep both in sync in the common case. Keep the split in mind if you build fully custom login/logout flows, since it means there are two things to clear on logout (see below).
+Bridge auth is **JWT-based**. Signing in gets the browser a token set (`accessToken`, `refreshToken`, `idToken`), stored in `localStorage`. Everything else (staying signed in across reloads, staying signed in across tabs, silently refreshing before expiry) follows from that one fact.
 
 ## How logging in works
 
-`<BridgeProvider>` initializes the client session synchronously on first render (not inside a `useEffect`), so a page reload never bounces a signed-in user back to login while the app decides what to do:
+On every app load, the SDK looks in `localStorage` for a stored token. That check is what decides whether the user sees the app or the login flow:
 
-- **A token is there** — the app starts as authenticated immediately, then quietly refreshes it in the background if it's close to expiring.
-- **No token is there** — `authState` starts at `'unauthenticated'` and the sign-in flow takes over (see [Sign-in methods](/auth/sign-in/email-password/) and [Auth states](/auth/user-token/auth-states/)).
+- **A token is there**: the app starts as authenticated immediately (no round-trip to check it first), then quietly schedules a refresh in the background if the token is close to expiring, so it's valid again before you'd ever notice. This is why reloading the page doesn't bounce a signed-in user back to the login page.
+- **No token is there**: `authState` starts at `'unauthenticated'` and the login flow takes over, whichever sign-in methods you've enabled (e.g. [email & password](/auth/sign-in/email-password/) or [magic link](/auth/sign-in/magic-link/); see the [Authentication overview](/auth/) for all of them, and [Auth states](/auth/user-token/auth-states/) for the states the flow moves through).
 
-If a refresh ever fails (the refresh token itself has expired or been revoked), Bridge clears the client session and drops the user back to `'unauthenticated'` — the same as an explicit logout.
+If a refresh ever fails (the refresh token itself has expired or been revoked), Bridge clears the stored token and drops the user back to `'unauthenticated'`, the same as an explicit logout.
 
 ## Logging out
 
-Use `useAuth()`'s `logout()`:
+Logging out is just erasing the stored token. There's no server-side session to invalidate first, since JWTs aren't revocable server-side the way a session cookie is:
 
 ```tsx
 'use client';
-import { useAuth } from '@nebulr-group/bridge-nextjs/client';
-import { useRouter } from 'next/navigation';
+import { getBridgeAuth } from '@nebulr-group/bridge-nextjs/client';
 
 export function LogoutButton() {
-  const { logout } = useAuth();
-  const router = useRouter();
-
   async function handleLogout() {
-    await logout();
-    router.push('/');
+    await getBridgeAuth().logout({ redirectTo: '/' });
   }
 
   return <button onClick={handleLogout}>Log out</button>;
 }
 ```
 
-`logout()` clears the client session (tokens, profile, flags) and resets `authState` to `'unauthenticated'` — it does **not** redirect the browser itself, so navigate away yourself afterward (`router.push`, a `<Link>`, whatever fits your app). This is a deliberate difference from bridge-svelte's `logout({ redirectTo })`, which does a hard redirect to Bridge's hosted logout page; bridge-nextjs's SDK-auth flow keeps logout a local, in-app action instead.
+`logout()` clears the token from `localStorage`, flips `authState` back to `'unauthenticated'`, and then redirects the browser:
 
-### Also clearing the server-side cookies
+- **With `redirectTo`**: the browser goes straight there (an in-app route, like the example above, or any URL of your choosing).
+- **Without it**: the browser is sent to Bridge's hosted login page instead, so the user lands somewhere sensible rather than on a blank logged-out app.
 
-`logout()` only clears the client session — it doesn't touch the `bridge_access_token` / `bridge_refresh_token` / `bridge_id_token` cookies written at login. If your app relies on `withBridgeAuth` middleware or `<ServerFeatureFlag>` for server-side checks, clear those too so a stale cookie doesn't leave a "logged out" user still passing server-side auth. `TokenServiceServer` (from `@nebulr-group/bridge-nextjs/server`) is the same class the middleware uses to write them:
-
-```ts
-// app/auth/logout/route.ts
-import { NextResponse } from 'next/server';
-import { TokenServiceServer } from '@nebulr-group/bridge-nextjs/server';
-
-export async function GET(request: Request) {
-  const response = NextResponse.redirect(new URL('/', request.url));
-  TokenServiceServer.getInstance().clearTokensServer(response);
-  return response;
-}
-```
-
-Send the browser there after calling `logout()` (or use it as your logout action directly) so both copies of the session are cleared together.
+> **Framework note:** if your app uses the hosted-login flow with `withBridgeAuth` middleware, a second copy of the session lives in cookies (written by the OAuth callback route so `middleware.ts` and Server Components can check auth). Clear those too on logout so a stale cookie doesn't keep passing server-side checks:
+>
+> ```ts
+> // app/auth/logout/route.ts
+> import { NextResponse } from 'next/server';
+> import { TokenServiceServer } from '@nebulr-group/bridge-nextjs/server';
+>
+> export async function GET(request: Request) {
+>   const response = NextResponse.redirect(new URL('/', request.url));
+>   TokenServiceServer.getInstance().clearTokensServer(response);
+>   return response;
+> }
+> ```

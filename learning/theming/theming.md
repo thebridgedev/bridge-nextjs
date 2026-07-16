@@ -1,23 +1,37 @@
-# Theming
+# Theming & Styles
 
-`@nebulr-group/bridge-nextjs` ships unstyled structural CSS by default. You opt in via:
+## Overview
 
-```tsx
+Bridge components ship with optional default styles. Import them for a ready-to-use appearance, or skip the import entirely for headless usage where you control all styling yourself.
+
+## Importing styles
+
+Add this import to your root layout or global CSS:
+
+```ts
 import '@nebulr-group/bridge-nextjs/styles';
 ```
 
-Add this once in `app/layout.tsx`.
+The stylesheet provides two layers:
 
-## CSS variables (overridable)
+- **Structural CSS**: layout, spacing, and sizing that components need to render correctly.
+- **Visual defaults**: a minimal but complete out-of-the-box appearance so forms look reasonable with no extra work. These include a visible input border/focus ring, an indigo primary button, and colored error/success alert banners.
+
+## CSS variables reference
+
+All visual defaults are driven by CSS custom properties defined on `:root`. Override any of them in your own CSS to theme the components:
 
 ```css
+/* globals.css */
 :root {
-  --bridge-primary: #4f46e5;
-  --bridge-primary-hover: #4338ca;
-  --bridge-primary-fg: #ffffff;
-  --bridge-border: #d1d5db;
-  --bridge-border-radius: 6px;
-  --bridge-input-focus: #4f46e5;
+  --bridge-primary: #4f46e5;          /* button + focus ring color */
+  --bridge-primary-hover: #4338ca;    /* button hover state */
+  --bridge-primary-fg: #ffffff;       /* text on primary button */
+  --bridge-border: #d1d5db;           /* input + secondary button border */
+  --bridge-border-radius: 6px;        /* corners for inputs, buttons, alerts */
+  --bridge-input-focus: #4f46e5;      /* input focus-ring color */
+
+  /* alert colors */
   --bridge-alert-error-bg: #fef2f2;
   --bridge-alert-error-fg: #991b1b;
   --bridge-alert-error-border: #fca5a5;
@@ -27,43 +41,96 @@ Add this once in `app/layout.tsx`.
 }
 ```
 
-Override any of these in your own CSS to match your brand.
+### Additional internal variables
 
-## Headless usage (no styles)
+These variables are used by specific components and can also be overridden:
 
-Skip the styles import. Components render as plain HTML — use the `data-bridge-*` attributes for your own selectors:
+| Variable | Default | Used by |
+|----------|---------|---------|
+| `--bridge-muted` | `#6b7280` | Password toggle, MFA help text, token table headings, workspace user text |
+| `--bridge-foreground` | `#374151` | Password toggle hover, workspace name text |
+| `--bridge-bg-muted` | `#f5f5f5` | MFA backup code background |
+| `--bridge-muted-bg` | `#f3f4f6` | Workspace item hover background |
+| `--bridge-primary-light` | `#eff6ff` | Active workspace item background |
+| `--bridge-primary-foreground` | `#ffffff` | Workspace avatar text color |
 
-| Attribute | Component |
-|---|---|
-| `data-bridge-alert` | `<Alert>` |
-| `data-bridge-spinner` | `<Spinner>` |
-| `data-bridge-auth-form` | `<AuthFormWrapper>` |
-| `data-bridge-team-panel` | `<TeamManagementPanel>` |
-| `data-bridge-team-users` | `<TeamUserList>` |
-| `data-bridge-plan-selector` | `<PlanSelector>` |
-| `data-bridge-plan-card` | each card in `<PlanSelector>` |
-| `data-bridge-sso-button` | `<SsoButton>` |
-| `data-bridge-sso-icon` | `<SsoProviderIcon>` |
-| `data-bridge-passkey-login` | `<PasskeyLogin>` |
-| `data-bridge-workspace-selector` | `<WorkspaceSelector>` |
-| `data-bridge-api-tokens` | `<ApiTokenManagement>` |
+## Zero specificity
 
-State variants:
+All visual-default rules use the `:where()` pseudo-class, which has zero specificity. This means any class or element selector in your own CSS wins automatically, no `!important` needed.
 
-| Selector | Meaning |
-|---|---|
-| `[data-active="true"]` | active tab / workspace |
-| `[data-loading="true"]` | request in flight |
-| `[data-state="active"]` | active status |
-| `[data-state="disabled"]` | disabled status |
-| `[data-variant="error"]` | error variant |
-| `[data-variant="info"]` | info variant |
-| `[data-variant="success"]` | success variant |
-| `[data-variant="danger"]` | danger variant |
+For example, the default primary button is styled as:
 
-## Tailwind / custom CSS
+```css
+:where(.bridge-btn-primary) {
+  background-color: var(--bridge-primary);
+  /* ... */
+}
+```
 
-The default styles import is plain CSS — it doesn't conflict with Tailwind or your design system. Override via:
-1. CSS variables (preferred for color/radius/border tweaks).
-2. Targeting `data-bridge-*` selectors in your own CSS.
-3. Passing `className`/`style` props (every exported component accepts them).
+Your own `.bridge-btn-primary { background: red; }` or even a simple `.my-button { background: red; }` will override it without specificity battles.
+
+## Component-level overrides
+
+All components forward `className` and `style` props to their root element, so you can target them directly:
+
+```tsx
+<LoginForm className="my-login-form" />
+```
+
+```css
+.my-login-form input {
+  border-radius: 0;   /* square inputs */
+}
+```
+
+You can also use the `style` prop for inline overrides:
+
+```tsx
+<LoginForm style={{ '--bridge-primary': '#7c3aed' } as React.CSSProperties} />
+```
+
+## Data attributes for state-based styling
+
+Bridge components expose data attributes that you can use as CSS selectors for state-based styling:
+
+| Attribute | Values | Description |
+|-----------|--------|-------------|
+| `[data-active="true"]` | `"true"` | Active tab |
+| `[data-loading="true"]` | `"true"` | Loading state |
+| `[data-state="active"]` | `"active"` | Active status |
+| `[data-state="disabled"]` | `"disabled"` | Disabled status |
+| `[data-variant="error"]` | `"error"` | Error variant (alerts) |
+| `[data-variant="info"]` | `"info"` | Info variant (alerts) |
+| `[data-variant="success"]` | `"success"` | Success variant (alerts) |
+| `[data-bridge-plan-selector]` | (none) | Plan selector root |
+| `[data-bridge-plan-card]` | (none) | Individual plan card |
+| `[data-current="true"]` | `"true"` / `"false"` | Current plan card |
+| `[data-bridge-alert]` | (none) | Alert component |
+| `[data-bridge-auth-form]` | (none) | Auth form wrapper |
+| `[data-bridge-passkey-login]` | (none) | Passkey login button |
+| `[data-bridge-sso-button]` | (none) | SSO button |
+| `[data-bridge-spinner]` | (none) | Loading spinner |
+| `[data-bridge-api-tokens]` | (none) | API token management root |
+| `[data-bridge-workspace-selector]` | (none) | Workspace selector root |
+| `[data-bridge-workspace-item]` | (none) | Individual workspace item |
+
+Example: style the active workspace differently.
+
+```css
+[data-bridge-workspace-item][data-active="true"] {
+  background: var(--my-highlight);
+  border-color: var(--my-accent);
+}
+```
+
+## Headless usage
+
+If you manage all styling yourself (e.g. you use Tailwind), skip the import entirely:
+
+```diff
+  // app/layout.tsx
+  import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
+- import '@nebulr-group/bridge-nextjs/styles';
+```
+
+Components render as plain, unstyled HTML. Use the `className` prop and the data attributes listed above to apply your own styles. The structural layout (flexbox, grid) is embedded in the stylesheet, so without it you have full control over how components are laid out.

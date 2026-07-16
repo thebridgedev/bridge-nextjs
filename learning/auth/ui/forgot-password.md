@@ -1,16 +1,16 @@
 # Forgot / reset password
 
 Dual-mode component:
-1. **Request mode** (no `token` prop) — shows an email form to request a password reset link.
-2. **Reset mode** (`token` prop set) — shows a new password form to complete the reset.
+1. **Request mode** (no `token` prop): shows an email form to request a password reset link.
+2. **Reset mode** (`token` prop set): shows a new password form to complete the reset.
 
 **Props:**
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `token` | `string` | — | Reset token from the URL. When set, shows the new password form |
-| `onComplete` | `() => void` | — | Called after the email is sent (request mode) or password is reset (reset mode) |
-| `onError` | `(error: Error) => void` | — | Called on error |
+| `token` | `string` | (none) | Reset token from URL. When set, shows the new password form |
+| `onComplete` | `() => void` | (none) | Called after the email is sent (request mode) or password is reset (reset mode) |
+| `onError` | `(error: Error) => void` | (none) | Called on error |
 | `loginHref` | `string` | `'/auth/login'` | Link back to the login page |
 
 **Request page:**
@@ -30,19 +30,21 @@ export default function ForgotPasswordPage() {
 }
 ```
 
-**Reset page (with token from the URL):**
+**Reset page (with token from URL):**
 
 ```tsx
-// app/auth/reset-password/[token]/page.tsx
+// app/auth/reset-password/page.tsx
 'use client';
 import { ForgotPassword } from '@nebulr-group/bridge-nextjs/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function ResetPasswordPage({ params }: { params: { token: string } }) {
+export default function ResetPasswordPage() {
   const router = useRouter();
+  const token = useSearchParams().get('token') ?? '';
+
   return (
     <ForgotPassword
-      token={params.token}
+      token={token}
       loginHref="/auth/login"
       onComplete={() => router.push('/auth/login')}
     />

@@ -11,8 +11,8 @@ A drop-in panel for managing team members, team profile, and workspace settings.
 | `defaultTab` | `'users' \| 'profile' \| 'workspace'` | `'users'` | Which tab is active by default |
 | `showProfileTab` | `boolean` | `true` | Show the profile tab |
 | `showWorkspaceTab` | `boolean` | `true` | Show the workspace tab |
-| `onError` | `(error: Error) => void` | — | Called on any error |
-| `tabBar` | `(ctx: { tabs, activeTab, setTab }) => ReactNode` | — | Custom tab bar render function |
+| `onError` | `(error: Error) => void` | (none) | Called on any error |
+| `tabBar` | `(ctx: { tabs, activeTab, setTab }) => ReactNode` | (none) | Custom tab bar render function |
 
 **Usage:**
 
@@ -34,8 +34,8 @@ export default function TeamPage() {
 **Custom tab bar:**
 
 ```tsx
-<TeamManagementPanel>
-  {({ tabs, activeTab, setTab }) => (
+<TeamManagementPanel
+  tabBar={({ tabs, activeTab, setTab }) => (
     <nav className="custom-tabs">
       {tabs.map((tab) => (
         <button
@@ -48,15 +48,13 @@ export default function TeamPage() {
       ))}
     </nav>
   )}
-</TeamManagementPanel>
+/>
 ```
 
-> `tabBar` is passed as the `tabBar` prop (a render function), not as `children` — see the props table above.
-
 The panel includes:
-- **Users tab** — list team members, invite new users, update roles, remove members.
-- **Profile tab** — update the current user's first/last name.
-- **Workspace tab** — update workspace name/locale settings.
+- **Users tab**: list team members, invite new users, update roles, remove members.
+- **Profile tab**: update team name and other profile fields.
+- **Workspace tab**: update workspace settings.
 
 ## Individual tab components
 
@@ -68,22 +66,18 @@ import { TeamUserList, TeamProfileForm, TeamWorkspaceForm } from '@nebulr-group/
 
 export default function CustomTeamLayout() {
   return (
-    <div className="grid grid-cols-2 gap-8">
+    <>
       {/* Just the user list */}
       <TeamUserList onError={(err) => console.error(err)} />
 
-      <div>
-        {/* Just the profile form */}
-        <TeamProfileForm onError={(err) => console.error(err)} />
+      {/* Just the profile form */}
+      <TeamProfileForm onError={(err) => console.error(err)} />
 
-        {/* Just the workspace settings */}
-        <TeamWorkspaceForm onError={(err) => console.error(err)} />
-      </div>
-    </div>
+      {/* Just the workspace settings */}
+      <TeamWorkspaceForm onError={(err) => console.error(err)} />
+    </>
   );
 }
 ```
 
-All three accept standard `HTMLAttributes<HTMLDivElement>` (`className`, `style`, etc.) plus `onError`.
-
-Internally, all four components call `getBridgeAuth().team.*` — the same methods are available directly if you build a fully custom UI: `listUsers()`, `listUserRoles()`, `createUsers(emails)`, `updateUser({ id, role, enabled })`, `deleteUser(id)`, `sendPasswordResetLink(id)`, `getProfile()`, `updateProfile({ firstName, lastName })`, `getWorkspace()`, `updateWorkspace({ name, locale })`.
+All three accept `className`, `style`, and `onError` props.
