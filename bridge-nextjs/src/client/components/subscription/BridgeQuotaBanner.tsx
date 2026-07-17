@@ -77,14 +77,13 @@ export function BridgeQuotaBanner({
     () => lastRef.current,
   );
 
-  // Role variant mirrors BridgeBillingNotice: any authenticated user is treated
-  // as a billing admin for US-11 until the role/privilege API is finalized.
+  // Role variant mirrors BridgeBillingNotice: CTA only for the workspace
+  // owner (v1 canManageBilling() policy). Member variant renders otherwise.
   const [isBillingAdmin, setIsBillingAdmin] = useState(false);
 
   useEffect(() => {
     try {
-      const ctx = getBridgeAuth().getApiContext();
-      if (ctx.accessToken) setIsBillingAdmin(true);
+      setIsBillingAdmin(getBridgeAuth().canManageBilling());
     } catch {
       // No BridgeAuth instance — render the member variant.
     }

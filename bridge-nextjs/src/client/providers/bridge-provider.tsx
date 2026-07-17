@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { FC, ReactNode, useEffect, useMemo, useRef } from 'react';
-import { ensureAppConfig, getBridgeAuth, initBridge, markReady } from '../../core/bridge-instance';
+import { ensureAppConfig, getBridgeAuth, initBridge, markReady, useBridgeStore } from '../../core/bridge-instance';
 import { startBridgeRuntime, stopBridgeRuntime } from '../../core/bridge-runtime';
 import { createBridgeFlags, type BridgeFlagsBundle } from '../../flags/bootstrap';
 import { logger, setLoggerDebug } from '../../shared/logger';
@@ -94,6 +94,7 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     }
 
     initBridge(mergedConfig);
+    useBridgeStore.setState({ billing: mergedConfig.billing ?? null });
     markReady();
     // Mount the core Bridge runtime (realtime channel + session.snapshot fanout
     // + dev-attribute provider). Idempotent; reads appId/apiBaseUrl from the
@@ -145,28 +146,34 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     void ensureAppConfig();
   }, [mergedConfig]);
 
-  // Paywall redirect — the CSR analogue of bridge-svelte's BridgeBootstrap
-  // step 2b. Runs after bootstrap resolves auth. Redirects to the configured
-  // paywall route only when:
-  //   - billing.paywallRoute is configured
-  //   - the current path is not already the paywall route (no redirect loop)
-  //   - the tenant is authenticated but has not selected a plan
-  //   - the app has not opted out via paymentsAutoRedirect: false
+  // Paywall + checkout-return-error redirect — the CSR analogue of
+  // bridge-svelte's BridgeBootstrap steps 2b/confirm-checkout. Runs after
+  // bootstrap resolves auth, and shares a single getSubscriptionStatus() call:
+  //   - billing.paywallRoute: redirect there when authenticated but no plan
+  //     selected, unless paymentsAutoRedirect: false.
+  //   - billing.paymentErrorRoute: redirect there when a Stripe checkout the
+  //     user just returned from (session_id in the URL or sessionStorage, set
+  //     during bootstrap) resolved with paymentFailed. This is the
+  //     checkout-round-trip case only — a persistent/recurring payment
+  //     failure with no pending session is left to PlanSelector's inline
+  //     'payment-failed' banner, not redirected here.
   // getSubscriptionStatus() self-heals after a Stripe round-trip: when a
-  // checkout session_id is present (URL or sessionStorage), auth-core syncs the
-  // completed session server-side first, so shouldSelectPlan reads false and a
-  // freshly-paid user is NOT bounced back to the paywall.
-  // Depend on PRIMITIVE values (paywallRoute, appId, pathname), NOT the
+  // checkout session_id is present, auth-core syncs the completed session
+  // server-side first, so shouldSelectPlan reads false and a freshly-paid
+  // user is NOT bounced back to the paywall.
+  // Depend on PRIMITIVE values (routes, appId, pathname), NOT the
   // mergedConfig object. mergedConfig is recomputed whenever the `config` prop
   // identity changes (a consumer passing an inline object literal re-creates it
   // every render); depending on the object would re-fire this effect — and its
   // getSubscriptionStatus() network call — on every render. The primitives are
-  // stable across renders, so the paywall check runs once per route.
+  // stable across renders, so the check runs once per route.
   const paywallRoute = mergedConfig.billing?.paywallRoute;
+  const paymentErrorRoute = mergedConfig.billing?.paymentErrorRoute;
   const paywallAppId = mergedConfig.appId;
   useEffect(() => {
-    if (!paywallRoute || pathname === paywallRoute) return;
+    if (!paywallRoute && !paymentErrorRoute) return;
     if (typeof window === 'undefined' || !paywallAppId) return;
+    if (pathname === paywallRoute || pathname === (paymentErrorRoute ?? '/payment-error')) return;
 
     let cancelled = false;
     void (async () => {
@@ -175,20 +182,43 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
         if (!bridge.isAuthenticated()) return;
         const status = await bridge.getSubscriptionStatus();
         if (cancelled) return;
-        if (status?.shouldSelectPlan === true && status?.paymentsAutoRedirect !== false) {
+
+        let pendingSessionId: string | null = null;
+        try {
+          pendingSessionId =
+            new URL(window.location.href).searchParams.get('session_id') ??
+            (typeof sessionStorage !== 'undefined'
+              ? sessionStorage.getItem('bridge_checkout_session_id')
+              : null);
+        } catch {
+          /* sessionStorage may be disabled — non-fatal */
+        }
+        if (pendingSessionId && status?.paymentFailed === true) {
+          try {
+            sessionStorage.removeItem('bridge_checkout_session_id');
+          } catch {
+            /* non-fatal */
+          }
+          const target = paymentErrorRoute ?? '/payment-error';
+          logger.debug('[BridgeProvider] checkout-return payment failure, redirecting', target);
+          router.push(target);
+          return;
+        }
+
+        if (paywallRoute && status?.shouldSelectPlan === true && status?.paymentsAutoRedirect !== false) {
           logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
           router.push(paywallRoute);
         }
       } catch (err) {
         // Non-fatal — fail open if the subscription fetch errors.
-        logger.debug('[BridgeProvider] paywall check skipped:', err);
+        logger.debug('[BridgeProvider] paywall/payment-error check skipped:', err);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [pathname, paywallRoute, paywallAppId, router]);
+  }, [pathname, paywallRoute, paymentErrorRoute, paywallAppId, router]);
 
   return <>{children}</>;
 };

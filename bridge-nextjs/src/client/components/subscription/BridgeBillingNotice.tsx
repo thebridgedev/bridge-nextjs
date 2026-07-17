@@ -60,16 +60,15 @@ export function BridgeBillingNotice({
     () => subscription.snapshot(),
   );
 
-  // Admin/member variant — read from existing auth context. Defaults to
-  // non-admin if unavailable. For US-5 default: assume admin if a JWT is
-  // present (the role/privilege claim read lands in a later story), keeping the
-  // CTA visible by default.
+  // Admin/member variant. v1 policy: workspace owner only, via
+  // canManageBilling() (immutable OWNER role key). Defaults to non-admin if
+  // unavailable.
   const [isBillingAdmin, setIsBillingAdmin] = useState(false);
 
   useEffect(() => {
     const ctx = getBridgeAuth().getApiContext();
     if (ctx.accessToken) {
-      setIsBillingAdmin(true);
+      setIsBillingAdmin(getBridgeAuth().canManageBilling());
     }
     if (!ctx.accessToken) {
       subscription.setError('Not authenticated');

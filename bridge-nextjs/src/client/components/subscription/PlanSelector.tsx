@@ -1,6 +1,6 @@
 'use client';
 
-import type { Plan, PriceOfferSdk } from '@nebulr-group/bridge-auth-core';
+import { HttpError, type Plan, type PriceOfferSdk } from '@nebulr-group/bridge-auth-core';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -46,9 +46,11 @@ export function PlanSelector({
 }: Props) {
   const subscription = useBridgeStore((s) => s.subscription);
   const { status, plans, loading, error: storeError } = subscription;
+  const billing = useBridgeStore((s) => s.billing);
 
   const [picking, setPicking] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const uiState: UiState = useMemo(() => {
     if (!status) return 'idle';
@@ -107,9 +109,35 @@ export function PlanSelector({
         }
       }
     } catch (err) {
-      setPickError(err instanceof Error ? err.message : 'Something went wrong');
+      // Backend plan/entitlement gating denies with 402 Payment Required
+      // (TBP-472/473 route-rule guards) — route to the paywall rather than
+      // surfacing a raw error, mirroring the automatic paywall redirect in
+      // <BridgeProvider>. Falls back to an inline message if no paywallRoute
+      // is configured for this app.
+      if (err instanceof HttpError && err.status === 402) {
+        const body = err.body as { error?: string; reason?: string } | undefined;
+        if (billing?.paywallRoute && typeof window !== 'undefined') {
+          window.location.href = billing.paywallRoute;
+          return;
+        }
+        setPickError(body?.error ?? 'This plan requires an upgrade.');
+      } else {
+        setPickError(err instanceof Error ? err.message : 'Something went wrong');
+      }
     } finally {
       setPicking(false);
+    }
+  }
+
+  async function handleManageBilling(): Promise<void> {
+    setPortalLoading(true);
+    setPickError(null);
+    try {
+      const url = await getBridgeAuth().getBillingPortalUrl();
+      window.location.href = url;
+    } catch (err) {
+      setPickError(err instanceof Error ? err.message : 'Could not open the billing portal.');
+      setPortalLoading(false);
     }
   }
 
@@ -142,14 +170,8 @@ export function PlanSelector({
               <button
                 type="button"
                 className="bridge-btn-primary bridge-plan-portal-btn"
-                onClick={() => {
-                  // auth-core 0.1.2 doesn't expose a billing portal URL;
-                  // svelte's `getBridgeAuth().getPortalUrl()` is the future API.
-                  // Surfacing the action so consumers can wire their own flow.
-                  setPickError(
-                    'Billing portal not yet wired — implement getPortalUrl on auth-core.'
-                  );
-                }}
+                disabled={portalLoading}
+                onClick={handleManageBilling}
               >
                 Manage billing
               </button>
