@@ -1,210 +1,69 @@
+---
+title: Feature Flags
+order: 40
+oneLiner: Ship behind a flag and change who sees what, live from Control Center, no redeploy.
+related: [live-updates, payments]
+---
+
 # Feature Flags
 
-Conditional rendering and access control driven by Bridge Feature Flags 2.0.
+Bridge Feature Flags lets you ship code dark, roll it out gradually, target it
+at specific users, and kill it instantly, all without a deploy. The SDK
+evaluates flags locally: it keeps your flag rules in memory, evaluates them
+against in-process context, and receives rule changes over the live channel (a
+persistent realtime connection the SDK maintains). A flag check is an O(1)
+lookup with no network call, safe in render paths.
 
-Bridge evaluates flags **locally in the SDK** against a cache of flag rules that
-syncs live from the Bridge API. On the client the cache rides the same realtime
-channel as the rest of Bridge (auth, billing) — toggling a flag in the admin UI
-updates your app without a refresh. On the server, flags evaluate in
-backend-mode against the request's token claims.
+Flags work standalone: an `appId` is all the configuration you need. Bridge
+auth and billing are optional context sources you can target on once they're
+enabled.
 
-## Define flags
+## The mental model
 
-Create flag definitions in the Bridge admin UI. Each flag has:
-- A unique key (e.g. `beta-dashboard`).
-- A state: `off`, `on`, or `on-with-rule`.
-- For `on-with-rule`: a targeting rule (branches of conditions against
-  attributes like `user.role`, `tenant.plan`, or dev-supplied attributes).
+1. **You create a flag in Control Center** (your admin dashboard at
+   app.thebridge.dev) and give it rules: on/off, a percentage rollout, or
+   conditions on attributes like `user.role` or `tenant.plan`.
+2. **The SDK evaluates those rules locally** against the eval context: the
+   identity and attributes a flag rule evaluates against. Bridge auth and
+   billing feed attributes in automatically; your code can add its own.
+3. **Changes arrive live.** Edit a rule in Control Center and every connected
+   app updates in place, typically within seconds, over the live channel. No
+   refresh, no redeploy.
 
-## Setup
+For the full picture (evaluation model, outage behavior, connection status),
+read [How flags work](/feature-flags/how-it-works/).
 
-Feature Flags 2.0 is bootstrapped automatically by `<BridgeProvider>` — no extra
-wiring. Mount the provider once in your root layout (see the integration guide):
+## Get started
 
-```tsx
-// app/layout.tsx
-import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
+[Get started](/feature-flags/get-started/) walks the whole loop in a few
+minutes: wire up `<BridgeProvider>`, create a flag in Control Center, read
+it with `useFlag`, then flip it and watch your app change live.
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <BridgeProvider>{children}</BridgeProvider>
-      </body>
-    </html>
-  );
-}
-```
+## Using flags
 
-## Client-side: `<FeatureFlag>` component
+- [Show or hide UI](/feature-flags/using/show-hide-ui/): the declarative
+  `<FeatureFlag>` component, with fallback content for the off case.
+- [Use flags in your logic](/feature-flags/using/in-logic/): the `useFlag` API
+  for branching code paths, plus `flagStore` and multi-type values (boolean,
+  string, number, JSON).
+- [Guard routes](/feature-flags/using/guard-routes/): gate whole routes behind
+  a flag in `middleware.ts`; the flag decision is made server-side, before the
+  route renders.
+- [Use flags on your backend](/feature-flags/using/backend/): forward the eval
+  context in the `x-bridge-context` header so your server and browser agree on
+  identity and bucketing.
 
-```tsx
-'use client';
-import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
+## Targeting
 
-// React reserves the prop name `key`, so the flag key is passed as `flagKey`.
-<FeatureFlag flagKey="beta-dashboard" defaultValue={false} fallback={<p>Stable dashboard</p>}>
-  <p>Beta dashboard preview</p>
-</FeatureFlag>
-```
-
-`children` renders when the rule passes; `fallback` renders when the flag is off
-or no rule matched. Both can be a render-prop that receives the Bridge-decided
-value (useful for non-boolean flags):
-
-```tsx
-<FeatureFlag flagKey="ui-theme" defaultValue="light">
-  {(value) => <App theme={value} />}
-</FeatureFlag>
-```
-
-Pass `context` to evaluate against attributes your app supplies at call time —
-these override server-side values for the same key:
-
-```tsx
-<FeatureFlag flagKey="plan-flag" defaultValue={false} context={{ attributes: { plan } }}>
-  {() => <EnterpriseFeature />}
-</FeatureFlag>
-```
-
-## Client-side: `useFlag` hook
-
-```tsx
-'use client';
-import { useFlag } from '@nebulr-group/bridge-nextjs/client';
-
-export function CTA() {
-  const { value, passed } = useFlag('new-checkout', false);
-  return passed ? <NewCheckout /> : <LegacyCheckout />;
-}
-```
-
-`useFlag(key, defaultValue, context?)` returns `{ value, passed }` and re-renders
-whenever the flag changes in the cache (live update, hydrate, login/logout). Pass
-`context` for per-call attributes, same as the component:
-
-```tsx
-const { value } = useFlag('enterprise-feature', false, { attributes: { plan } });
-```
-
-## Dev-supplied attributes
-
-Your app can declare attributes globally via the unified bridge surface so every
-flag eval sees them, without threading `context` through each call:
-
-```tsx
-'use client';
-import { bridge } from '@nebulr-group/bridge-nextjs/client';
-
-bridge.attributes.set('plan', 'enterprise');
-bridge.attributes.bindMany(() => ({ plan: currentPlan, region: currentRegion }));
-```
-
-Dev-supplied attributes win on key collision with Bridge-managed providers
-(auth, billing). Per-call `context` attributes win over everything for that one
-eval.
-
-## Advanced: `createBridgeFlags`
-
-`<BridgeProvider>` calls `createBridgeFlags()` for you. Call it directly only for
-standalone-SDK use or tests where you need a second instance:
-
-```tsx
-import { createBridgeFlags } from '@nebulr-group/bridge-nextjs/client';
-
-const { bridge, stop } = createBridgeFlags({ registerGlobal: false });
-```
-
-## Server-side: `<ServerFeatureFlag>`
-
-For SSR-safe conditional rendering in server components. Evaluates in
-backend-mode against the request's token claims (read from cookies):
-
-```tsx
-import { ServerFeatureFlag } from '@nebulr-group/bridge-nextjs/server';
-
-export default function Page() {
-  return (
-    <ServerFeatureFlag flagName="beta-dashboard" fallback={<StableDashboard />}>
-      <BetaDashboard />
-    </ServerFeatureFlag>
-  );
-}
-```
-
-Supports `negate` and `redirectTo` for access control:
-
-```tsx
-<ServerFeatureFlag flagName="maintenance-mode" negate redirectTo="/">
-  <NormalContent />
-</ServerFeatureFlag>
-```
-
-## Server-side: middleware
-
-Protect page and API routes by flag in `middleware.ts`:
-
-```ts
-import { withFeatureFlags } from '@nebulr-group/bridge-nextjs/server';
-
-export const middleware = withFeatureFlags([
-  { flag: 'beta-dashboard', paths: ['/beta', '/beta/*'], redirectTo: '/' },
-  { flag: 'beta-api', paths: ['/api/beta/*'], responseType: 'error', errorStatus: 403 },
-]);
-
-export const config = { matcher: ['/beta/:path*', '/api/beta/:path*'] };
-```
-
-The middleware also serializes the eval context onto the `x-bridge-context`
-request header so any Bridge backend (nestjs / express) the request flows to
-buckets the same identity. Convenience wrappers: `withFeatureFlag`,
-`requireFeatureFlag` (page redirect), `requireApiFeatureFlag` (JSON 403).
-
-## Server-side: API route handlers
-
-```ts
-import { NextRequest } from 'next/server';
-import { requireFeatureFlagForRoute } from '@nebulr-group/bridge-nextjs/server';
-
-export function GET(request: NextRequest) {
-  return requireFeatureFlagForRoute('beta-api', async () => {
-    return Response.json({ ok: true });
-  })(request);
-}
-```
-
-When the flag passes, the handler runs and the response carries the
-`x-bridge-context` header for downstream propagation. When it fails, a JSON 403
-is returned.
-
-## Environment variables
-
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_BRIDGE_APP_ID` | Your Bridge app id — the workspace flags evaluate against. |
-| `NEXT_PUBLIC_BRIDGE_API_BASE_URL` | Bridge API root (defaults to `https://api.thebridge.dev`). |
-
-The flag SDK reads `appId` + `apiBaseUrl` from the BridgeAuth config — no
-separate flag configuration is needed.
-
-## Caching & freshness
-
-- **Client:** the flag cache hydrates on bootstrap and re-hydrates on every
-  realtime reconnect; live updates push individual flag changes. No TTL — it's a
-  live channel.
-- **Server:** flag rules are read through a short-lived pull cache (default 30s
-  TTL) and evaluated locally per request. Expect up to one TTL window of delay
-  after toggling a flag before server-rendered output changes.
-
-## Common pitfalls
-
-- **Use `flagKey`, not `key`.** React reserves `key`; the component will never
-  receive a prop named `key`.
-- **Flags before authentication:** anonymous users still get evaluated (the SDK
-  tracks an anonymous identity). Rule-targeted flags that need a logged-in user
-  fall through to the default — always pass a sensible `defaultValue` / `fallback`.
-- **Flag keys must match exactly** what's in the Bridge admin UI. Typos silently
-  return the default.
-- **Backend mode refuses to bucket without identity:** server evals of
-  rolled-out (`rolloutPct < 100`) rules return the safe default when the request
-  has no token — by design.
+- [Target by plan or role](/feature-flags/targeting/by-plan-or-role/): with
+  Bridge auth or billing enabled, attributes like `user.role`, `tenant.plan`,
+  and `bridge:billing.*` merge into every evaluation with no app code. For
+  plan-granted features, prefer entitlement attributes; see
+  [Lock features to a plan](/billing/limits/lock-features/).
+- [Send context from your code](/feature-flags/targeting/send-context/):
+  supply app-specific facts (like a project count) per call or app-wide via
+  `bridge.attributes` on the `bridge` object. The full attributes API is in
+  the [Live Updates guide](/live-updates/).
+- [Target anonymous visitors](/feature-flags/targeting/anonymous/): visitors
+  who aren't signed in get a persisted anonymous ID and stable bucketing, so
+  percentage rollouts and A/B tests work before signup and never flicker.

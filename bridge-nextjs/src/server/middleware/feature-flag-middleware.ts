@@ -4,6 +4,7 @@ import { logger } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 import { FeatureFlagServer } from '../utils/feature-flag.server';
 import { getConfig } from '../utils/get-config';
+import { isApiRequest } from '../utils/is-api-request';
 
 export interface FeatureFlagProtection {
   flag: string;
@@ -23,19 +24,6 @@ export interface WithFeatureFlagOptions {
   responseType?: 'redirect' | 'error';
   errorStatus?: number;
   errorMessage?: string;
-}
-
-/** Determines if a request is an API request. */
-function isApiRequest(request: NextRequest): boolean {
-  const { pathname } = request.nextUrl;
-  if (pathname.startsWith('/api/')) {
-    return true;
-  }
-  const acceptHeader = request.headers.get('accept');
-  if (acceptHeader && acceptHeader.includes('application/json')) {
-    return true;
-  }
-  return false;
 }
 
 /**

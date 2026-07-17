@@ -24,6 +24,7 @@ import {
 } from '@nebulr-group/bridge-auth-core';
 import { create } from 'zustand';
 import { logger } from '../shared/logger';
+import type { BridgeConfig } from '../shared/types/config';
 
 // ── Singleton ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,10 @@ interface BridgeStoreState {
   tenantUsers: TenantUser[];
   ready: boolean;
   subscription: SubscriptionState;
+  /** `billing` slice of the app's BridgeConfig — set once by <BridgeProvider> on
+   *  mount so components outside the provider's own scope (e.g. PlanSelector)
+   *  can read paywallRoute / paymentErrorRoute without threading props. */
+  billing: BridgeConfig['billing'] | null;
 }
 
 export const useBridgeStore = create<BridgeStoreState>(() => ({
@@ -67,6 +72,7 @@ export const useBridgeStore = create<BridgeStoreState>(() => ({
   tenantUsers: [],
   ready: false,
   subscription: { status: null, plans: null, loading: false, error: null },
+  billing: null,
 }));
 
 // ── Ready gate ─────────────────────────────────────────────────────────────────

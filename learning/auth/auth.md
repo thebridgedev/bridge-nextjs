@@ -1,136 +1,61 @@
+---
+title: Authentication
+order: 20
+oneLiner: Embedded auth (login, signup, magic link, passkeys, SSO and MFA) plus route guards.
+related: [multi-tenancy, feature-flags]
+---
+
 # Authentication
 
-How `@nebulr-group/bridge-nextjs` represents auth state, exposes hooks, and protects routes.
+Bridge gives your Next.js app a complete authentication system without you building one: sign-in flows (email and password, magic link, passkeys, Google and Azure AD SSO, MFA), signup, drop-in UI components for all of them, route protection, roles and privileges, multi-workspace support, and self-service API tokens. You configure what's enabled in Control Center (your admin dashboard at app.thebridge.dev) or the CLI; the SDK components pick it up automatically.
 
-## How it works
+## The mental model
 
-`<BridgeProvider>` initializes a singleton `BridgeAuth` (from `@nebulr-group/bridge-auth-core`) on mount. Auth-core emits events:
-- `auth:login` — when tokens are issued.
-- `auth:logout` — when tokens are cleared.
-- `auth:token-refreshed` — when refresh succeeds.
-- `auth:state-change` — when the state machine transitions (`unauthenticated` → `mfa-required` → `tenant-selection` → `authenticated`).
-- `auth:profile` — when the profile loads or updates.
-- `auth:workspace-changed` — when the user switches workspaces.
-- `auth:error` — on any auth error.
+Three ideas carry the whole section:
 
-These events update a Zustand store (`useBridgeStore`) which all the hooks read from.
+- **The `bridge` object.** One import that exposes the signed-in user and their workspace as reactive stores: `bridge.user` (id, email, role, tenantId) and `bridge.tenant.*` (the workspace; a workspace is called a *tenant* in the API). Read them with the `useBridgeReadable()` hook and your UI stays current.
+- **Auth states.** A single `useAuthState()` hook tracks where the user is in the login flow, from `'unauthenticated'` through steps like `'mfa-required'` and `'tenant-selection'` to `'authenticated'`. The drop-in `LoginForm` walks these states for you; you can also branch on them yourself. See [Auth states](/auth/user-token/auth-states/).
+- **The live channel.** A persistent realtime connection the SDK maintains. When a role, plan, or permission changes server-side, Bridge pushes the change down the channel and your stores update in place, with no reload or polling. See [Live Updates](/live-updates/).
 
-## Hooks
+Sessions are JWT-based: signing in stores a token set in `localStorage`, and Bridge refreshes it before expiry. Signing out erases the stored token. See [Logging in and logging out](/auth/user-token/logging-in-and-out/).
 
-### `useAuth()`
+## Enabling sign-in methods
 
-```tsx
-const { isAuthenticated, isLoading, error, authState, login, logout, handleCallback } = useAuth();
-```
+Each method is a per-app setting, flipped on in Control Center or via the CLI:
 
-- `isAuthenticated` — boolean, derived from token presence.
-- `isLoading` — `true` until bootstrap completes.
-- `authState` — `'unauthenticated' | 'authenticating' | 'mfa-required' | 'mfa-setup-required' | 'tenant-selection' | 'authenticated'`.
-- `login()` — redirects to hosted bridge auth.
-- `logout()` — clears tokens and resets state.
+- [Email & password](/auth/sign-in/email-password/) (on by default)
+- [Magic link](/auth/sign-in/magic-link/)
+- [Passkeys](/auth/sign-in/passkeys/)
+- [Google SSO](/auth/sign-in/google-sso/)
+- [Azure AD SSO](/auth/sign-in/azure-ad/)
+- [MFA / 2FA](/auth/sign-in/mfa/)
 
-### `useProfile()`
+## Drop-in UI components
 
-```tsx
-const { profile, isLoading, error, updateProfile, isOnboarded, hasMultiTenantAccess } = useProfile();
-```
+Every flow has a ready-made component, imported from `@nebulr-group/bridge-nextjs/client`. They render inside your app with no external redirects, and all accept standard HTML attributes (`className`, `style`, `data-*`) alongside their own props.
 
-`profile` is the auth-core `Profile` type — has `fullName`, `email`, `username`, `onboarded`, `multiTenantAccess`, etc.
+| Component(s) | What it does | Docs |
+|--------------|--------------|------|
+| `LoginForm` | Complete login form; handles forgot password, magic link, passkeys, MFA, and workspace selection inline | [Email & password](/auth/ui/email-password/) |
+| `SignupForm` | Signup with email, first name, and last name | [Signup](/auth/ui/signup/) |
+| `SsoButton` | Standalone SSO button, redirect or popup mode | [SSO login button](/auth/ui/google-sso/) |
+| `MagicLink` | Magic link request form | [Magic link](/auth/ui/magic-link/) |
+| `ForgotPassword` | Request and reset modes for password resets | [Forgot / reset password](/auth/ui/forgot-password/) |
+| `MfaChallenge`, `MfaSetup` | MFA code challenge and first-time setup | [MFA / 2FA](/auth/ui/mfa/) |
+| `PasskeyLogin`, `PasskeySetup`, `PasskeyRequestSetupLink` | Passkey (WebAuthn) login and registration | [Passkeys](/auth/ui/passkeys/) |
+| `TenantSelector`, `WorkspaceSelector` | Pick a workspace at login; switch workspaces later | [Switching workspaces](/auth/ui/switching-workspaces/) |
+| `TeamManagementPanel` | Invite users, change roles, edit workspace settings | [User & team management](/auth/ui/team-management/) |
+| `ApiTokenManagement` | Self-service API token management | [Tokens](/auth/ui/tokens/) |
 
-### Other state hooks
+## Protecting routes
 
-- `useAuthState()` — just the state machine value.
-- `useBridgeTokens()` — `TokenSet | null`.
-- `useIsOnboarded()` — boolean.
-- `useHasMultiTenantAccess()` — boolean.
-- `useTenantUsers()` — `TenantUser[]` (populated during `tenant-selection`).
-- `useBridgeReady()` — boolean, `true` once bootstrap finishes.
+Pass a rules config to `withBridgeAuth` in `middleware.ts` to mark routes public or protected. Unauthenticated users are redirected to Bridge's hosted login page. See [Route guards](/auth/securing/route-guards/) and the [config reference](/auth/config/).
 
-## Route protection
+> **Framework note:** Next.js splits route protection across the server/client boundary. `withBridgeAuth` runs in `middleware.ts` and reads the cookie-based session set by the hosted-login callback; apps using the drop-in `LoginForm` (tokens in `localStorage`) protect pages client-side with `<ProtectedRoute redirectTo="/auth/login">` instead. See [Route guards](/auth/securing/route-guards/).
 
-### Server-side (middleware)
+## Identity, roles, and workspaces
 
-```ts
-// middleware.ts
-import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
-
-export default withBridgeAuth({
-  rules: [
-    { match: '/', public: true },
-    { match: '/auth/:path*', public: true },
-    // everything else requires authentication
-  ],
-});
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-};
-```
-
-When middleware blocks a request, it redirects to the configured `loginRoute` (default `/auth/login`).
-
-### Client-side (`<ProtectedRoute>`)
-
-```tsx
-'use client';
-import { ProtectedRoute } from '@nebulr-group/bridge-nextjs/client';
-
-export default function DashboardPage() {
-  return (
-    <ProtectedRoute>
-      <Dashboard />
-    </ProtectedRoute>
-  );
-}
-```
-
-## Accessing the profile
-
-```tsx
-'use client';
-import { useProfile } from '@nebulr-group/bridge-nextjs/client';
-
-export function ProfileBadge() {
-  const { profile } = useProfile();
-  return <span>{profile?.fullName ?? profile?.email}</span>;
-}
-```
-
-For a simple display name, use `<ProfileName />`:
-
-```tsx
-import { ProfileName } from '@nebulr-group/bridge-nextjs/client';
-<ProfileName className="text-gray-700" />
-```
-
-## Authenticated API calls
-
-```tsx
-'use client';
-import { getBridgeAuth } from '@nebulr-group/bridge-nextjs/client';
-
-export async function fetchUser() {
-  const token = await getBridgeAuth().getAccessToken();
-  const res = await fetch('/api/me', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.json();
-}
-```
-
-## Logout flow
-
-`logout()` clears localStorage + cookies, fires `auth:logout`, and resets all hooks to unauthenticated state. There's no redirect by default — the consumer can navigate after:
-
-```tsx
-const router = useRouter();
-const { logout } = useAuth();
-await logout();
-router.push('/');
-```
-
-## Common pitfalls
-
-- **`getBridgeAuth()` throws** if called before `<BridgeProvider>` has mounted. Always call it from `'use client'` components after mount.
-- **OAuth callback preserves `?payment=*`** by default. If you add other query params your app needs after login, pass them to `createBridgeCallbackRoute({ preserveQueryParams: ['payment', 'ref'] })`.
-- **MFA-setup-required state** is reachable only when the Bridge app forces MFA for new users. `<LoginForm>` handles it; if you wire a custom login UI, check `authState === 'mfa-setup-required'` and render `<MfaSetup />`.
+- **Reading the user:** `bridge.user` for live identity claims, `useProfile()` for richer display fields, `useBridgeTokens()` for the raw JWTs. See [Getting the user token](/auth/user-token/getting-the-token/) and [How the user token is updated](/auth/user-token/object-updates/).
+- **Roles and privileges:** every user has exactly one role per workspace; roles bundle privilege keys you define. See [How roles work](/auth/roles/how-it-works/), [Define roles](/auth/roles/define-roles/), [Assign roles](/auth/roles/assign-roles/), [Common setups](/auth/roles/common-setups/), [The owner role](/auth/roles/owner-role/), and [Gate features by role](/auth/roles/gate-with-flags/).
+- **Multi-workspace:** one set of credentials, many workspaces, with isolation enforced server-side. See [Multi-tenancy](/auth/multi-tenancy/).
+- **API tokens:** let your users mint privilege-scoped tokens for scripts and integrations. See [API tokens](/auth/api-tokens/).
