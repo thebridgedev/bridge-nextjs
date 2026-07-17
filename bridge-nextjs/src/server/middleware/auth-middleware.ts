@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { BridgeConfig } from '../../shared/types/config';
 import { getConfig } from '../utils/get-config';
 import { initServices } from '../utils/init-services';
+import { isApiRequest } from '../utils/is-api-request';
+
+/**
+ * Denial response for an unauthenticated request.
+ *
+ * - API/data requests get a `401` JSON body (never a redirect — a redirect to
+ *   an HTML login page is useless to a fetch/XHR caller).
+ * - Page navigations are redirected to the Bridge login URL.
+ */
+function unauthenticatedResponse(
+  request: NextRequest,
+  loginUrl: string,
+): NextResponse {
+  if (isApiRequest(request)) {
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Authentication required' },
+      { status: 401 },
+    );
+  }
+  return NextResponse.redirect(loginUrl);
+}
 
 export interface WithAuthOptions {
   publicPaths?: string[];
@@ -40,21 +61,21 @@ export function withAuth(options: WithAuthOptions = {}) {
     const isAuthenticated = await tokenService.isAuthenticatedServer(request);
     
     if (!isAuthenticated) {
-      // Redirect to bridge login URL using AuthService
+      // Unauthenticated: API routes get 401 JSON, page navigations redirect to login.
       const currentOrigin = new URL(request.url).origin;
       const loginUrl = authService.createLoginUrl({}, currentOrigin);
-      return NextResponse.redirect(loginUrl);
+      return unauthenticatedResponse(request, loginUrl);
     }
-    
+
     // Get the access token for logging purposes
     const cookieString = request.headers.get('cookie') || '';
     const accessToken = tokenService.getAccessTokenServer(cookieString);
-    
+
     if (!accessToken) {
-      // Redirect to bridge login URL using AuthService
+      // Unauthenticated: API routes get 401 JSON, page navigations redirect to login.
       const currentOrigin = new URL(request.url).origin;
       const loginUrl = authService.createLoginUrl({}, currentOrigin);
-      return NextResponse.redirect(loginUrl);
+      return unauthenticatedResponse(request, loginUrl);
     }
     
     // Create a response object to potentially set new cookies
