@@ -85,6 +85,14 @@ import { BridgeBillingNotice } from '@nebulr-group/bridge-nextjs/client';
 
 Each state has two role variants: admins get an action CTA ("Update card", "Upgrade"); members get an informational variant. Pass `mode="hard"` to render a full-screen lockscreen when the workspace is billing-locked.
 
+The CTA navigates to `billing.manageRoute` from the `<BridgeProvider>` config (default `/billing`). Since this guide scaffolds the plan page at `/subscription`, set it accordingly:
+
+```tsx
+<BridgeProvider config={{ billing: { manageRoute: '/subscription' } }}>
+```
+
+Per-instance override: the `actionHref` prop; full override: `onActionClick`. The same destination logic applies to `<BridgeQuotaBanner>`'s Upgrade CTA (Step 3).
+
 To show the current plan + status badge anywhere (e.g. a header), drop in `<BridgeSubscriptionStatus />` — no props required.
 
 ## Step 2b — Plan-selection paywall (default)
@@ -163,6 +171,7 @@ Auth-core methods used internally by `<PlanSelector>`: `selectFreePlan(planKey)`
 - [ ] `app/subscription/success/page.tsx` and `app/subscription/cancel/page.tsx` exist.
 - [ ] Subscription routes protected by middleware or `<ProtectedRoute>`.
 - [ ] `<BridgeBillingNotice />` added to the root layout (inside `<BridgeProvider>`).
+- [ ] `billing.manageRoute` set to the plan page (e.g. `/subscription`) so banner CTAs don't 404 on the `/billing` default.
 - [ ] Paywall set up — `<BridgePaywall>` wrapping the app, OR a `/welcome` route + bootstrap paywall config.
 - [ ] Quota/entitlement UI added if plans have limits.
 - [ ] **No legacy `planService.redirectToPlanSelection()` calls remain.**

@@ -228,17 +228,28 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
  * Stop the runtime. Idempotent — safe to call without a prior start. Flushes the
  * realtime client and unsubscribes from the token store. Subscriber sets are NOT
  * cleared so re-start picks up existing capability extensions.
+ *
+ * The module-level state is dropped **synchronously**, before the awaited
+ * `client.stop()` flush. This matters for React 18/19 StrictMode — which
+ * Next.js turns on by default (`reactStrictMode: true`): the dev-only
+ * simulated remount runs the provider's cleanup and its re-mount effect back to
+ * back in the same synchronous commit, so a `stop()` that only cleared
+ * `_realtime` after its first `await` would still look "started" to the
+ * immediately-following `startBridgeRuntime()` — which would bail out as a
+ * no-op, and then the in-flight stop would land and leave the runtime dead.
+ * Clearing up-front makes a synchronous stop→start pair actually restart.
  */
 export async function stopBridgeRuntime(): Promise<void> {
   if (_unsubscribeAuth) {
     _unsubscribeAuth();
     _unsubscribeAuth = undefined;
   }
-  if (_realtime) {
-    try { await _realtime.stop(); } catch { /* already stopped, ignore */ }
-    _realtime = undefined;
-  }
+  const client = _realtime;
+  _realtime = undefined;
   _currentAuthToken = undefined;
+  if (client) {
+    try { await client.stop(); } catch { /* already stopped, ignore */ }
+  }
 }
 
 /**
