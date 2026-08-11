@@ -19,6 +19,9 @@ export function AiQuotaBanner() {
 | `label` | `string` | metric key | Humanized display label |
 | `className` | `string` | `''` | Class applied to the root element |
 | `onActionClick` | `(snap) => void` | (none) | Override the default Upgrade CTA handler |
+| `actionHref` | `string` | `billing.manageRoute` config → `/billing` | Upgrade CTA destination for this instance; `onActionClick` takes precedence |
+
+By default the Upgrade CTA navigates to `billing.manageRoute` from the `<BridgeProvider>` config (falling back to `/billing`) — point it at your plan page, e.g. `billing: { manageRoute: '/subscription' }`.
 
 ## Reading quota state yourself
 

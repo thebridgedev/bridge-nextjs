@@ -114,8 +114,36 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     logger.debug('[BridgeProvider] bootstrap complete', mergedConfig);
   }
 
-  // Flush the realtime client + token subscription on provider unmount.
+  // Own the runtime's mounted lifetime: (re)start on mount, flush the realtime
+  // client + token subscriptions on unmount.
+  //
+  // The start above happens during render so children can read the singleton in
+  // their own effects — but render runs ONCE while effects can run many times.
+  // Under React 18/19 StrictMode — which Next.js enables by default
+  // (`reactStrictMode: true`) — the dev-only double-invoke simulates a full
+  // mount → unmount → remount on the same fiber: the cleanup below fires, but
+  // the component does NOT re-render, so `initedRef` still reads "initialized"
+  // and nothing would ever restart what the cleanup tore down. The result was a
+  // dev-only dead runtime — no realtime channel, no session.snapshot fanout, no
+  // live flag updates, no token-driven channel rescoping — for the whole page
+  // lifetime.
+  //
+  // So the effect re-asserts the runtime instead of assuming render did it.
+  // `startBridgeRuntime()` is idempotent and `flagsBundleRef` is nulled by the
+  // cleanup, so on a genuine first mount both calls below are no-ops, and on a
+  // StrictMode remount they rebuild exactly what was torn down.
   useEffect(() => {
+    if (!initedRef.current) return; // no appId / SSR — nothing was ever started
+
+    startBridgeRuntime();
+    if (!flagsBundleRef.current) {
+      try {
+        flagsBundleRef.current = createBridgeFlags();
+      } catch (err) {
+        logger.debug('[BridgeProvider] feature flags bootstrap skipped:', err);
+      }
+    }
+
     return () => {
       if (flagsBundleRef.current) {
         void flagsBundleRef.current.stop();
@@ -148,7 +176,7 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
 
   // Paywall + checkout-return-error redirect — the CSR analogue of
   // bridge-svelte's BridgeBootstrap steps 2b/confirm-checkout. Runs after
-  // bootstrap resolves auth, and shares a single getSubscriptionStatus() call:
+  // bootstrap resolves auth, and covers two destinations:
   //   - billing.paywallRoute: redirect there when authenticated but no plan
   //     selected, unless paymentsAutoRedirect: false.
   //   - billing.paymentErrorRoute: redirect there when a Stripe checkout the
@@ -157,10 +185,25 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
   //     checkout-round-trip case only — a persistent/recurring payment
   //     failure with no pending session is left to PlanSelector's inline
   //     'payment-failed' banner, not redirected here.
-  // getSubscriptionStatus() self-heals after a Stripe round-trip: when a
-  // checkout session_id is present, auth-core syncs the completed session
-  // server-side first, so shouldSelectPlan reads false and a freshly-paid
-  // user is NOT bounced back to the paywall.
+  //
+  // Two paths, deliberately:
+  //   1. Checkout return (a pending session id exists). Only here do we spend a
+  //      getSubscriptionStatus() call — it is the one authoritative source for
+  //      `paymentFailed`, and auth-core self-heals inside it by syncing the
+  //      completed Stripe session server-side first, so a freshly-paid user
+  //      reads shouldSelectPlan: false and is NOT bounced back to the paywall.
+  //      The paywall decision on this path therefore uses that same fresh
+  //      `status` rather than shouldRedirectToPaywall(), whose JWT claims are
+  //      still pre-payment until the next token refresh.
+  //   2. Ordinary mount. shouldRedirectToPaywall() (auth-core) bundles the auth
+  //      check + the shouldSelectPlan/paymentsAutoRedirect decision (TBP-369),
+  //      shared with bridge-svelte/react/angular, and is claim-driven — zero
+  //      network on the hot path (TBP-368).
+  //
+  // `pendingSessionId` MUST be read before getSubscriptionStatus(): that call
+  // strips `?session_id=` from the URL and clears the sessionStorage copy as
+  // part of its self-heal.
+  //
   // Depend on PRIMITIVE values (routes, appId, pathname), NOT the
   // mergedConfig object. mergedConfig is recomputed whenever the `config` prop
   // identity changes (a consumer passing an inline object literal re-creates it
@@ -179,9 +222,6 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     void (async () => {
       try {
         const bridge = getBridgeAuth();
-        if (!bridge.isAuthenticated()) return;
-        const status = await bridge.getSubscriptionStatus();
-        if (cancelled) return;
 
         let pendingSessionId: string | null = null;
         try {
@@ -193,19 +233,41 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
         } catch {
           /* sessionStorage may be disabled — non-fatal */
         }
-        if (pendingSessionId && status?.paymentFailed === true) {
-          try {
-            sessionStorage.removeItem('bridge_checkout_session_id');
-          } catch {
-            /* non-fatal */
+
+        // Path 1 — returning from Stripe Checkout.
+        if (pendingSessionId) {
+          if (!bridge.isAuthenticated()) return;
+          const status = await bridge.getSubscriptionStatus();
+          if (cancelled) return;
+
+          if (status?.paymentFailed === true) {
+            try {
+              sessionStorage.removeItem('bridge_checkout_session_id');
+            } catch {
+              /* non-fatal */
+            }
+            const target = paymentErrorRoute ?? '/payment-error';
+            logger.debug('[BridgeProvider] checkout-return payment failure, redirecting', target);
+            router.push(target);
+            return;
           }
-          const target = paymentErrorRoute ?? '/payment-error';
-          logger.debug('[BridgeProvider] checkout-return payment failure, redirecting', target);
-          router.push(target);
+
+          if (
+            paywallRoute &&
+            status?.shouldSelectPlan === true &&
+            status?.paymentsAutoRedirect !== false
+          ) {
+            logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
+            router.push(paywallRoute);
+          }
           return;
         }
 
-        if (paywallRoute && status?.shouldSelectPlan === true && status?.paymentsAutoRedirect !== false) {
+        // Path 2 — ordinary mount.
+        if (!paywallRoute) return;
+        const should = await bridge.shouldRedirectToPaywall();
+        if (cancelled) return;
+        if (should) {
           logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
           router.push(paywallRoute);
         }

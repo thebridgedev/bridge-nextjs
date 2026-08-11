@@ -15,7 +15,6 @@ import {
   BridgeAuth,
   type AppConfig,
   type AuthState,
-  type BridgeAuthConfig,
   type Plan,
   type Profile,
   type SubscriptionStatus,
@@ -29,6 +28,7 @@ import type { BridgeConfig } from '../shared/types/config';
 // ── Singleton ──────────────────────────────────────────────────────────────────
 
 let _instance: BridgeAuth | null = null;
+let _initConfig: BridgeConfig | null = null;
 
 // ── Subscription state shape ──────────────────────────────────────────────────
 
@@ -91,13 +91,14 @@ let _appConfigPromise: Promise<AppConfig | null> | null = null;
 
 // ── Init / access ──────────────────────────────────────────────────────────────
 
-export function initBridge(config: BridgeAuthConfig): BridgeAuth {
+export function initBridge(config: BridgeConfig): BridgeAuth {
   if (_instance) {
     logger.debug('[bridge-instance] already initialized, returning existing');
     return _instance;
   }
 
   _instance = new BridgeAuth(config);
+  _initConfig = config;
 
   // Seed store from current auth-core state
   const existingTokens = _instance.getTokens();
@@ -207,6 +208,21 @@ export function getBridgeAuth(): BridgeAuth {
   return _instance;
 }
 
+/**
+ * Read the full plugin config passed to `initBridge()` / `<BridgeProvider>`.
+ * Mirrors bridge-svelte's `getConfig()` (config.store). Throws if Bridge has
+ * not been initialized yet — callers that may run before init (e.g. click
+ * handlers) should guard with try/catch and fall back to a default.
+ */
+export function getBridgeConfig(): BridgeConfig {
+  if (!_initConfig) {
+    throw new Error(
+      'BridgeAuth not initialized. Wrap your app in <BridgeProvider> first.'
+    );
+  }
+  return _initConfig;
+}
+
 export function markReady(): void {
   if (useBridgeStore.getState().ready) return;
   useBridgeStore.setState({ ready: true });
@@ -255,6 +271,7 @@ export const auth: BridgeAuth = new Proxy({} as BridgeAuth, {
 /** @internal — reset singleton + store. Used by tests only. Do not call from app code. */
 export function _resetBridgeInstance(): void {
   _instance = null;
+  _initConfig = null;
   _appConfigPromise = null;
   _resolveReady = null;
   useBridgeStore.setState({

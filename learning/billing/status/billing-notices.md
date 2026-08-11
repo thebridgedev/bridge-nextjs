@@ -18,6 +18,9 @@ export function BillingBanner() {
 | `mode` | `'soft' \| 'hard'` | `'soft'` | `soft` always renders inline; `hard` renders a full-screen lockscreen when the workspace is billing-locked |
 | `className` | `string` | `''` | Class applied to the root element |
 | `onActionClick` | `(state) => void` | (none) | Override the default CTA click handler |
+| `actionHref` | `string` | `billing.manageRoute` config → `/billing` | CTA destination for this instance; `onActionClick` takes precedence |
+
+By default the CTA navigates to `billing.manageRoute` from the `<BridgeProvider>` config (falling back to `/billing`) — point it at your plan page, e.g. `billing: { manageRoute: '/subscription' }`.
 
 "Billing-locked" means the subscription of the workspace (called a *tenant* in the API) has lapsed, so the app should be gated; it's the `gateEngaged` flag on the subscription snapshot. See [How billing works](/billing/how-it-works/#when-billing-locks-the-app) for how the lock relates to the plan-selection gate.
 
