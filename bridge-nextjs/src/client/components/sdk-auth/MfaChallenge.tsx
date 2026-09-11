@@ -2,7 +2,9 @@
 
 import type { HTMLAttributes } from 'react';
 import { useEffect, useState } from 'react';
+import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
+import { getTranslator } from '../../../i18n';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -11,22 +13,31 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   onVerified?: () => void;
   onError?: (error: Error) => void;
   showRecoveryOption?: boolean;
+  /** Heading text. Pass `null`/`''` to render no heading and use your own page title. */
+  heading?: string | null;
+  /** Per-key copy overrides for this component only (TBP-630). */
+  messages?: MessageOverrides;
 }
 
 export function MfaChallenge({
   onVerified,
   onError,
   showRecoveryOption = true,
+  heading,
+  messages,
   className,
   style,
   ...rest
 }: Props) {
+  const t = getTranslator(messages);
   const [code, setCode] = useState('');
   const [backupCode, setBackupCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useRecovery, setUseRecovery] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
+
+  const wrapperHeading = heading !== undefined ? heading : t('mfa.challengeHeading');
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
@@ -43,7 +54,7 @@ export function MfaChallenge({
       setCode('');
       setResendCountdown(60);
     } catch (err: any) {
-      setError(err.message || 'Failed to resend code.');
+      setError(err.message || t('mfa.error.resend'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -59,7 +70,7 @@ export function MfaChallenge({
       await (getBridgeAuth() as any).verifyMfa(code);
       onVerified?.();
     } catch (err: any) {
-      setError(err.message || 'Invalid code. Please try again.');
+      setError(err.message || t('mfa.error.invalidCode'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -75,7 +86,7 @@ export function MfaChallenge({
       await (getBridgeAuth() as any).resetMfa(backupCode);
       onVerified?.();
     } catch (err: any) {
-      setError(err.message || 'Invalid recovery code.');
+      setError(err.message || t('mfa.error.invalidRecoveryCode'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -84,7 +95,7 @@ export function MfaChallenge({
 
   return (
     <AuthFormWrapper
-      heading="Two-factor authentication"
+      heading={wrapperHeading}
       className={className}
       style={style}
       {...rest}
@@ -95,13 +106,13 @@ export function MfaChallenge({
         <>
           <form onSubmit={handleVerify}>
             <div className="bridge-form-group">
-              <label htmlFor="mfa-code">Authentication code</label>
+              <label htmlFor="mfa-code">{t('field.authenticationCode')}</label>
               <input
                 id="mfa-code"
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                placeholder="Enter 6-digit code"
+                placeholder={t('placeholder.sixDigitCode')}
                 maxLength={6}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
@@ -113,22 +124,22 @@ export function MfaChallenge({
               className="bridge-btn bridge-btn-primary"
               disabled={loading || code.length < 6}
             >
-              {loading ? <Spinner size={16} /> : 'Verify'}
+              {loading ? <Spinner size={16} /> : t('mfa.submit')}
             </button>
           </form>
           <p className="bridge-mfa-help">
             {resendCountdown > 0 ? (
-              `Didn't get your text message? You can resend in ${resendCountdown}s.`
+              t('mfa.resendCountdown', { seconds: resendCountdown })
             ) : (
               <>
-                Didn't get your text message?{' '}
+                {t('mfa.resendPrompt')}{' '}
                 <button
                   type="button"
                   className="bridge-link"
                   onClick={handleResend}
                   disabled={loading}
                 >
-                  Resend code
+                  {t('action.resendCode')}
                 </button>
                 .
               </>
@@ -144,7 +155,7 @@ export function MfaChallenge({
                   setError(null);
                 }}
               >
-                Use recovery code
+                {t('mfa.useRecoveryCode')}
               </button>
             </div>
           )}
@@ -153,11 +164,11 @@ export function MfaChallenge({
         <>
           <form onSubmit={handleRecovery}>
             <div className="bridge-form-group">
-              <label htmlFor="backup-code">Recovery code</label>
+              <label htmlFor="backup-code">{t('field.recoveryCode')}</label>
               <input
                 id="backup-code"
                 type="text"
-                placeholder="Enter recovery code"
+                placeholder={t('placeholder.recoveryCode')}
                 value={backupCode}
                 onChange={(e) => setBackupCode(e.target.value)}
                 disabled={loading}
@@ -168,7 +179,7 @@ export function MfaChallenge({
               className="bridge-btn bridge-btn-primary"
               disabled={loading || !backupCode.trim()}
             >
-              {loading ? <Spinner size={16} /> : 'Recover'}
+              {loading ? <Spinner size={16} /> : t('mfa.recoverSubmit')}
             </button>
           </form>
           <div className="bridge-form-footer">
@@ -180,7 +191,7 @@ export function MfaChallenge({
                 setError(null);
               }}
             >
-              Use authentication code
+              {t('mfa.useAuthenticationCode')}
             </button>
           </div>
         </>

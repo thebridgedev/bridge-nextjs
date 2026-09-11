@@ -105,3 +105,87 @@ Redirects are handled automatically by the middleware: when a protected route is
 >   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 > };
 > ```
+
+## Returning to the page they asked for
+
+Someone who follows a link into a protected page — an emailed document link, a
+bookmark, a shared URL — lands on that page after signing in, not on your
+default route. This is on by default; you do not configure anything to get it.
+
+How the target travels depends on which login you use:
+
+| Mode | Mechanism | Your job |
+|------|-----------|----------|
+| **Hosted** (no `loginRoute`) | An `httpOnly` cookie, written by `withAuth` and consumed by `createBridgeCallbackRoute` | Nothing. It is automatic |
+| **SDK** (you set `loginRoute`) | `?redirectUri=` on your own login route | Read it after login — below |
+
+Next.js uses a cookie rather than `sessionStorage` because both ends of the
+hosted round-trip run on the server: `withAuth` is middleware and the callback
+is a route handler, so neither has a DOM. The cookie is `httpOnly`,
+`sameSite=lax` (so it survives the top-level navigation back from the identity
+provider), and short-lived.
+
+### SDK mode: read it on your login page
+
+Your login page owns the post-login navigation, so it has to read the target.
+Use `readReturnTo` — it validates the value for you:
+
+```tsx
+'use client';
+import { LoginForm, readReturnTo } from '@nebulr-group/bridge-nextjs/client';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+
+  return (
+    <LoginForm
+      onLogin={() => {
+        // Falls back to your own default when there is no target, or when the
+        // one supplied is not safe to navigate to.
+        router.push(readReturnTo(params) ?? '/dashboard');
+      }}
+    />
+  );
+}
+```
+
+:::caution[Do not read the parameter yourself]
+`?redirectUri=` arrives in the URL, so **whoever wrote the link controls it**.
+Navigating to it unchecked is an open redirect: a link carrying
+`?redirectUri=https://example.invalid` would bounce your users off-site, still
+looking like it came from you. Phishing works well from there.
+
+`readReturnTo` rejects anything that is not a same-origin path — absolute URLs,
+protocol-relative `//host`, backslash variants, and control characters — and
+returns `null` instead, which is why the `??` fallback above is all you need.
+If you must handle the value yourself, run it through `sanitizeReturnTo` first.
+:::
+
+### Keeping auth routes out of it
+
+Your `loginRoute` is excluded automatically, so a bounce through the login page
+never comes back pointing at itself. Exclude the rest of your auth flow too:
+
+```tsx
+<BridgeProvider
+  config={{
+    appId: '…',
+    loginRoute: '/auth/login',
+    returnTo: { exclude: [new RegExp('^/auth($|/)')] },
+  }}
+>
+```
+
+### Turning it off
+
+To send every login to the same place regardless of where the visitor was
+heading:
+
+```tsx
+returnTo: { enabled: false }
+```
+
+A path that fails validation is treated the same way: your login page gets
+`null` and falls back to its own default.

@@ -27,3 +27,15 @@ export {
   serverInstanceId,
 } from '@nebulr-group/bridge-auth-core';
 export type { EvalContext, CachedFlag, FlagEvalResult } from '@nebulr-group/bridge-auth-core';
+
+// ── Deep-link preservation, server half (TBP-629) ────────────────────────────
+// `withAuth` writes the cookie and `createBridgeCallbackRoute` consumes it, so
+// most apps need none of this. It is exported for apps that write their own
+// middleware or callback handler and must stay consistent with the pair above.
+export {
+  RETURN_TO_COOKIE,
+  clearReturnToCookie,
+  readReturnToCookie,
+  stashReturnToCookie,
+} from './server/utils/return-to';
+export { DEFAULT_RETURN_TO_PARAM, sanitizeReturnTo, withReturnTo } from '@nebulr-group/bridge-auth-core';

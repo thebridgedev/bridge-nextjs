@@ -2,7 +2,9 @@
 
 import type { HTMLAttributes } from 'react';
 import { useState } from 'react';
+import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
+import { getTranslator } from '../../../i18n';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -13,6 +15,12 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   onComplete?: () => void;
   onError?: (error: Error) => void;
   loginHref?: string;
+  /** Heading text. Pass `null`/`''` to render no heading and use your own page title. */
+  heading?: string | null;
+  /** Step description. Pass `null`/`''` to render nothing and use your own subtitle (TBP-631). */
+  description?: string | null;
+  /** Per-key copy overrides for this component only (TBP-630). */
+  messages?: MessageOverrides;
 }
 
 export function ForgotPassword({
@@ -20,10 +28,14 @@ export function ForgotPassword({
   onComplete,
   onError,
   loginHref = '/auth/login',
+  heading,
+  description,
+  messages,
   className,
   style,
   ...rest
 }: Props) {
+  const t = getTranslator(messages);
   const isSetMode = !!token;
 
   const [email, setEmail] = useState('');
@@ -35,6 +47,21 @@ export function ForgotPassword({
   const [passwordReset, setPasswordReset] = useState(false);
   const [showPasswords, setShowPasswords] = useState(false);
 
+  const builtInHeading = isSetMode ? t('forgot.headingSet') : t('forgot.headingRequest');
+  const wrapperHeading =
+    passwordReset || emailSent ? null : heading !== undefined ? heading : builtInHeading;
+
+  // TBP-631 — same shape as the heading above: the description belongs to the
+  // send-link step only. `undefined` means "not overridden" and falls through to
+  // the built-in; `null` is an explicit suppression from the host and must be
+  // respected, which is why this cannot collapse to `description ?? builtIn`.
+  const wrapperDescription =
+    isSetMode || passwordReset || emailSent
+      ? null
+      : description !== undefined
+        ? description
+        : t('forgot.description');
+
   async function handleSendLink(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
@@ -44,7 +71,7 @@ export function ForgotPassword({
       await getBridgeAuth().sendResetPasswordLink(email);
       setEmailSent(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset link.');
+      setError(err.message || t('forgot.error.send'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -57,11 +84,11 @@ export function ForgotPassword({
     setError(null);
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('forgot.error.mismatch'));
       return;
     }
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setError(t('forgot.error.tooShort'));
       return;
     }
 
@@ -71,7 +98,7 @@ export function ForgotPassword({
       setPasswordReset(true);
       onComplete?.();
     } catch (err: any) {
-      setError(err.message || 'Failed to update password.');
+      setError(err.message || t('forgot.error.update'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -80,7 +107,8 @@ export function ForgotPassword({
 
   return (
     <AuthFormWrapper
-      heading={isSetMode ? 'Set new password' : 'Reset your password'}
+      heading={wrapperHeading}
+      description={wrapperDescription}
       className={className}
       style={style}
       {...rest}
@@ -90,20 +118,20 @@ export function ForgotPassword({
       {isSetMode ? (
         passwordReset ? (
           <>
-            <h2 className="bridge-success-heading">Password set</h2>
+            <h2 className="bridge-success-heading">{t('forgot.successHeading')}</h2>
             <div className="bridge-form-footer">
-              <a href={loginHref}>Back to login</a>
+              <a href={loginHref}>{t('action.backToLogin')}</a>
             </div>
           </>
         ) : (
           <form onSubmit={handleSetPassword}>
             <div className="bridge-form-group">
-              <label htmlFor="newPassword">New password</label>
+              <label htmlFor="newPassword">{t('field.newPassword')}</label>
               <div className="bridge-password-wrapper">
                 <input
                   id="newPassword"
                   type={showPasswords ? 'text' : 'password'}
-                  placeholder="At least 8 characters"
+                  placeholder={t('placeholder.newPassword')}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -114,17 +142,20 @@ export function ForgotPassword({
                   className="bridge-password-toggle"
                   onClick={() => setShowPasswords((v) => !v)}
                   tabIndex={-1}
+                  aria-label={
+                    showPasswords ? t('action.hidePasswords') : t('action.showPasswords')
+                  }
                 >
                   {showPasswords ? '🙈' : '👁'}
                 </button>
               </div>
             </div>
             <div className="bridge-form-group">
-              <label htmlFor="confirmPassword">Confirm password</label>
+              <label htmlFor="confirmPassword">{t('field.confirmPassword')}</label>
               <input
                 id="confirmPassword"
                 type={showPasswords ? 'text' : 'password'}
-                placeholder="Repeat password"
+                placeholder={t('placeholder.confirmPassword')}
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -136,29 +167,26 @@ export function ForgotPassword({
               className="bridge-btn bridge-btn-primary"
               disabled={loading || !password}
             >
-              {loading ? <Spinner size={16} /> : 'Set a password'}
+              {loading ? <Spinner size={16} /> : t('forgot.setSubmit')}
             </button>
           </form>
         )
       ) : emailSent ? (
         <>
-          <Alert variant="success">Check your email for a password reset link.</Alert>
+          <Alert variant="success">{t('forgot.emailSent')}</Alert>
           <div className="bridge-form-footer">
-            <a href={loginHref}>Back to login</a>
+            <a href={loginHref}>{t('action.backToLogin')}</a>
           </div>
         </>
       ) : (
         <>
-          <p className="bridge-step-desc">
-            Enter your email and we'll send you a link to reset your password.
-          </p>
           <form onSubmit={handleSendLink}>
             <div className="bridge-form-group">
-              <label htmlFor="reset-email">Email</label>
+              <label htmlFor="reset-email">{t('field.email')}</label>
               <input
                 id="reset-email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('placeholder.email')}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -170,11 +198,11 @@ export function ForgotPassword({
               className="bridge-btn bridge-btn-primary"
               disabled={loading || !email.trim()}
             >
-              {loading ? <Spinner size={16} /> : 'Send reset link'}
+              {loading ? <Spinner size={16} /> : t('forgot.submit')}
             </button>
           </form>
           <div className="bridge-form-footer">
-            <a href={loginHref}>Back to login</a>
+            <a href={loginHref}>{t('action.backToLogin')}</a>
           </div>
         </>
       )}

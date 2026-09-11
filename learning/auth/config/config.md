@@ -107,7 +107,44 @@ If you leave `loginRoute` unset, Bridge uses hosted auth instead: unauthenticate
 | `billing.paywallRoute` | `string` | (none) | Route to redirect to when the workspace (called a *tenant* in the API) has no plan selected |
 | `billing.paymentErrorRoute` | `string` | `'/payment-error'` | Route to redirect to when a Stripe checkout confirmation fails |
 | `storage` | `TokenStorage` | `localStorage` (browser) / memory (SSR) | Token storage adapter; implement `get`/`set`/`remove` to bring your own |
+| `locale` | `string` | `'en'` | UI language for the SDK auth components, e.g. `'sv'`. Region variants (`'sv-SE'`) resolve to their base language; an unknown locale falls back to English |
+| `messages` | `MessageOverrides` | (none) | Per-key copy overrides applied on top of the locale. See [Translating the auth UI](#translating-the-auth-ui) |
+| `returnTo.enabled` | `boolean` | `true` | Set `false` to send every login to `defaultRedirectRoute` regardless of where the visitor was heading |
+| `returnTo.param` | `string` | `'redirectUri'` | Query parameter carrying the return target in SDK mode |
+| `returnTo.exclude` | `(string \| RegExp)[]` | `[]` | Paths that must never become a return target. Your `loginRoute` is excluded automatically |
 | `debug` | `boolean` | `false` | Enable debug logging |
+
+## Translating the auth UI
+
+The SDK auth components ship their own copy — field labels, buttons, alerts,
+success messages. Set `locale` once and all of it renders in that language:
+
+```tsx
+<BridgeProvider config={{ appId: '…', locale: 'sv' }}>
+```
+
+Bridge owns the **mechanics**: what a field is, what a button does, what went
+wrong. Your app owns **voice and context**: the page title, the subtitle,
+anything naming your product. Bridge cannot know those, which is why every
+component takes `heading={null}` and `description={null}` so you can write your
+own.
+
+Shipping locales: **`en`** and **`sv`**. An unknown locale falls back to English
+rather than throwing, and a key missing from a locale falls back to English —
+a raw key like `login.submit` never renders.
+
+For a phrase you need worded differently, override it per key:
+
+```tsx
+// app-wide
+<BridgeProvider config={{ appId: '…', locale: 'sv', messages: { 'login.submit': 'Logga in nu' } }}>
+
+// or one screen only
+<LoginForm messages={{ 'login.heading': 'Welcome back' }} />
+```
+
+Precedence is component prop → config `messages` → `locale` → English. The
+override path also covers any language Bridge does not ship yet.
 
 ## Route guard config
 

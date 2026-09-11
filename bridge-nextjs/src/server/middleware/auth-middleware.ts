@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sanitizeReturnTo, withReturnTo } from '@nebulr-group/bridge-auth-core';
 import { BridgeConfig } from '../../shared/types/config';
 import { getConfig } from '../utils/get-config';
 import { initServices } from '../utils/init-services';
 import { isApiRequest } from '../utils/is-api-request';
+import { stashReturnToCookie } from '../utils/return-to';
 
 /**
  * Denial response for an unauthenticated request.
@@ -14,6 +16,7 @@ import { isApiRequest } from '../utils/is-api-request';
 function unauthenticatedResponse(
   request: NextRequest,
   loginUrl: string,
+  returnTo?: string | null,
 ): NextResponse {
   if (isApiRequest(request)) {
     return NextResponse.json(
@@ -21,7 +24,63 @@ function unauthenticatedResponse(
       { status: 401 },
     );
   }
-  return NextResponse.redirect(loginUrl);
+  // TBP-629 — a redirect to login that forgets where the visitor was heading
+  // silently collapses every deep link onto the app's default route.
+  const response = NextResponse.redirect(loginUrl);
+  stashReturnToCookie(response, returnTo, request.url);
+  return response;
+}
+
+/**
+ * Where to send an unauthenticated page navigation, and what to remember.
+ *
+ * Two shapes, and the difference is forced rather than stylistic:
+ *
+ * - **SDK mode** (`loginRoute` configured): the login page is the app's own, so
+ *   the target rides as a query parameter it can read. Visible, debuggable, and
+ *   it survives a cross-tab click.
+ * - **Hosted mode**: the target CANNOT ride on the URL. `createLoginUrl()` feeds
+ *   `redirectUri` to the OAuth authorize call and bridge-api validates it with an
+ *   exact `allowedRedirectUris.includes()` match, so appending a query would
+ *   break login rather than improve it. It goes in a cookie instead, and
+ *   `createBridgeCallbackRoute` consumes it when the round-trip lands.
+ */
+function resolveLoginDestination(
+  request: NextRequest,
+  config: BridgeConfig,
+  hostedLoginUrl: string,
+): { loginUrl: string; returnTo: string | null } {
+  if (config.returnTo?.enabled === false) {
+    return {
+      loginUrl: config.loginRoute
+        ? new URL(config.loginRoute, request.url).toString()
+        : hostedLoginUrl,
+      returnTo: null,
+    };
+  }
+
+  const { pathname, search } = request.nextUrl;
+  let returnTo = sanitizeReturnTo(`${pathname}${search}`);
+
+  // Never let the login route become its own destination — that either loops or
+  // strands the visitor on a page that immediately bounces them.
+  const loginRoute = config.returnTo?.loginRoute ?? config.loginRoute;
+  if (returnTo && loginRoute && returnTo.split('?')[0] === loginRoute.split('?')[0]) {
+    returnTo = null;
+  }
+
+  if (config.loginRoute) {
+    // Resolved against the request origin: `NextResponse.redirect` rejects a
+    // relative URL outright ("Invalid URL"), and `loginRoute` is an in-app path
+    // by definition. The hosted branch below is already absolute.
+    const target = withReturnTo(config.loginRoute, returnTo, config.returnTo?.param);
+    return {
+      loginUrl: new URL(target, request.url).toString(),
+      // Already on the URL; a cookie as well would be a second source of truth.
+      returnTo: null,
+    };
+  }
+  return { loginUrl: hostedLoginUrl, returnTo };
 }
 
 export interface WithAuthOptions {
@@ -63,8 +122,9 @@ export function withAuth(options: WithAuthOptions = {}) {
     if (!isAuthenticated) {
       // Unauthenticated: API routes get 401 JSON, page navigations redirect to login.
       const currentOrigin = new URL(request.url).origin;
-      const loginUrl = authService.createLoginUrl({}, currentOrigin);
-      return unauthenticatedResponse(request, loginUrl);
+      const hostedLoginUrl = authService.createLoginUrl({}, currentOrigin);
+      const destination = resolveLoginDestination(request, config, hostedLoginUrl);
+      return unauthenticatedResponse(request, destination.loginUrl, destination.returnTo);
     }
 
     // Get the access token for logging purposes
@@ -74,8 +134,9 @@ export function withAuth(options: WithAuthOptions = {}) {
     if (!accessToken) {
       // Unauthenticated: API routes get 401 JSON, page navigations redirect to login.
       const currentOrigin = new URL(request.url).origin;
-      const loginUrl = authService.createLoginUrl({}, currentOrigin);
-      return unauthenticatedResponse(request, loginUrl);
+      const hostedLoginUrl = authService.createLoginUrl({}, currentOrigin);
+      const destination = resolveLoginDestination(request, config, hostedLoginUrl);
+      return unauthenticatedResponse(request, destination.loginUrl, destination.returnTo);
     }
     
     // Create a response object to potentially set new cookies

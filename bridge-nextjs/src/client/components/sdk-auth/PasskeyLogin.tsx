@@ -2,7 +2,9 @@
 
 import type { ButtonHTMLAttributes } from 'react';
 import { useState } from 'react';
+import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
+import { getTranslator } from '../../../i18n';
 import { Spinner } from './shared/Spinner';
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'> {
@@ -10,7 +12,10 @@ interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'>
   onError?: (error: Error) => void;
   onSetupPasskey?: () => void;
   setupHref?: string;
+  /** Button label. Defaults to the catalogue's `passkey.loginButton`. */
   label?: string;
+  /** Per-key copy overrides for this component only (TBP-630). */
+  messages?: MessageOverrides;
 }
 
 export function PasskeyLogin({
@@ -18,11 +23,13 @@ export function PasskeyLogin({
   onError,
   onSetupPasskey,
   setupHref,
-  label = 'Continue with passkey',
+  label,
+  messages,
   className,
   style,
   ...rest
 }: Props) {
+  const t = getTranslator(messages);
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
@@ -38,10 +45,10 @@ export function PasskeyLogin({
           window.location.href = setupHref;
         }
       } else if (result?.type === 'auth_error') {
-        throw new Error(result.error || 'Passkey login failed');
+        throw new Error(result.error || t('passkey.error.auth'));
       }
     } catch (err: any) {
-      onError?.(new Error(err.message || 'Passkey login failed'));
+      onError?.(new Error(err.message || t('passkey.error.auth')));
     } finally {
       setLoading(false);
     }
@@ -59,7 +66,7 @@ export function PasskeyLogin({
       {...rest}
     >
       {loading ? <Spinner size={16} /> : null}
-      <span>{label}</span>
+      <span>{label ?? t('passkey.loginButton')}</span>
     </button>
   );
 }
