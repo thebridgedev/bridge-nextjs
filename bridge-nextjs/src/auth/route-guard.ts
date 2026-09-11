@@ -29,9 +29,19 @@ export function createRouteGuard(
       await flagsReady;
       return guard.checkRouteRestrictions(pathname);
     },
-    async getNavigationDecision(pathname: string) {
+    async getNavigationDecision(pathname: string, attempted?: string) {
       if (guard.shouldRedirectToLogin(pathname)) {
-        return { type: 'login' as const, loginUrl: guard.getLoginRedirect() };
+        // TBP-629 — this branch short-circuits before flagsReady on purpose (an
+        // unauthenticated visitor needs no flag evaluation), which is exactly
+        // why `attempted` has to be threaded through here too. The wrapper
+        // rebuilds the decision by hand and would otherwise silently drop any
+        // argument auth-core's version learned to accept.
+        const returnTo = guard.resolveReturnTo(attempted ?? pathname);
+        return {
+          type: 'login' as const,
+          loginUrl: guard.getLoginRedirect(),
+          ...(returnTo ? { returnTo } : {}),
+        };
       }
       await flagsReady;
       const redirectTo = await guard.checkRouteRestrictions(pathname);

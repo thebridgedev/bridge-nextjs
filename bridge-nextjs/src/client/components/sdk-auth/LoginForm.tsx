@@ -1,6 +1,6 @@
 'use client';
 
-import type { FederationConnection } from '@nebulr-group/bridge-auth-core';
+import type { FederationConnection, MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import {
@@ -8,6 +8,7 @@ import {
   getBridgeAuth,
   useBridgeStore,
 } from '../../../core/bridge-instance';
+import { getTranslator } from '../../../i18n';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -30,10 +31,16 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   onLogin?: () => void;
   onError?: (error: Error) => void;
   onSsoClick?: (connectionType: string) => void;
-  heading?: string;
+  /** Heading text. Pass `null`/`''` to render no heading and use your own page title. */
+  heading?: string | null;
+  headingSlot?: ReactNode;
   ssoConnections?: FederationConnection[];
   ssoMode?: 'redirect' | 'popup';
   footer?: ReactNode;
+  /** Per-key copy overrides for this component only (TBP-630). Fanned out to
+   *  the MFA / passkey / forgot-password sub-views this form renders, so an app
+   *  overrides a phrase once rather than once per step. */
+  messages?: MessageOverrides;
 }
 
 function buildSsoConnections(appConfig: any): FederationConnection[] {
@@ -61,13 +68,16 @@ export function LoginForm({
   onError,
   onSsoClick,
   heading = '',
+  headingSlot,
   ssoConnections = [],
   ssoMode = 'redirect',
   footer,
+  messages,
   className,
   style,
   ...rest
 }: Props) {
+  const t = getTranslator(messages);
   const authState = useBridgeStore((s) => s.authState);
   const appConfig = useBridgeStore((s) => s.appConfig);
 
@@ -100,7 +110,7 @@ export function LoginForm({
       await getBridgeAuth().sendResetPasswordLink(email);
       setFpEmailSent(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset link.');
+      setError(err.message || t('forgot.error.send'));
       onError?.(err);
     } finally {
       setFpLoading(false);
@@ -132,7 +142,7 @@ export function LoginForm({
     (getBridgeAuth() as any)
       .authenticateWithMagicLinkToken(magicToken)
       .catch((err: any) => {
-        setError(err.message || 'Magic link authentication failed.');
+        setError(err.message || t('magicLink.error.auth'));
         onError?.(err);
       })
       .finally(() => setLoading(false));
@@ -152,27 +162,32 @@ export function LoginForm({
     try {
       await getBridgeAuth().authenticate(email, password);
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password.');
+      setError(err.message || t('login.error.invalidCredentials'));
       onError?.(err);
       setLoading(false);
     }
   }
 
-  if (authState === 'mfa-required') return <MfaChallenge onError={onError} />;
-  if ((authState as any) === 'mfa-setup-required') return <MfaSetup onError={onError} />;
+  if (authState === 'mfa-required') return <MfaChallenge onError={onError} messages={messages} />;
+  if ((authState as any) === 'mfa-setup-required') return <MfaSetup onError={onError} messages={messages} />;
   if (authState === 'tenant-selection') return <TenantSelector onError={onError} />;
 
   if (step === 'forgot-password') {
     return (
-      <AuthFormWrapper heading="Reset your password" className={className} style={style} {...rest}>
+      <AuthFormWrapper
+        heading={fpEmailSent ? null : t('forgot.headingRequest')}
+        className={className}
+        style={style}
+        {...rest}
+      >
         {error && <Alert variant="error">{error}</Alert>}
 
         {fpEmailSent ? (
           <>
-            <Alert variant="success">Check your email for a password reset link.</Alert>
+            <Alert variant="success">{t('forgot.emailSent')}</Alert>
             <div className="bridge-form-footer">
               <button type="button" className="bridge-link" onClick={goBackToCredentials}>
-                Back to login
+                {t('action.backToLogin')}
               </button>
             </div>
           </>
@@ -180,11 +195,11 @@ export function LoginForm({
           <>
             <form onSubmit={handleForgotSubmit}>
               <div className="bridge-form-group">
-                <label htmlFor="forgot-email">Email</label>
+                <label htmlFor="forgot-email">{t('field.email')}</label>
                 <input
                   id="forgot-email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder={t('placeholder.email')}
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -196,12 +211,12 @@ export function LoginForm({
                 className="bridge-btn bridge-btn-primary"
                 disabled={fpLoading || !email.trim()}
               >
-                {fpLoading ? <Spinner size={16} /> : 'Send reset link'}
+                {fpLoading ? <Spinner size={16} /> : t('forgot.submit')}
               </button>
             </form>
             <div className="bridge-form-footer">
               <button type="button" className="bridge-link" onClick={goBackToCredentials}>
-                Back to login
+                {t('action.backToLogin')}
               </button>
             </div>
           </>
@@ -211,16 +226,22 @@ export function LoginForm({
   }
 
   return (
-    <AuthFormWrapper heading={heading} className={className} style={style} {...rest}>
+    <AuthFormWrapper
+      heading={heading}
+      headingSlot={headingSlot}
+      className={className}
+      style={style}
+      {...rest}
+    >
       {error && <Alert variant="error">{error}</Alert>}
 
       <form onSubmit={handleSubmit}>
         <div className="bridge-form-group">
-          <label htmlFor="login-email">Email</label>
+          <label htmlFor="login-email">{t('field.email')}</label>
           <input
             id="login-email"
             type="email"
-            placeholder="you@example.com"
+            placeholder={t('placeholder.email')}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -229,12 +250,12 @@ export function LoginForm({
         </div>
 
         <div className="bridge-form-group">
-          <label htmlFor="login-password">Password</label>
+          <label htmlFor="login-password">{t('field.password')}</label>
           <div className="bridge-password-wrapper">
             <input
               id="login-password"
               type={showPassword ? 'text' : 'password'}
-              placeholder="Enter your password"
+              placeholder={t('placeholder.password')}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -245,7 +266,7 @@ export function LoginForm({
               className="bridge-password-toggle"
               onClick={() => setShowPassword((v) => !v)}
               tabIndex={-1}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? t('action.hidePassword') : t('action.showPassword')}
             >
               {showPassword ? '🙈' : '👁'}
             </button>
@@ -259,10 +280,10 @@ export function LoginForm({
         >
           {loading ? (
             <>
-              <Spinner size={16} /> Signing in…
+              <Spinner size={16} /> {t('login.submitting')}
             </>
           ) : (
-            'Sign in'
+            t('login.submit')
           )}
         </button>
 
@@ -276,14 +297,14 @@ export function LoginForm({
                 setError(null);
               }}
             >
-              Forgot password?
+              {t('login.forgotPassword')}
             </button>
           </div>
         )}
       </form>
 
       {(effectiveShowPasskeys || effectiveShowMagicLink || effectiveSso.length > 0) && (
-        <div className="bridge-divider">or</div>
+        <div className="bridge-divider">{t('divider.or')}</div>
       )}
 
       {effectiveShowPasskeys && (
@@ -292,6 +313,7 @@ export function LoginForm({
             onLogin={onLogin}
             onError={onError}
             setupHref={passkeySetupHref}
+            messages={messages}
             className="bridge-btn bridge-btn-secondary bridge-sso-btn"
           />
         </div>
@@ -304,7 +326,7 @@ export function LoginForm({
             className="bridge-btn bridge-btn-secondary bridge-sso-btn"
             data-bridge-magic-link
           >
-            <span className="bridge-sso-btn-inner">Sign in with Magic Link</span>
+            <span className="bridge-sso-btn-inner">{t('login.magicLink')}</span>
           </a>
         </div>
       )}
@@ -336,7 +358,8 @@ export function LoginForm({
       {footer ?? (
         effectiveShowSignupLink && (
           <div className="bridge-form-footer">
-            Don't have an account? <a href={signupHref ?? '/auth/signup'}>Sign up</a>
+            {t('login.signupPrompt')}{' '}
+            <a href={signupHref ?? '/auth/signup'}>{t('login.signupLink')}</a>
           </div>
         )
       )}
