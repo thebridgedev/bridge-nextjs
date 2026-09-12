@@ -1,10 +1,11 @@
 'use client';
 
-import type { FederationConnection } from '@nebulr-group/bridge-auth-core';
+import type { FederationConnection, MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { useState } from 'react';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { Spinner } from './shared/Spinner';
+import { getTranslator } from '../../../i18n';
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'> {
   connection: FederationConnection;
@@ -13,6 +14,8 @@ interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'>
   onSuccess?: () => void;
   onError?: (error: Error) => void;
   icon?: ReactNode;
+  /** Per-key copy overrides for this component only (TBP-630). */
+  messages?: MessageOverrides;
 }
 
 export function SsoButton({
@@ -22,12 +25,16 @@ export function SsoButton({
   onSuccess,
   onError,
   icon,
+  messages,
   className,
   style,
   ...rest
 }: Props) {
+  const t = getTranslator(messages);
   const [loading, setLoading] = useState(false);
-  const buttonLabel = label ?? `Continue with ${connection.name}`;
+  // `label` still wins: an app naming its own provider button is voice, not
+  // mechanics, and the catalogue only supplies the default (TBP-634).
+  const buttonLabel = label ?? t('sso.continueWith', { provider: connection.name });
 
   async function handleClick() {
     if (loading) return;
@@ -37,12 +44,12 @@ export function SsoButton({
       if (result.type === 'auth_success') {
         onSuccess?.();
       } else if (result.type === 'auth_error') {
-        throw new Error(result.error || 'SSO login failed');
+        throw new Error(result.error || t('sso.error.login'));
       }
     } catch (err: any) {
       const message = err.message?.includes('popup')
-        ? 'Pop-up was blocked. Please allow pop-ups and try again.'
-        : err.message || 'SSO login failed';
+        ? t('sso.error.popupBlocked')
+        : err.message || t('sso.error.login');
       onError?.(new Error(message));
     } finally {
       setLoading(false);

@@ -170,7 +170,8 @@ export function LoginForm({
 
   if (authState === 'mfa-required') return <MfaChallenge onError={onError} messages={messages} />;
   if ((authState as any) === 'mfa-setup-required') return <MfaSetup onError={onError} messages={messages} />;
-  if (authState === 'tenant-selection') return <TenantSelector onError={onError} />;
+  if (authState === 'tenant-selection')
+    return <TenantSelector onError={onError} messages={messages} />;
 
   if (step === 'forgot-password') {
     return (
