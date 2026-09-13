@@ -1,11 +1,12 @@
 'use client';
 
-import type { Workspace } from '@nebulr-group/bridge-auth-core';
+import type { MessageOverrides, Workspace } from '@nebulr-group/bridge-auth-core';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { getBridgeAuth, useBridgeStore } from '../../../core/bridge-instance';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
+import { getTranslator } from '../../../i18n';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   onSwitch?: () => void;
@@ -16,16 +17,20 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
     isLoading: boolean;
     onSelect: () => void;
   }) => ReactNode;
+  /** Per-key copy overrides for this component only (TBP-630). */
+  messages?: MessageOverrides;
 }
 
 export function WorkspaceSelector({
   onSwitch,
   onError,
   workspaceItem,
+  messages,
   className,
   style,
   ...rest
 }: Props) {
+  const t = getTranslator(messages);
   const profile = useBridgeStore((s) => s.profile);
   const currentWorkspaceId = profile?.id ?? null;
 
@@ -42,7 +47,7 @@ export function WorkspaceSelector({
         const ws = await (getBridgeAuth() as any).getWorkspaces();
         if (mounted) setWorkspaces(ws);
       } catch (err: any) {
-        if (mounted) setLoadError(err.message || 'Failed to load workspaces.');
+        if (mounted) setLoadError(err.message || t('workspace.error.load'));
       } finally {
         if (mounted) setLoadingList(false);
       }
@@ -60,7 +65,7 @@ export function WorkspaceSelector({
       await (getBridgeAuth() as any).switchWorkspace(workspace.id);
       onSwitch?.();
     } catch (err: any) {
-      setSwitchError(err.message || 'Failed to switch workspace.');
+      setSwitchError(err.message || t('workspace.error.switch'));
       onError?.(err);
     } finally {
       setSwitchingId(null);

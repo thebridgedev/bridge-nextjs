@@ -1,27 +1,32 @@
 'use client';
 
-import type { TenantUser } from '@nebulr-group/bridge-auth-core';
+import type { MessageOverrides, TenantUser } from '@nebulr-group/bridge-auth-core';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useState } from 'react';
 import { getBridgeAuth, useBridgeStore } from '../../../core/bridge-instance';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
+import { getTranslator } from '../../../i18n';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError' | 'onSelect'> {
   onSelect?: () => void;
   onError?: (error: Error) => void;
   tenantItem?: (tu: TenantUser) => ReactNode;
+  /** Per-key copy overrides for this component only (TBP-630). */
+  messages?: MessageOverrides;
 }
 
 export function TenantSelector({
   onSelect,
   onError,
   tenantItem,
+  messages,
   className,
   style,
   ...rest
 }: Props) {
+  const t = getTranslator(messages);
   const tenantUsers = useBridgeStore((s) => s.tenantUsers);
 
   const [loading, setLoading] = useState(false);
@@ -37,7 +42,7 @@ export function TenantSelector({
       await (getBridgeAuth() as any).selectTenant(tenantUser.id);
       onSelect?.();
     } catch (err: any) {
-      setError(err.message || 'Failed to select workspace.');
+      setError(err.message || t('tenant.error.select'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -46,7 +51,7 @@ export function TenantSelector({
   }
 
   return (
-    <AuthFormWrapper heading="Choose a workspace" className={className} style={style} {...rest}>
+    <AuthFormWrapper heading={t('tenant.chooseHeading')} className={className} style={style} {...rest}>
       {error && <Alert variant="error">{error}</Alert>}
 
       <div className="bridge-tenant-list">
