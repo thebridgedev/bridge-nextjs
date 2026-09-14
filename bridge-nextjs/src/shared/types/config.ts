@@ -55,6 +55,15 @@ export interface BridgeConfig extends BridgeAuthConfig {
   returnTo?: ReturnToConfig;
 
   /**
+   * Show the "Live updates off — why?" corner badge that `<BridgeProvider>`
+   * mounts while realtime is refused, degraded or stuck retrying (TBP-644).
+   * It only ever renders in development builds (`NODE_ENV !== 'production'`);
+   * set `false` to hide it there too. Production builds never show it.
+   * @default true
+   */
+  devBadge?: boolean;
+
+  /**
    * Billing paywall configuration. When set, Bridge redirects authenticated
    * users that still have to pick a plan (`shouldSelectPlan === true` and the
    * app has not opted out via `paymentsAutoRedirect: false`) to `paywallRoute`

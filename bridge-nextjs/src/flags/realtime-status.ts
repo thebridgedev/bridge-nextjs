@@ -8,5 +8,10 @@
  * with svelte's module layout (the full Feature Flags surface lands in a
  * follow-up feature).
  */
-export { realtimeStatus, useRealtimeStatus } from '../core/realtime-status';
-export type { ConnectionState } from '@nebulr-group/bridge-auth-core';
+export {
+  realtimeStatus,
+  useRealtimeStatus,
+  realtimeStatusDetail,
+  useRealtimeStatusDetail,
+} from '../core/realtime-status';
+export type { ConnectionState, RealtimeStatus } from '@nebulr-group/bridge-auth-core';
