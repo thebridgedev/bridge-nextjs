@@ -42,7 +42,11 @@ import {
 } from '@nebulr-group/bridge-auth-core';
 
 import { getBridgeAuth, useBridgeStore } from './bridge-instance';
-import { applySessionSnapshot } from './snapshot-stores';
+import {
+  applyEntitlementsChanged,
+  applySessionSnapshot,
+  applySubscriptionPlanChanged,
+} from './snapshot-stores';
 import { bridgeEvents } from './events';
 import { _setRealtimeStatus, _setRealtimeStatusDetail } from './realtime-status';
 import { logger } from '../shared/logger';
@@ -195,8 +199,18 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
   try {
     const billing = useBillingBridge();
     billing.attachToRealtimeClient(_realtime);
+    // TBP-644 — the two pushes that carry the complete new value also move the
+    // `bridge.tenant.*` slices, which were otherwise written only by
+    // `session.snapshot`. A plan change never re-sends a snapshot, so without
+    // this an upgraded app kept rendering the old plan until a reload. The slice
+    // is patched BEFORE dispatch so a `bridge.events` handler that reads
+    // `bridge.tenant.subscription` already sees the new plan. Lifecycle events
+    // are deliberately not mirrored: their payloads carry no status.
     billing.handle({
-      'subscription.plan_changed': (m) => bridgeEvents._dispatch(m),
+      'subscription.plan_changed': (m) => {
+        try { applySubscriptionPlanChanged(m); } catch { /* store updates shouldn't throw, defensive */ }
+        bridgeEvents._dispatch(m);
+      },
       'payment.failed': (m) => bridgeEvents._dispatch(m),
       'payment.succeeded': (m) => bridgeEvents._dispatch(m),
       'subscription.created': (m) => bridgeEvents._dispatch(m),
@@ -212,7 +226,11 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
       'dunning.recovered': (m) => bridgeEvents._dispatch(m),
       'dunning.exhausted': (m) => bridgeEvents._dispatch(m),
       'quota.updated': (m) => bridgeEvents._dispatch(m),
-      'entitlements.changed': (m) => bridgeEvents._dispatch(m),
+      'entitlements.changed': (m) => {
+        // Only the payload-carrying variant has a map; the signal-only one is a no-op here.
+        try { applyEntitlementsChanged(m as { entitlements?: unknown }); } catch { /* defensive */ }
+        bridgeEvents._dispatch(m);
+      },
     });
   } catch (err) {
     logger.debug('[bridge-runtime] billing bridge attach skipped:', err);

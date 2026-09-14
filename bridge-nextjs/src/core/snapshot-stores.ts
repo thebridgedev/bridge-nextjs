@@ -97,6 +97,47 @@ export function applySessionSnapshot(data: SessionSnapshotData): void {
   if (Object.keys(patch).length > 0) useSnapshotStore.setState(patch);
 }
 
+/**
+ * TBP-644 — move `bridge.tenant.subscription` on a `subscription.plan_changed`
+ * push. Until now this slice was written only by `session.snapshot`, and a plan
+ * change never re-sends one, so an upgraded workspace kept rendering its old
+ * plan until a reload — while auth-core's `useBridge().subscription`, hydrated
+ * from the very same push, already had the new one.
+ *
+ * The push is authoritative for plan and status (auth-core's contract for it:
+ * "consumers hydrate their cached state on receipt; no refetch required").
+ * Fields it does not carry (`endsAt`, `gateEngaged`) keep their current value.
+ * A payload without a plan slug is ignored. Never throws.
+ */
+export function applySubscriptionPlanChanged(
+  msg: { to?: { slug?: unknown; name?: unknown } | null; status?: unknown } | null | undefined,
+): void {
+  const slug = msg?.to?.slug;
+  if (typeof slug !== 'string' || slug === '') return;
+  const name = typeof msg?.to?.name === 'string' ? msg.to.name : slug;
+  const status = typeof msg?.status === 'string' ? msg.status : undefined;
+  useSnapshotStore.setState((s) => ({
+    tenantSubscription: {
+      ...(s.tenantSubscription ?? {}),
+      plan: { slug, name },
+      status: status ?? s.tenantSubscription?.status ?? '',
+    },
+  }));
+}
+
+/**
+ * TBP-644 — replace `bridge.tenant.entitlements` from an `entitlements.changed`
+ * push that carries the map (the slice is documented as "replaced wholesale on
+ * every entitlements.changed push", but only `session.snapshot` ever wrote it).
+ * The signal-only lifecycle variant of the same kind carries no map and leaves
+ * the slice untouched. Never throws.
+ */
+export function applyEntitlementsChanged(msg: { entitlements?: unknown } | null | undefined): void {
+  const map = msg?.entitlements;
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return;
+  useSnapshotStore.setState({ tenantEntitlements: { ...(map as Record<string, boolean>) } });
+}
+
 /** Test-only: reset every snapshot slice to `null`. */
 export function __resetSnapshotStores(): void {
   useSnapshotStore.setState({

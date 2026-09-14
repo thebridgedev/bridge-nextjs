@@ -67,7 +67,10 @@ export interface BridgeTenantSurface {
   id: BridgeReadable<string | null>;
   /** Workspace display name. Populated by session.snapshot. */
   name: BridgeReadable<string | null>;
-  /** Canonical subscription (plan + status + endsAt). Populated by session.snapshot. */
+  /**
+   * Canonical subscription (plan + status + endsAt). Populated by session.snapshot
+   * and moved by every `subscription.plan_changed` push.
+   */
   subscription: BridgeReadable<SubscriptionSnapshot | null>;
   /**
    * Entitlements scope. `snapshot` is the full `{ key: boolean }` map; `can(key)`
