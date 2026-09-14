@@ -173,6 +173,35 @@ export function LoginForm({
   if (authState === 'tenant-selection')
     return <TenantSelector onError={onError} messages={messages} />;
 
+  // Settling: the session is real and the host app has not navigated yet.
+  //
+  // This test is `!== 'unauthenticated'` rather than an explicit list of
+  // `authenticated | credentials-validated` on purpose. Those two used to fall
+  // through to the credentials form below, so somebody who had just typed their
+  // password correctly was shown the password form again — which reads as a
+  // refusal, and the reasonable response is to type it again (TBP-635). The
+  // window opens when the token exchange resolves and closes only when the
+  // consumer's router lands, because LoginForm fires `onLogin` and deliberately
+  // does not navigate.
+  //
+  // Listing the two states would fix the two we know about and leave the next
+  // `AuthState` member falling into the same hole. Inverting the test means the
+  // credentials form renders ONLY for `unauthenticated`, and anything else lands
+  // on a spinner — wrong-but-harmless instead of wrong-and-alarming.
+  //
+  // `login.submitting` is reused rather than given its own key: it already says
+  // "Signing in…" in all twelve locales.
+  if (authState !== 'unauthenticated') {
+    return (
+      <AuthFormWrapper heading={null} className={className} style={style} {...rest}>
+        <div className="bridge-auth-settling" data-bridge-auth-settling>
+          <Spinner size={24} />
+          <span>{t('login.submitting')}</span>
+        </div>
+      </AuthFormWrapper>
+    );
+  }
+
   if (step === 'forgot-password') {
     return (
       <AuthFormWrapper
