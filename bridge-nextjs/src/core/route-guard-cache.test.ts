@@ -146,6 +146,8 @@ describe('route-guard cache invalidation (TBP-654)', () => {
   });
 
   it('user.state_changed invalidates exactly once, before subscribers and before the token refresh', async () => {
+    // Signed in: a signed-out session has no token to refresh (TBP-654 upgrade race).
+    setTokens(token());
     start();
     const seenBySubscriber: number[] = [];
     onBridgeRealtimeUserState(() => seenBySubscriber.push(invalidate.mock.calls.length));

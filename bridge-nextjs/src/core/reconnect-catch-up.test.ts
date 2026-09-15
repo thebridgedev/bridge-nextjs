@@ -164,15 +164,28 @@ describe('reconnect catch-up (TBP-660)', () => {
     expect(useSnapshotStore.getState().tenantEntitlements).toEqual(PRO_ENTITLEMENTS.entitlements);
     expect(useBridge().subscription.snapshot().state?.plan.slug).toBe('pro');
     expect(useBridge().entitlements.can('pro_reports')).toBe(true);
-    // Loop guard intact: no token refresh, no further reauthorize.
-    expect(refreshTokens).not.toHaveBeenCalled();
+    // TBP-654 — the recovered plan change starts the token refresh the route
+    // guard waits for, exactly like the lost push would have. Once.
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
     expect(reauthorize).toHaveBeenCalledTimes(1);
+
+    // Loop guard intact: the refreshed token reauthorizes, and that reconnect's
+    // catch-up finds nothing new — no second refresh.
+    setTokens(token());
+    expect(reauthorize).toHaveBeenCalledTimes(2);
+    open();
+    await flush();
+    expect(calls('/billing/state')).toBe(2);
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    expect(reauthorize).toHaveBeenCalledTimes(2);
   });
 
   it('a network-blip reconnect still refreshes the token, and catches up once', async () => {
     open(); // external reconnect
     await flush();
 
+    // One refresh: the plan change the catch-up recovers joins the refresh the
+    // reconnect itself started (TBP-654) rather than starting a second.
     expect(refreshTokens).toHaveBeenCalledTimes(1);
     expect(calls('/billing/state')).toBe(1);
     expect(calls('/entitlements')).toBe(1);
@@ -227,8 +240,26 @@ describe('reconnect catch-up (TBP-660)', () => {
     open();
     await flush();
 
-    expect(reasons).toEqual(['reconnect']);
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    // The reconnect itself, then the plan change it recovered (Free → Pro).
+    expect(reasons).toEqual(['reconnect', 'subscription.plan_changed']);
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    off();
+  });
+
+  it('a reconnect that recovers nothing new starts no refresh (TBP-654)', async () => {
+    open();
+    await flush(); // recovers Free → Pro, refreshes once
+    refreshTokens.mockClear();
+    const reasons: BridgeAuthorizationChangeReason[] = [];
+    const off = onBridgeAuthorizationChange((r) => reasons.push(r));
+
+    setTokens(token()); // our own reauthorize → self-induced reconnect
+    open();
+    await flush();
+
+    expect(calls('/billing/state')).toBe(2);
+    expect(reasons).toEqual(['token', 'reconnect']);
+    expect(refreshTokens).not.toHaveBeenCalled();
     off();
   });
 });
