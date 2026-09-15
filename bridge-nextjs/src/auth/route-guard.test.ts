@@ -19,11 +19,15 @@ const mockInvalidateFeatureFlagCache = jest.fn();
 const mockCheckRouteRestrictions = jest.fn<Promise<string | null>, [string]>();
 const mockShouldRedirectToLogin = jest.fn<boolean, [string]>().mockReturnValue(false);
 
+const mockIsAuthenticated = jest.fn<boolean, []>(() => false);
+const mockIsPublicRoute = jest.fn<boolean, [string]>(() => false);
+
 jest.mock('../core/bridge-instance', () => ({
   getBridgeAuth: () => ({
     invalidateFeatureFlagCache: mockInvalidateFeatureFlagCache,
+    isAuthenticated: () => mockIsAuthenticated(),
     createRouteGuard: () => ({
-      isPublicRoute: () => false,
+      isPublicRoute: (p: string) => mockIsPublicRoute(p),
       isProtectedRoute: () => true,
       shouldRedirectToLogin: mockShouldRedirectToLogin,
       checkRouteRestrictions: mockCheckRouteRestrictions,
@@ -105,5 +109,64 @@ describe('createRouteGuard — stale in-flight verdicts (TBP-654)', () => {
       to: '/upgrade',
     });
     expect(mockCheckRouteRestrictions).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('createRouteGuard — fails closed when it cannot decide (TBP-653)', () => {
+  const rules = {
+    rules: [
+      { match: '/pro', featureFlag: 'pro-page', redirectTo: '/upgrade' },
+      { match: '/about', public: true },
+    ],
+    defaultAccess: 'protected',
+  };
+
+  beforeEach(() => {
+    mockIsAuthenticated.mockReset().mockReturnValue(false);
+    mockIsPublicRoute.mockReset().mockReturnValue(false);
+  });
+
+  it('a signed-out visitor goes to login, carrying the attempted target', async () => {
+    mockShouldRedirectToLogin.mockImplementation(() => {
+      throw new Error('malformed config');
+    });
+
+    await expect(createRouteGuard(rules).getNavigationDecision('/pro', '/pro?x=1')).resolves.toEqual({
+      type: 'login',
+      loginUrl: 'https://login.example/login',
+      returnTo: '/pro?x=1',
+    });
+  });
+
+  it('a signed-in user whose flag check throws gets the rule redirect, never allow', async () => {
+    mockIsAuthenticated.mockReturnValue(true);
+    mockCheckRouteRestrictions.mockRejectedValue(new Error('network down'));
+
+    await expect(createRouteGuard(rules).getNavigationDecision('/pro')).resolves.toEqual({
+      type: 'redirect',
+      to: '/upgrade',
+    });
+  });
+
+  it('a public route with no requirement stays reachable', async () => {
+    mockIsPublicRoute.mockReturnValue(true);
+    mockCheckRouteRestrictions.mockRejectedValue(new Error('network down'));
+
+    await expect(createRouteGuard(rules).getNavigationDecision('/about')).resolves.toEqual({ type: 'allow' });
+  });
+
+  it('a public route that also carries a flag requirement is still denied', async () => {
+    mockIsPublicRoute.mockReturnValue(true);
+    mockIsAuthenticated.mockReturnValue(true);
+    mockCheckRouteRestrictions.mockRejectedValue(new Error('network down'));
+    const publicButFlagged = {
+      rules: [{ match: '/pro', public: true, featureFlag: 'pro-page', redirectTo: '/upgrade' }],
+      defaultAccess: 'protected',
+    };
+
+    await expect(createRouteGuard(publicButFlagged).getNavigationDecision('/pro')).resolves.toEqual({
+      type: 'redirect',
+      to: '/upgrade',
+    });
   });
 });

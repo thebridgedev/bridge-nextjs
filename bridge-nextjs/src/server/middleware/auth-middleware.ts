@@ -13,7 +13,7 @@ import { stashReturnToCookie } from '../utils/return-to';
  *   an HTML login page is useless to a fetch/XHR caller).
  * - Page navigations are redirected to the Bridge login URL.
  */
-function unauthenticatedResponse(
+export function unauthenticatedResponse(
   request: NextRequest,
   loginUrl: string,
   returnTo?: string | null,
@@ -45,7 +45,7 @@ function unauthenticatedResponse(
  *   break login rather than improve it. It goes in a cookie instead, and
  *   `createBridgeCallbackRoute` consumes it when the round-trip lands.
  */
-function resolveLoginDestination(
+export function resolveLoginDestination(
   request: NextRequest,
   config: BridgeConfig,
   hostedLoginUrl: string,

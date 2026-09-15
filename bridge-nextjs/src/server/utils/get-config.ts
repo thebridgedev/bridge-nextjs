@@ -17,7 +17,11 @@ const DEFAULT_CONFIG: Partial<BridgeConfig> = {
   cloudViewsUrl: `${PROD_API_BASE_URL}/cloud-views`,
   teamManagementUrl: `${PROD_API_BASE_URL}/cloud-views/user-management-portal/users`,
   defaultRedirectRoute: '/',
-  loginRoute: '/login',
+  // No `loginRoute` default (TBP-629 follow-up). The middleware reads a set
+  // `loginRoute` as "SDK mode: redirect to the app's own login page"; a default
+  // here made every hosted-mode app (no NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE) send
+  // signed-out visitors to `/login?redirectUri=…` on its own origin instead of
+  // the hosted login page. Set NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE for SDK mode.
   debug: false,
 };
 

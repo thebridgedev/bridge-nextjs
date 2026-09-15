@@ -5,6 +5,7 @@
 // access rules consistently with the rest of the SDK.
 
 import { getBridgeAuth } from '../core/bridge-instance';
+import { logger } from '../shared/logger';
 import { dropFlagCache, guardCacheGeneration } from './guard-cache';
 
 export type {
@@ -15,7 +16,7 @@ export type {
   RouteRule,
 } from '@nebulr-group/bridge-auth-core';
 
-import type { NavigationDecision, RouteGuardConfig } from '@nebulr-group/bridge-auth-core';
+import type { NavigationDecision, RouteGuardConfig, RouteRule } from '@nebulr-group/bridge-auth-core';
 
 // How many times a restriction check is re-run when the cache was invalidated
 // underneath it (TBP-654). Bounded so a burst of invalidations cannot spin.
@@ -41,6 +42,62 @@ export function createRouteGuard(
     }
   }
 
+  function loginDecision(pathname: string, attempted?: string): NavigationDecision {
+    // TBP-629 — the attempted target (path + query) rides along on every login
+    // decision, including the fail-closed ones below.
+    let returnTo: string | null = null;
+    try {
+      returnTo = guard.resolveReturnTo(attempted ?? pathname);
+    } catch {
+      returnTo = null;
+    }
+    let loginUrl = '';
+    try {
+      loginUrl = guard.getLoginRedirect();
+    } catch {
+      // SDK mode never reads loginUrl; hosted mode rebuilds it at redirect time.
+    }
+    return { type: 'login', loginUrl, ...(returnTo ? { returnTo } : {}) };
+  }
+
+  // TBP-653 — the guard could not reach a decision (a network error on a flag
+  // check, malformed config, an exception anywhere in the chain). That must
+  // never let a restricted route through, and must not surface as a rejected
+  // promise a consumer may treat as "no objection":
+  //   - a public route with no flag/billing requirement stays reachable;
+  //   - a signed-out visitor is sent to login;
+  //   - a signed-in user is treated as failing the route's requirement and
+  //     sent where the rule says a failing user goes.
+  function failClosed(pathname: string, attempted: string | undefined, err: unknown): NavigationDecision {
+    logger.error('[route-guard] could not evaluate route; denying access', pathname, err);
+    let rule: RouteRule | null = null;
+    try {
+      rule = findMatchingRule(pathname, config?.rules ?? []);
+    } catch {
+      rule = null;
+    }
+    const restricted = !!(rule?.featureFlag || (rule as { billing?: string } | null)?.billing === 'hard');
+    let isPublic = false;
+    try {
+      isPublic = guard.isPublicRoute(pathname);
+    } catch {
+      isPublic = false;
+    }
+    if (isPublic && !restricted) return { type: 'allow' };
+
+    let authenticated = false;
+    try {
+      authenticated = getBridgeAuth().isAuthenticated();
+    } catch {
+      authenticated = false;
+    }
+    if (authenticated) {
+      const to = rule?.redirectTo ?? '/';
+      if (to !== pathname) return { type: 'redirect', to };
+    }
+    return loginDecision(pathname, attempted);
+  }
+
   return {
     ...guard,
     async checkRouteRestrictions(pathname: string): Promise<string | null> {
@@ -48,25 +105,38 @@ export function createRouteGuard(
       return checkRestrictionsFresh(pathname);
     },
     async getNavigationDecision(pathname: string, attempted?: string): Promise<NavigationDecision> {
-      if (guard.shouldRedirectToLogin(pathname)) {
-        // TBP-629 — this branch short-circuits before flagsReady on purpose (an
-        // unauthenticated visitor needs no flag evaluation), which is exactly
-        // why `attempted` has to be threaded through here too. The wrapper
-        // rebuilds the decision by hand and would otherwise silently drop any
-        // argument auth-core's version learned to accept.
-        const returnTo = guard.resolveReturnTo(attempted ?? pathname);
-        return {
-          type: 'login',
-          loginUrl: guard.getLoginRedirect(),
-          ...(returnTo ? { returnTo } : {}),
-        };
+      try {
+        if (guard.shouldRedirectToLogin(pathname)) {
+          // TBP-629 — this branch short-circuits before flagsReady on purpose
+          // (an unauthenticated visitor needs no flag evaluation), which is
+          // exactly why `attempted` has to be threaded through here too.
+          return loginDecision(pathname, attempted);
+        }
+        await flagsReady;
+        const redirectTo = await checkRestrictionsFresh(pathname);
+        if (redirectTo) {
+          return { type: 'redirect', to: redirectTo };
+        }
+        return { type: 'allow' };
+      } catch (err) {
+        return failClosed(pathname, attempted, err);
       }
-      await flagsReady;
-      const redirectTo = await checkRestrictionsFresh(pathname);
-      if (redirectTo) {
-        return { type: 'redirect', to: redirectTo };
-      }
-      return { type: 'allow' };
     },
   };
+}
+
+// Same matching semantics as auth-core's route guard: a RegExp is tested as-is,
+// a string is an exact match unless it contains `*` wildcards. First match wins.
+function toRegExp(pattern: string | RegExp): RegExp {
+  if (pattern instanceof RegExp) return pattern;
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!pattern.includes('*')) return new RegExp(`^${escaped}$`);
+  return new RegExp(`^${escaped.replace(/\\\*/g, '.*')}$`);
+}
+
+function findMatchingRule(pathname: string, rules: RouteRule[]): RouteRule | null {
+  for (const rule of rules) {
+    if (toRegExp(rule.match).test(pathname)) return rule;
+  }
+  return null;
 }

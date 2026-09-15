@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from './auth-middleware';
+import { resolveLoginDestination, unauthenticatedResponse, withAuth } from './auth-middleware';
 import { FeatureFlagServer } from '../utils/feature-flag.server';
 import { getConfig } from '../utils/get-config';
 import { isApiRequest } from '../utils/is-api-request';
@@ -230,8 +230,14 @@ async function evaluateFeatureFlagRule(
     const authService = AuthService.getInstance();
     authService.init(config);
     const currentOrigin = new URL(request.url).origin;
-    const loginUrl = authService.createLoginUrl({}, currentOrigin);
-    return NextResponse.redirect(loginUrl);
+    const hostedLoginUrl = authService.createLoginUrl({}, currentOrigin);
+    // TBP-629 — the same login destination as any other protected route: the
+    // app's `loginRoute` with `?redirectUri=` in SDK mode, the hosted page plus
+    // the return-to cookie in hosted mode. This branch used to redirect to the
+    // hosted page bare, so a signed-out visitor on a flag-gated deep link lost
+    // it (and an SDK-mode app's own login page was skipped).
+    const destination = resolveLoginDestination(request, config, hostedLoginUrl);
+    return unauthenticatedResponse(request, destination.loginUrl, destination.returnTo);
   }
 
   const featureFlagServer = FeatureFlagServer.getInstance();
