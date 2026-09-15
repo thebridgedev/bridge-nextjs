@@ -6,7 +6,12 @@
 
 import { getBridgeAuth } from '../core/bridge-instance';
 import { logger } from '../shared/logger';
-import { dropFlagCache, guardCacheGeneration } from './guard-cache';
+import {
+  AUTHORIZATION_CHANGE_WAIT_MS,
+  dropFlagCache,
+  guardCacheGeneration,
+  settleAuthorizationChange,
+} from './guard-cache';
 
 export type {
   FlagRequirement,
@@ -32,8 +37,14 @@ export function createRouteGuard(
   // invalidated while the check was in flight (plan change, token refresh),
   // the answer may predate the change AND has just been written back into the
   // cache. Discard it and ask again.
-  async function checkRestrictionsFresh(pathname: string): Promise<string | null> {
+  //
+  // Each read first waits (bounded by `deadline`) for a token refresh that a
+  // plan / entitlements / user-state change started: the page shows the new
+  // plan a few hundred ms before the token carrying it lands, and a verdict
+  // taken in between would be evaluated with the old one.
+  async function checkRestrictionsFresh(pathname: string, deadline: number): Promise<string | null> {
     for (let attempt = 1; ; attempt++) {
+      await settleAuthorizationChange(deadline);
       const generation = guardCacheGeneration();
       const redirectTo = await guard.checkRouteRestrictions(pathname);
       if (generation === guardCacheGeneration()) return redirectTo;
@@ -101,11 +112,18 @@ export function createRouteGuard(
   return {
     ...guard,
     async checkRouteRestrictions(pathname: string): Promise<string | null> {
+      const deadline = Date.now() + AUTHORIZATION_CHANGE_WAIT_MS;
       await flagsReady;
-      return checkRestrictionsFresh(pathname);
+      return checkRestrictionsFresh(pathname, deadline);
     },
     async getNavigationDecision(pathname: string, attempted?: string): Promise<NavigationDecision> {
+      // TBP-654 — one bound for the whole decision, however many reads it takes.
+      const deadline = Date.now() + AUTHORIZATION_CHANGE_WAIT_MS;
       try {
+        // A refresh that fails can sign the session out, so let it land before
+        // the signed-in check too. Nothing pending (always the case for a
+        // signed-out visitor) → no wait at all.
+        await settleAuthorizationChange(deadline);
         if (guard.shouldRedirectToLogin(pathname)) {
           // TBP-629 — this branch short-circuits before flagsReady on purpose
           // (an unauthenticated visitor needs no flag evaluation), which is
@@ -113,7 +131,7 @@ export function createRouteGuard(
           return loginDecision(pathname, attempted);
         }
         await flagsReady;
-        const redirectTo = await checkRestrictionsFresh(pathname);
+        const redirectTo = await checkRestrictionsFresh(pathname, deadline);
         if (redirectTo) {
           return { type: 'redirect', to: redirectTo };
         }
