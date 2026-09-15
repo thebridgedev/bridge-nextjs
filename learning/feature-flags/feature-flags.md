@@ -51,7 +51,7 @@ it with `useFlag`, then flip it and watch your app change live.
   route renders.
 - [Use flags on your backend](/feature-flags/using/backend/): forward the eval
   context in the `x-bridge-context` header so your server and browser agree on
-  identity and bucketing.
+  identity and bucketing. The header is internal: it is built from the verified session and a client-supplied copy is never trusted.
 
 ## Targeting
 

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BRIDGE_CONTEXT_HEADER } from '@nebulr-group/bridge-auth-core';
 import { logger } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 import { FeatureFlagServer } from '../utils/feature-flag.server';
 import { getConfig } from '../utils/get-config';
 import { isApiRequest } from '../utils/is-api-request';
+import { nextWithTrustedContext } from '../utils/bridge-context-header';
 
 export interface FeatureFlagProtection {
   flag: string;
@@ -35,16 +35,16 @@ export interface WithFeatureFlagOptions {
  * `NextResponse.next({ request: { headers } })`, so the propagated context is
  * available to API route handlers / server components in the same app, and to
  * any backend the app proxies to.
+ *
+ * TBP-671 — the header is internal. A client-supplied copy is ALWAYS removed;
+ * only the context built here from the verified session token is forwarded.
+ * (This used to return a plain `NextResponse.next()` when there was no verified
+ * context, which forwarded a spoofed header untouched.)
  */
 async function withContextHeader(request: NextRequest): Promise<NextResponse> {
   const featureFlagServer = FeatureFlagServer.getInstance();
   const serialized = await featureFlagServer.serializeVerifiedContextForRequest(request);
-  if (!serialized) {
-    return NextResponse.next();
-  }
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set(BRIDGE_CONTEXT_HEADER, serialized);
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  return nextWithTrustedContext(request, serialized);
 }
 
 /**

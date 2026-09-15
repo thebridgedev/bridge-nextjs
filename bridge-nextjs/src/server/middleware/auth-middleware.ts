@@ -5,6 +5,7 @@ import { getConfig } from '../utils/get-config';
 import { initServices } from '../utils/init-services';
 import { isApiRequest } from '../utils/is-api-request';
 import { stashReturnToCookie } from '../utils/return-to';
+import { nextWithTrustedContext } from '../utils/bridge-context-header';
 
 /**
  * Denial response for an unauthenticated request.
@@ -113,7 +114,7 @@ export function withAuth(options: WithAuthOptions = {}) {
     });
     
     if (isPublicPath) {
-      return NextResponse.next();
+      return nextWithTrustedContext(request);
     }
     
     // Check if user is authenticated using TokenServiceServer
@@ -140,7 +141,8 @@ export function withAuth(options: WithAuthOptions = {}) {
     }
     
     // Create a response object to potentially set new cookies
-    const response = NextResponse.next();
+    // TBP-671 — never forward a client-supplied x-bridge-context.
+    const response = nextWithTrustedContext(request);
     
     // Get token expiry time for logging
     const expiryTime = tokenService.getTokenExpiryTime(accessToken);
