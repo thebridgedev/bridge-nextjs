@@ -51,7 +51,11 @@ export {
   realtimeStatusDetail,
   useRealtimeStatusDetail,
 } from './core/realtime-status';
-export { onBridgeRealtimeStatus } from './core/bridge-runtime';
+export {
+  onBridgeAuthorizationChange,
+  onBridgeRealtimeStatus,
+  type BridgeAuthorizationChangeReason,
+} from './core/bridge-runtime';
 export type { ConnectionState, RealtimeStatus } from '@nebulr-group/bridge-auth-core';
 
 // ── Reactive hooks (auth-core-backed) ─────────────────────────────────────────
