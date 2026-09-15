@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage } from './shared/auth-error';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -66,7 +67,7 @@ export function PasskeySetup({
       setDone(true);
       onComplete?.();
     } catch (err: any) {
-      setError(err.message || t('passkey.error.setupFailed'));
+      setError(authErrorMessage(err, t, 'passkey.error.setupFailed'));
       onError?.(err);
     } finally {
       setLoading(false);

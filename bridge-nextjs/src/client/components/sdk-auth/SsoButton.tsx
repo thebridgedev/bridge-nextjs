@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { Spinner } from './shared/Spinner';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage } from './shared/auth-error';
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'> {
   connection: FederationConnection;
@@ -49,7 +50,7 @@ export function SsoButton({
     } catch (err: any) {
       const message = err.message?.includes('popup')
         ? t('sso.error.popupBlocked')
-        : err.message || t('sso.error.login');
+        : authErrorMessage(err, t, 'sso.error.login');
       onError?.(new Error(message));
     } finally {
       setLoading(false);

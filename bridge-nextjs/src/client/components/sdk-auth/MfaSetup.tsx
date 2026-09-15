@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { MessageKey, MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage } from './shared/auth-error';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -77,7 +78,7 @@ export function MfaSetup({
       setStep('verify');
       setResendCountdown(60);
     } catch (err: any) {
-      setError(err.message || t('mfaSetup.error.sendCode'));
+      setError(authErrorMessage(err, t, 'mfaSetup.error.sendCode'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -93,7 +94,7 @@ export function MfaSetup({
       setCode('');
       setResendCountdown(60);
     } catch (err: any) {
-      setError(err.message || t('mfaSetup.error.resend'));
+      setError(authErrorMessage(err, t, 'mfaSetup.error.resend'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -110,7 +111,7 @@ export function MfaSetup({
       setBackupCode(result.backupCode ?? null);
       setStep('backup');
     } catch (err: any) {
-      setError(err.message || t('mfa.error.invalidCode'));
+      setError(authErrorMessage(err, t, 'mfa.error.invalidCode'));
       onError?.(err);
     } finally {
       setLoading(false);

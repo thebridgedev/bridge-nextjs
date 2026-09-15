@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage } from './shared/auth-error';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -68,7 +69,7 @@ export function SignupForm({
       setSuccess(true);
       onSignup?.();
     } catch (err: any) {
-      setError(err.message || t('signup.error.create'));
+      setError(authErrorMessage(err, t, 'signup.error.create'));
       onError?.(err);
     } finally {
       setLoading(false);

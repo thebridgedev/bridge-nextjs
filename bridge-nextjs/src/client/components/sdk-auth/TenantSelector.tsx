@@ -8,6 +8,7 @@ import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage } from './shared/auth-error';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError' | 'onSelect'> {
   onSelect?: () => void;
@@ -42,7 +43,7 @@ export function TenantSelector({
       await (getBridgeAuth() as any).selectTenant(tenantUser.id);
       onSelect?.();
     } catch (err: any) {
-      setError(err.message || t('tenant.error.select'));
+      setError(authErrorMessage(err, t, 'tenant.error.select'));
       onError?.(err);
     } finally {
       setLoading(false);

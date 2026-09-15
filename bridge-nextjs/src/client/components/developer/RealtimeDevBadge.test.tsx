@@ -103,6 +103,27 @@ describe('<RealtimeDevBadge>', () => {
     expect(panel.querySelector('a')!.getAttribute('href')).toBe(unauthorized.docsUrl);
   });
 
+  it('origin_not_allowed (TBP-669): names the allowed origins and shows the fix row', () => {
+    // What an auth-core before TBP-669 passes through: side `app`, no hint.
+    _setRealtimeStatusDetail({ ...unauthorized, reason: 'origin_not_allowed', side: 'app' });
+    render(<RealtimeDevBadge />);
+    act(() => toggle()!.click());
+    const panel = container.querySelector('#bridge-realtime-dev-badge-panel')!;
+    expect(panel.textContent).toContain('origin_not_allowed');
+    expect(panel.textContent).toContain("this page's origin is not in the app's allowed origins");
+    expect(panel.textContent).not.toContain('apiBaseUrl');
+    const hint = panel.querySelector('[data-testid="bridge-realtime-dev-badge-hint"]');
+    expect(hint?.textContent).toContain('http://localhost');
+    expect(hint?.textContent).toContain('Authentication → Security → Allowed Origins');
+  });
+
+  it('no fix row for reasons without a known fix', () => {
+    _setRealtimeStatusDetail(unauthorized);
+    render(<RealtimeDevBadge />);
+    act(() => toggle()!.click());
+    expect(container.querySelector('[data-testid="bridge-realtime-dev-badge-hint"]')).toBeNull();
+  });
+
   it('Escape collapses the panel and returns focus to the toggle', () => {
     _setRealtimeStatusDetail(unauthorized);
     render(<RealtimeDevBadge />);

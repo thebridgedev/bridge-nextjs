@@ -174,6 +174,12 @@ function RealtimeDevBadgeView() {
                 <span style={s.label}>Whose side</span>
                 <span>{view.sideLabel}</span>
               </div>
+              {view.hint && (
+                <div style={s.row}>
+                  <span style={s.label}>Fix</span>
+                  <span data-testid="bridge-realtime-dev-badge-hint">{view.hint}</span>
+                </div>
+              )}
               {view.ref && (
                 <div style={s.row}>
                   <span style={s.label}>Ref</span>
