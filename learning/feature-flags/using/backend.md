@@ -23,7 +23,7 @@ await fetch('https://your-api.example.com/checkout', {
 
 `getBridgeFlagsInstance().getContext()` returns the same `{ identity, attributes }` your `useFlag` calls resolve against, including anything you've set via per-call context or `bridge.attributes` (see [Send context from your code](/feature-flags/targeting/send-context/)).
 
-> **Framework note:** Next.js can also evaluate flags in its own server layer, without a round-trip to another service: wrap a route handler with `requireFeatureFlagForRoute`, or guard paths with the `withFeatureFlags` middleware (see [Guard routes](/feature-flags/using/guard-routes/)). Both come from `@nebulr-group/bridge-nextjs/server`, evaluate against the request's token claims, and set the same `x-bridge-context` header for you, so anything downstream of them already carries the context.
+> **Framework note:** Next.js can also evaluate flags in its own server layer, without a round-trip to another service: wrap a route handler with `requireFeatureFlagForRoute`, or guard paths with the `withFeatureFlags` middleware (see [Guard routes](/feature-flags/using/guard-routes/)). Both come from `@nebulr-group/bridge-nextjs/server`, evaluate against the request's token claims, and set the same `x-bridge-context` header for you, so anything downstream of them already carries the context. `x-bridge-context` is internal: the SDK builds it from the verified session token only, removes any copy a client sends on every middleware path and in `requireFeatureFlagForRoute`, and never reads an inbound one. A backend must not trust it on a request that could have come straight from a browser.
 
 ## Reading it on a NestJS backend
 

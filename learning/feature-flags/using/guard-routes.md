@@ -40,3 +40,5 @@ protection and the middleware redirects when the flag is off.
 Route rules can also guard on authentication state; see
 [Route guards](/auth/securing/route-guards/) in the Auth section for the full
 `RouteRule` reference and the composition pattern.
+
+> **Security note:** `x-bridge-context` is internal: the SDK builds it from the verified session token only, removes any copy a client sends on every middleware path and in `requireFeatureFlagForRoute`, and never reads an inbound one. A backend must not trust it on a request that could have come straight from a browser.

@@ -6,6 +6,7 @@ import { isApiRequest } from '../utils/is-api-request';
 import { TokenServiceServer } from '../utils/token-service.server';
 import { AuthService } from '../../shared/services/auth.service';
 import { logger } from '../../shared/logger';
+import { nextWithTrustedContext } from '../utils/bridge-context-header';
 
 export interface RouteRule {
   /** Path pattern to match (string or RegExp) */
@@ -205,7 +206,7 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
   async function requireSession(request: NextRequest): Promise<NextResponse> {
     if (sdkAuth && !sessionVisible(request)) {
       warnUnenforced(request.nextUrl.pathname);
-      return NextResponse.next();
+      return nextWithTrustedContext(request);
     }
     try {
       return await authMiddleware(request);
@@ -240,7 +241,7 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
     // Handling it here would run in Edge and fetch() to stage can fail.
     // An exemption, so it applies to the exact spelling only.
     if (rawPathname === callbackPath) {
-      return NextResponse.next();
+      return nextWithTrustedContext(request);
     }
 
     // TBP-666 — decide for the raw spelling AND the normalised one (decoded,
@@ -258,7 +259,7 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
       // evaluated against the current user's identity/attributes).
       if (sdkAuth && !sessionVisible(request)) {
         warnUnenforced(rawPathname);
-        return NextResponse.next();
+        return nextWithTrustedContext(request);
       }
       try {
         return await evaluateFeatureFlagRule(request, flagDecision.rule.featureFlag!, {
@@ -276,7 +277,8 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
     if (decisions.some((d) => d.kind === 'protected')) {
       return requireSession(request);
     }
-    return NextResponse.next();
+    // TBP-671 — every forwarded request drops a client-supplied x-bridge-context.
+    return nextWithTrustedContext(request);
   };
 }
 
@@ -371,7 +373,7 @@ async function evaluateFeatureFlagRule(
     );
   }
 
-  return NextResponse.next();
+  return nextWithTrustedContext(request);
 }
 
 /**

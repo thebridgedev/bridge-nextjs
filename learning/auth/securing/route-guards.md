@@ -68,6 +68,8 @@ Redirects are handled automatically by the middleware: when a protected route is
 
 Neither route guard replaces server-side authorization. They decide what the browser is shown; every API route must still verify the user's token itself. In SDK-auth mode the middleware is not a guard at all.
 
+The middleware also removes any `x-bridge-context` header a client sends before the request reaches your app; the SDK only ever forwards one it built from the verified session.
+
 Rules are matched against both the requested path and its normalised form (percent-decoding, duplicate slashes, `.`/`..` segments, trailing slash); the stricter answer wins. Matching is case-sensitive, like Next.js routing.
 
 In an SDK-auth app, wrap each protected page:

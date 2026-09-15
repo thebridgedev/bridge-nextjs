@@ -36,9 +36,9 @@ import { verifySessionToken } from './verify-session';
  *     instance.
  *   - Per-request context is built from the request's token claims
  *     (sub/role/tid/plan/privileges) — the same claim shape the
- *     AuthAttributeProvider flattens on the client. If a propagated
- *     `x-bridge-context` header is present (set by an upstream Bridge SDK), it
- *     is honored too (mirrors nestjs `BridgeContextInterceptor`).
+ *     AuthAttributeProvider flattens on the client. The claims come from the
+ *     VERIFIED session token. An inbound `x-bridge-context` header is never
+ *     read — it is internal, and a client can send anything in it (TBP-671).
  *
  * Public method names/signatures are kept stable where reasonable
  * (`isFeatureEnabledServer`, `loadAllFlagsServer`, `init`, `getInstance`) so
@@ -110,16 +110,6 @@ export class FeatureFlagServer {
     }
   }
 
-  /**
-   * Build a per-request EvalContext from the request. Order of precedence:
-   *   1. A propagated `x-bridge-context` header (set by an upstream Bridge SDK)
-   *      — honored as the base, mirroring nestjs BridgeContextInterceptor.
-   *   2. Token claims from the request cookies (sub → identity; role/email/tid/
-   *      plan/privileges → attributes) — the same claim shape the client-side
-   *      AuthAttributeProvider flattens.
-   * Returns `undefined` when neither is present (backend mode then returns the
-   * safe default for rolled-out rules).
-   */
   /**
    * @deprecated The claims are DECODED, not verified — anyone can write a
    * cookie that claims `plan: 'enterprise'`. Never use this for an access

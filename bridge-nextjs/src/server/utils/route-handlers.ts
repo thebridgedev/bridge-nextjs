@@ -4,6 +4,7 @@ import { logger } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 import { FeatureFlagServer } from './feature-flag.server';
 import { getConfig } from './get-config';
+import { withTrustedContext } from './bridge-context-header';
 
 interface RequireFeatureFlagOptions {
   /** Optional config overrides. */
@@ -54,12 +55,18 @@ export const requireFeatureFlagForRoute = (
         return NextResponse.json({ error: errorMessage }, { status: statusCode });
       }
 
-      const response = await handler(request);
-
-      // Propagate the eval context to downstream Bridge backends.
+      // TBP-671 — the handler gets the request with any client-supplied
+      // x-bridge-context removed and the verified one (if any) in its place,
+      // so a handler that proxies headers to a backend cannot pass a spoofed
+      // context on.
       const serialized = await featureFlagServer.serializeVerifiedContextForRequest(request);
-      if (serialized && response instanceof NextResponse) {
-        response.headers.set(BRIDGE_CONTEXT_HEADER, serialized);
+      const response = await handler(withTrustedContext(request, serialized));
+
+      // Propagate the eval context to downstream Bridge backends — the verified
+      // one only, never anything that came in with the request.
+      if (response instanceof NextResponse) {
+        if (serialized) response.headers.set(BRIDGE_CONTEXT_HEADER, serialized);
+        else response.headers.delete(BRIDGE_CONTEXT_HEADER);
       }
       return response;
     } catch (error) {
