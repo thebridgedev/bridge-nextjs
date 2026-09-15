@@ -15,6 +15,7 @@ import { logger } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 import { getConfig } from './get-config';
 import { TokenServiceServer } from './token-service.server';
+import { verifySessionToken } from './verify-session';
 
 /**
  * Server-side feature flag evaluation for bridge-nextjs — Feature Flags 2.0.
@@ -119,29 +120,52 @@ export class FeatureFlagServer {
    * Returns `undefined` when neither is present (backend mode then returns the
    * safe default for rolled-out rules).
    */
+  /**
+   * @deprecated The claims are DECODED, not verified — anyone can write a
+   * cookie that claims `plan: 'enterprise'`. Never use this for an access
+   * decision; the SDK's own flag checks use `buildVerifiedContextFromRequest`
+   * (TBP-666). Kept for display-only callers.
+   */
   buildContextFromRequest(request: NextRequest): Partial<EvalContext> | undefined {
-    // 1. Propagated header (deserialize is done by callers that want it; here we
-    //    decode claims from the token, which is the common Next.js case).
     const tokenService = TokenServiceServer.getInstance();
     const cookieString = request.headers.get('cookie') || '';
     const accessToken = tokenService.getAccessTokenServer(cookieString);
     if (!accessToken) return undefined;
-
-    const claims = decodeJwtPayload(accessToken) as AuthJwtClaims | null;
-    if (!claims) return undefined;
-
-    const attributes: Record<string, unknown> = {};
-    if (typeof claims.role === 'string') attributes['user.role'] = claims.role;
-    if (typeof claims.email === 'string') attributes['user.email'] = claims.email;
-    if (typeof claims.tid === 'string') attributes['tenant.id'] = claims.tid;
-    if (typeof claims.plan === 'string') attributes['tenant.plan'] = claims.plan;
-    if (claims.privileges !== undefined) attributes['privileges'] = claims.privileges;
-
-    return {
-      identity: typeof claims.sub === 'string' ? claims.sub : undefined,
-      attributes,
-    };
+    return contextFromClaims(decodeJwtPayload(accessToken) as AuthJwtClaims | null);
   }
+
+  /**
+   * The per-request eval context from VERIFIED token claims (signature,
+   * PS256, issuer, audience = appId, exp — see `verify-session.ts`). A token
+   * that fails verification yields no context, so identity- and plan-targeted
+   * rules fall back to the safe default (TBP-666: a forged cookie claiming
+   * `plan: 'pro'` used to unlock plan-gated flags).
+   */
+  async buildVerifiedContextFromRequest(request: NextRequest): Promise<Partial<EvalContext> | undefined> {
+    const tokenService = TokenServiceServer.getInstance();
+    const cookieString = request.headers.get('cookie') || '';
+    const accessToken = tokenService.getAccessTokenServer(cookieString);
+    if (!accessToken) return undefined;
+    const claims = await verifySessionToken(accessToken, this.ensureConfig());
+    return contextFromClaims(claims as AuthJwtClaims | null);
+  }
+
+  /** @deprecated Serializes UNVERIFIED claims; use `serializeVerifiedContextForRequest`. */
+  serializeContextForRequest(request: NextRequest): string | undefined {
+    return serializeForHeader(this.buildContextFromRequest(request));
+  }
+
+  /**
+   * Serialize the verified per-request context into the `x-bridge-context`
+   * header value so downstream Bridge backends (nestjs/express) share the same
+   * identity for their own flag evals. Mirrors auth-core's `serializeContext` +
+   * the nestjs BridgeContextInterceptor wire contract. `undefined` when there is
+   * no verified context to propagate.
+   */
+  async serializeVerifiedContextForRequest(request: NextRequest): Promise<string | undefined> {
+    return serializeForHeader(await this.buildVerifiedContextFromRequest(request));
+  }
+
 
   /**
    * Check if a feature flag is enabled on the server. Evaluates locally against
@@ -163,7 +187,7 @@ export class FeatureFlagServer {
     }
 
     await this.ensureFlagsHydrated(cfg.appId);
-    const context = this.buildContextFromRequest(request);
+    const context = await this.buildVerifiedContextFromRequest(request);
 
     try {
       return this.bridge.flag<boolean>(flagName, false, context).value;
@@ -189,7 +213,7 @@ export class FeatureFlagServer {
       return defaultValue;
     }
     await this.ensureFlagsHydrated(cfg.appId);
-    const context = this.buildContextFromRequest(request);
+    const context = await this.buildVerifiedContextFromRequest(request);
     try {
       return this.bridge.flag<T>(flagName, defaultValue, context).value;
     } catch (error) {
@@ -210,7 +234,7 @@ export class FeatureFlagServer {
     }
 
     await this.ensureFlagsHydrated(cfg.appId);
-    const context = this.buildContextFromRequest(request);
+    const context = await this.buildVerifiedContextFromRequest(request);
 
     const result: { [key: string]: boolean } = {};
     try {
@@ -223,31 +247,39 @@ export class FeatureFlagServer {
     return result;
   }
 
-  /**
-   * Serialize a per-request context into the `x-bridge-context` header value so
-   * downstream Bridge backends (nestjs/express) share the same identity for
-   * their own flag evals. Mirrors auth-core's `serializeContext` + the nestjs
-   * BridgeContextInterceptor wire contract. Returns `undefined` when there is
-   * no context to propagate.
-   */
-  serializeContextForRequest(request: NextRequest): string | undefined {
-    const ctx = this.buildContextFromRequest(request);
-    if (!ctx || (!ctx.identity && Object.keys(ctx.attributes ?? {}).length === 0)) {
-      return undefined;
-    }
-    try {
-      return serializeContext(ctx as EvalContext);
-    } catch (err) {
-      logger.warn('FeatureFlagServer - context serialization failed:', err);
-      return undefined;
-    }
-  }
 }
 
 /** Re-exported for callers that set the header on outbound requests/responses. */
 export { BRIDGE_CONTEXT_HEADER };
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+/** Map Bridge token claims to the flag eval context (same shape as the client's AuthAttributeProvider). */
+function contextFromClaims(claims: AuthJwtClaims | null | undefined): Partial<EvalContext> | undefined {
+  if (!claims) return undefined;
+  const attributes: Record<string, unknown> = {};
+  if (typeof claims.role === 'string') attributes['user.role'] = claims.role;
+  if (typeof claims.email === 'string') attributes['user.email'] = claims.email;
+  if (typeof claims.tid === 'string') attributes['tenant.id'] = claims.tid;
+  if (typeof claims.plan === 'string') attributes['tenant.plan'] = claims.plan;
+  if (claims.privileges !== undefined) attributes['privileges'] = claims.privileges;
+  return {
+    identity: typeof claims.sub === 'string' ? claims.sub : undefined,
+    attributes,
+  };
+}
+
+function serializeForHeader(ctx: Partial<EvalContext> | undefined): string | undefined {
+  if (!ctx || (!ctx.identity && Object.keys(ctx.attributes ?? {}).length === 0)) {
+    return undefined;
+  }
+  try {
+    return serializeContext(ctx as EvalContext);
+  } catch (err) {
+    logger.warn('FeatureFlagServer - context serialization failed:', err);
+    return undefined;
+  }
+}
 
 /** Decode a JWT payload without signature verification (claims-only read). */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {

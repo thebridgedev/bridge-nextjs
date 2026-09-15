@@ -3,10 +3,12 @@ import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
 /**
  * Demo middleware — fully permissive (`defaultAccess: 'public'`).
  *
- * `withBridgeAuth` is a server-side guard that reads tokens from cookies. The
- * demo's primary flow is SDK auth, which stores tokens in `localStorage`
- * (`bridge_tokens`) — invisible to the middleware. Letting it gate routes
- * would redirect SDK-authenticated users away from their pages.
+ * Which layer guards what: `withBridgeAuth` guards hosted-login sessions, which
+ * live in cookies. The demo's primary flow is SDK auth, which stores tokens in
+ * `localStorage` (`bridge_tokens`), invisible to the middleware; for SDK-auth
+ * apps (`loginRoute` set) the middleware steps aside and `<ProtectedRoute>` plus
+ * the API are the guards. Neither route guard replaces verifying the token in
+ * the API.
  *
  * Note: `match: '/:path*'` would NOT work here — `withBridgeAuth`'s matcher
  * uses exact/prefix string equality (no path-parameter parsing). Use
@@ -17,8 +19,9 @@ import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
  * PlanSelector, etc. bail out gracefully when the user isn't authenticated).
  *
  * Consuming apps that use the hosted-redirect flow (cookies set by
- * `createBridgeCallbackRoute`) should replace this with rules listing their
- * protected routes explicitly.
+ * `createBridgeCallbackRoute`) should list their protected routes: either
+ * `defaultAccess: 'protected'` with public exceptions, or `{ match, public: false }`
+ * rules under `defaultAccess: 'public'`. Both are enforced for cookie sessions.
  */
 export default withBridgeAuth({
   defaultAccess: 'public',

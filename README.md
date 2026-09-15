@@ -34,6 +34,14 @@ For authentication examples and implementation details, see:
 - [Quickstart Guide - Authentication](learning/quickstart/quickstart.md#authentication)
 - [Examples - Authentication](learning/examples/examples.md#authentication)
 
+### Route protection: which layer guards what
+
+- **Hosted login** (no `loginRoute`): the session is a cookie, and the `withBridgeAuth` middleware is the route guard. It enforces unmatched routes under `defaultAccess: 'protected'` and any rule without `public: true`. It verifies the session token: its PS256 signature against the Bridge JWKS (`<apiBaseUrl>/auth/.well-known/jwks.json`), issuer `<apiBaseUrl>/auth`, audience containing your `appId`, and expiry; a failed check denies.
+- **SDK auth** (`<LoginForm />`, `loginRoute` set): tokens live in the browser, where middleware cannot see them. `withBridgeAuth` steps aside for those requests (it is not authoritative there), and `<ProtectedRoute>` plus your API are the guards.
+- **Neither route guard is authorization.** Every API route must verify the user's token itself.
+
+See [Route guards](learning/auth/securing/route-guards.md#which-layer-guards-what).
+
 ## Feature Flags
 
 For feature flag examples and implementation details, see:

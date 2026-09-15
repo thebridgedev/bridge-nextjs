@@ -57,7 +57,7 @@ export const requireFeatureFlagForRoute = (
       const response = await handler(request);
 
       // Propagate the eval context to downstream Bridge backends.
-      const serialized = featureFlagServer.serializeContextForRequest(request);
+      const serialized = await featureFlagServer.serializeVerifiedContextForRequest(request);
       if (serialized && response instanceof NextResponse) {
         response.headers.set(BRIDGE_CONTEXT_HEADER, serialized);
       }

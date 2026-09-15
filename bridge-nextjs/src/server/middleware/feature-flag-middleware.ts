@@ -36,9 +36,9 @@ export interface WithFeatureFlagOptions {
  * available to API route handlers / server components in the same app, and to
  * any backend the app proxies to.
  */
-function withContextHeader(request: NextRequest): NextResponse {
+async function withContextHeader(request: NextRequest): Promise<NextResponse> {
   const featureFlagServer = FeatureFlagServer.getInstance();
-  const serialized = featureFlagServer.serializeContextForRequest(request);
+  const serialized = await featureFlagServer.serializeVerifiedContextForRequest(request);
   if (!serialized) {
     return NextResponse.next();
   }

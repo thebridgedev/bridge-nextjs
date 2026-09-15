@@ -59,24 +59,35 @@ export const GET = createBridgeCallbackRoute({
 
 Redirects are handled automatically by the middleware: when a protected route is hit without a valid session, the user is sent to Bridge's hosted login page, and the callback route stores the resulting session before redirecting them back in. For the full `RouteRule` shape, see the [config reference](/auth/config/#route-guard-config).
 
-> **Framework note:** `withBridgeAuth` runs on the server and reads the session from cookies, which are set by the hosted-login callback route. If your app signs users in with the drop-in `LoginForm` instead (SDK auth stores tokens in `localStorage`, invisible to middleware), gate pages client-side with `<ProtectedRoute>` and set `defaultAccess: 'public'` in the middleware:
->
-> ```tsx
-> 'use client';
-> import { ProtectedRoute } from '@nebulr-group/bridge-nextjs/client';
->
-> export default function DashboardPage() {
->   return (
->     <ProtectedRoute redirectTo="/auth/login">
->       <Dashboard />
->     </ProtectedRoute>
->   );
-> }
-> ```
->
-> `<ProtectedRoute>` shows a loading placeholder while auth state resolves, redirects to `redirectTo` (default `'/'`) if the user isn't authenticated, and renders `children` otherwise.
+### Which layer guards what
 
-> **Framework note:** flag-gated route rules (`featureFlag` / `redirectTo` on a rule) are not enforced by `withBridgeAuth` yet. To gate routes behind feature flags in middleware today, compose `withFeatureFlags` with `withBridgeAuth`:
+| Your app signs in with | Guarded by | What `withBridgeAuth` does |
+|---|---|---|
+| Hosted login (no `loginRoute`): the session is a cookie | `withBridgeAuth`, before the page loads | Enforces every route that needs a session: an unmatched route under `defaultAccess: 'protected'`, and any rule without `public: true` under either `defaultAccess`. It verifies the session token: its PS256 signature against the Bridge JWKS (`<apiBaseUrl>/auth/.well-known/jwks.json`), issuer `<apiBaseUrl>/auth`, audience containing your `appId`, and expiry. A missing, forged, foreign or expired token counts as signed out: a page is redirected to login with the page they asked for remembered, an API request gets `401`. If the check itself fails (for example the key set cannot be fetched), the request is denied. |
+| The drop-in `LoginForm` (`loginRoute` set): tokens live in the browser | `<ProtectedRoute>` in each protected page, and your API | Steps aside. It cannot see a browser-held session, and redirecting would loop a signed-in user, so a request without a Bridge session cookie is let through. In development it logs a one-time warning saying so. |
+
+Neither route guard replaces server-side authorization. They decide what the browser is shown; every API route must still verify the user's token itself. In SDK-auth mode the middleware is not a guard at all.
+
+Rules are matched against both the requested path and its normalised form (percent-decoding, duplicate slashes, `.`/`..` segments, trailing slash); the stricter answer wins. Matching is case-sensitive, like Next.js routing.
+
+In an SDK-auth app, wrap each protected page:
+
+```tsx
+'use client';
+import { ProtectedRoute } from '@nebulr-group/bridge-nextjs/client';
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute redirectTo="/auth/login">
+      <Dashboard />
+    </ProtectedRoute>
+  );
+}
+```
+
+`<ProtectedRoute>` shows a loading placeholder while auth state resolves, redirects to `redirectTo` (default `'/'`) if the user isn't authenticated, and renders `children` otherwise.
+
+> **Framework note:** a rule with `featureFlag` is evaluated by `withBridgeAuth` for the signed-in user and answers `403` when the flag is off. To redirect instead, or to gate whole path trees, compose `withFeatureFlags` with `withBridgeAuth`:
 >
 > ```ts
 > // middleware.ts
