@@ -2,6 +2,8 @@ import { jwtDecode } from 'jwt-decode';
 import { NextResponse } from 'next/server';
 import { AuthService } from '../../shared/services/auth.service';
 import { BridgeConfig } from '../../shared/types/config';
+import { getConfig } from './get-config';
+import { verifySessionToken } from './verify-session';
 
 export interface TokenSet {
   accessToken: string;
@@ -64,19 +66,22 @@ export class TokenServiceServer {
     response.cookies.delete('bridge_id_token');
   }
   
+  /**
+   * Is there a valid Bridge session on this request? The `bridge_access_token`
+   * cookie is VERIFIED (signature against the Bridge JWKS, PS256, issuer,
+   * audience = appId, exp/nbf) — see `verify-session.ts`. It used to be only
+   * decoded and its `exp` checked, so any forged token passed (TBP-666).
+   */
   async isAuthenticatedServer(request: Request): Promise<boolean> {
     const cookieString = request.headers.get('cookie') || '';
     const accessToken = this.getAccessTokenServer(cookieString);
-    
     if (!accessToken) return false;
-    
-    try {
-      const decoded = jwtDecode(accessToken);
-      const expiryTime = (decoded as any).exp * 1000; // Convert to milliseconds
-      return Date.now() < expiryTime;
-    } catch {
-      return false;
-    }
+    return (await this.verifyAccessTokenServer(accessToken)) !== null;
+  }
+
+  /** Verified claims of a Bridge access token, or `null` (fail closed). */
+  async verifyAccessTokenServer(accessToken: string): Promise<Record<string, unknown> | null> {
+    return verifySessionToken(accessToken, this.config ?? getConfig());
   }
   
   getAccessTokenServer(cookieString: string): string | null {
@@ -115,22 +120,10 @@ export class TokenServiceServer {
     // In a real implementation, you would check the token expiry
     
     // Get the access token from cookies
-    const cookieString = request?.headers?.get('cookie') || '';
-    const accessToken = this.getAccessTokenServer(cookieString);
-    
-    if (!accessToken) {
-      return false;
-    }
-    
-    try {
-      const decoded = jwtDecode(accessToken);
-      const expiryTime = (decoded as any).exp * 1000; // Convert to milliseconds
-      const isValid = Date.now() < expiryTime;
-      
-      return isValid;
-    } catch (error) {
-      return false;
-    }
+    // Despite the name this answers "is the session valid" — and it is now a
+    // verified answer, like isAuthenticatedServer (TBP-666).
+    if (!request) return false;
+    return this.isAuthenticatedServer(request);
   }
   
   init(config: BridgeConfig): void {
@@ -139,6 +132,11 @@ export class TokenServiceServer {
   
   // New methods for token expiry checking
   
+  /**
+   * Expiry of a token, DECODED without verification. Used only to time the
+   * refresh and for debug logging, after the session was verified — never to
+   * decide whether a request is authenticated.
+   */
   getTokenExpiryTime(token: string): number | null {
     try {
       const decoded = jwtDecode(token);

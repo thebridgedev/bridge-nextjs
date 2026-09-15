@@ -163,6 +163,42 @@ describe('hosted mode — the middleware can see the session, so it guards', () 
     expect(res.status).toBe(401);
   });
 
+  // TBP-666 (security review) — rules match the path the router serves, not
+  // its spelling.
+  for (const spelling of ['/dash%62oard', '//dashboard', '/dashboard/', '/dashboard//reports']) {
+    it(`a \`public: false\` rule also covers the spelling ${spelling}`, async () => {
+      const res = await withBridgeAuth(publicByDefault)(pageRequest(spelling));
+      expect(passedThrough(res)).toBe(false);
+      expect(res.headers.get('location')).toBe(HOSTED_LOGIN);
+    });
+  }
+
+  it('a public rule is not widened by an encoded path (it resolves to the protected one)', async () => {
+    const mw = withBridgeAuth({
+      defaultAccess: 'public',
+      rules: [
+        { match: '/help', public: true },
+        { match: '/dashboard', public: false },
+      ],
+    });
+    const res = await mw(pageRequest('/help/..%2Fdashboard'));
+    expect(res.headers.get('location')).toBe(HOSTED_LOGIN);
+  });
+
+  it('normalising never makes a path less protected than the route Next serves', async () => {
+    // Next does not percent-decode when routing: this is served under
+    // /dashboard (e.g. by a catch-all), even though it normalises to /help.
+    const mw = withBridgeAuth({
+      defaultAccess: 'public',
+      rules: [
+        { match: '/help', public: true },
+        { match: '/dashboard', public: false },
+      ],
+    });
+    const res = await mw(pageRequest('/dashboard/..%2F..%2Fhelp'));
+    expect(res.headers.get('location')).toBe(HOSTED_LOGIN);
+  });
+
   it('never warns about SDK auth', async () => {
     await withBridgeAuth(publicByDefault)(pageRequest('/dashboard'));
     expect(warn).not.toHaveBeenCalled();

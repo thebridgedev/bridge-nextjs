@@ -63,10 +63,12 @@ Redirects are handled automatically by the middleware: when a protected route is
 
 | Your app signs in with | Guarded by | What `withBridgeAuth` does |
 |---|---|---|
-| Hosted login (no `loginRoute`): the session is a cookie | `withBridgeAuth`, before the page loads | Enforces every route that needs a session: an unmatched route under `defaultAccess: 'protected'`, and any rule without `public: true` under either `defaultAccess`. A signed-out visitor is redirected to login with the page they asked for remembered; an API request gets `401`. If the session cannot be checked, the request is denied. |
+| Hosted login (no `loginRoute`): the session is a cookie | `withBridgeAuth`, before the page loads | Enforces every route that needs a session: an unmatched route under `defaultAccess: 'protected'`, and any rule without `public: true` under either `defaultAccess`. It verifies the session token: its PS256 signature against the Bridge JWKS (`<apiBaseUrl>/auth/.well-known/jwks.json`), issuer `<apiBaseUrl>/auth`, audience containing your `appId`, and expiry. A missing, forged, foreign or expired token counts as signed out: a page is redirected to login with the page they asked for remembered, an API request gets `401`. If the check itself fails (for example the key set cannot be fetched), the request is denied. |
 | The drop-in `LoginForm` (`loginRoute` set): tokens live in the browser | `<ProtectedRoute>` in each protected page, and your API | Steps aside. It cannot see a browser-held session, and redirecting would loop a signed-in user, so a request without a Bridge session cookie is let through. In development it logs a one-time warning saying so. |
 
-Neither route guard is authorization. They decide what the browser shows; every API route must still verify the user's token itself.
+Neither route guard replaces server-side authorization. They decide what the browser is shown; every API route must still verify the user's token itself. In SDK-auth mode the middleware is not a guard at all.
+
+Rules are matched against both the requested path and its normalised form (percent-decoding, duplicate slashes, `.`/`..` segments, trailing slash); the stricter answer wins. Matching is case-sensitive, like Next.js routing.
 
 In an SDK-auth app, wrap each protected page:
 

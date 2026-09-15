@@ -68,12 +68,19 @@ const SESSION_COOKIE = 'bridge_access_token';
  *
  * - **This middleware guards hosted-mode sessions.** Hosted login (no
  *   `loginRoute`) stores the session in cookies, which the middleware reads on
- *   every request. A route that requires a session — an unmatched route under
+ *   every request, and VERIFIES the `bridge_access_token` cookie: PS256
+ *   signature against the Bridge JWKS (`<apiBaseUrl>/auth/.well-known/jwks.json`),
+ *   `iss` = `<apiBaseUrl>/auth`, `aud` containing the appId, `exp`/`nbf`. A
+ *   missing, forged, foreign or expired token is "signed out". A route that
+ *   requires a session — an unmatched route under
  *   `defaultAccess: 'protected'`, or a rule without `public: true` under
  *   either `defaultAccess` — is enforced: a signed-out page navigation is
  *   redirected to login with the attempted URL remembered, an API request gets
  *   `401`. If the session cannot be checked (an error while deciding), the
- *   request is denied, never let through.
+ *   request is denied, never let through. Rules are checked for the raw path
+ *   and its normalised form (decoded, slashes collapsed, dot segments
+ *   resolved, trailing slash stripped); the stricter decision wins. Matching
+ *   is case-sensitive, like Next.js routing.
  * - **SDK-auth apps are guarded by `<ProtectedRoute>` and by your API.** When
  *   `loginRoute` is configured (option or NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE),
  *   users sign in with `<LoginForm />` and their tokens live in the browser,
@@ -162,8 +169,11 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
   // live in the browser, invisible to middleware.
   const sdkAuth = !!getConfig(overrides).loginRoute;
 
-  // Create the auth middleware with public paths and config
-  const authMiddleware = withAuth({ publicPaths, config: overrides });
+  // The session check only. Public/protected is decided below on the
+  // normalised path; letting withAuth re-decide "public" on the RAW path would
+  // give an encoded or dotted path a second, different answer.
+  void publicPaths;
+  const authMiddleware = withAuth({ publicPaths: [], config: overrides });
 
   let warnedUnenforced = false;
   function warnUnenforced(pathname: string): void {
@@ -204,57 +214,69 @@ export function withBridgeAuth(options: WithBridgeAuthOptions = {}) {
     }
   }
 
-  return async function middleware(request: NextRequest) {
-    const { pathname } = request.nextUrl;
+  type Decision = { kind: 'flag'; rule: RouteRule } | { kind: 'public' } | { kind: 'protected' };
 
-    // Let OAuth callback be handled by the App Router route (Node.js runtime).
-    // Handling it here would run in Edge and fetch() to stage can fail.
-    if (pathname === callbackPath) {
-      return NextResponse.next();
-    }
-
-    // Apply route rules. A public (or flag) rule decides as soon as it matches;
-    // a matching non-public rule is remembered so that it is enforced even
-    // under `defaultAccess: 'public'` (TBP-666 — it used to fall through to the
-    // default and let the request in).
+  // Rules for ONE spelling of the path. A public (or flag) rule decides as soon
+  // as it matches; a matching non-public rule is remembered so that it is
+  // enforced even under `defaultAccess: 'public'` (TBP-666 — it used to fall
+  // through to the default and let the request in).
+  function decide(path: string): Decision {
     let matchedProtected = false;
     for (const rule of rules) {
-      if (matchesRule(pathname, rule.match)) {
-        // Feature-flag rules require an authenticated user (flags are
-        // evaluated against the current user's identity/attributes).
-        if (rule.featureFlag) {
-          if (sdkAuth && !sessionVisible(request)) {
-            warnUnenforced(pathname);
-            return NextResponse.next();
-          }
-          try {
-            return await evaluateFeatureFlagRule(request, rule.featureFlag, {
-              appId,
-              authBaseUrl,
-              callbackUrl,
-              loginRoute,
-              debug,
-            });
-          } catch (err) {
-            return denied(request, err);
-          }
-        }
-
-        // If route is public, allow access
-        if (rule.public) {
-          return NextResponse.next();
-        }
+      if (matchesRule(path, rule.match)) {
+        if (rule.featureFlag) return { kind: 'flag', rule };
+        if (rule.public) return { kind: 'public' };
         matchedProtected = true;
       }
     }
+    if (defaultAccess === 'public' && !matchedProtected) return { kind: 'public' };
+    return { kind: 'protected' };
+  }
 
-    // Apply default access level
-    if (defaultAccess === 'public' && !matchedProtected) {
+  return async function middleware(request: NextRequest) {
+    const rawPathname = request.nextUrl.pathname;
+
+    // Let OAuth callback be handled by the App Router route (Node.js runtime).
+    // Handling it here would run in Edge and fetch() to stage can fail.
+    // An exemption, so it applies to the exact spelling only.
+    if (rawPathname === callbackPath) {
       return NextResponse.next();
     }
 
-    // Protected: by a matching rule, or by default
-    return requireSession(request);
+    // TBP-666 — decide for the raw spelling AND the normalised one (decoded,
+    // slashes collapsed, dot segments resolved) and let the stricter win.
+    // Normalising alone could make a path look less protected than the route
+    // Next actually serves (Next does not percent-decode when routing, so
+    // `/dashboard/..%2F..%2Fhelp` is served under /dashboard); matching the raw
+    // spelling alone let `/dash%62oard`-style spellings slip past a rule.
+    const candidates = Array.from(new Set([rawPathname, normalizePathname(rawPathname)]));
+    const decisions = candidates.map(decide);
+    const flagDecision = decisions.find((d): d is { kind: 'flag'; rule: RouteRule } => d.kind === 'flag');
+
+    if (flagDecision) {
+      // Feature-flag rules require an authenticated user (flags are
+      // evaluated against the current user's identity/attributes).
+      if (sdkAuth && !sessionVisible(request)) {
+        warnUnenforced(rawPathname);
+        return NextResponse.next();
+      }
+      try {
+        return await evaluateFeatureFlagRule(request, flagDecision.rule.featureFlag!, {
+          appId,
+          authBaseUrl,
+          callbackUrl,
+          loginRoute,
+          debug,
+        });
+      } catch (err) {
+        return denied(request, err);
+      }
+    }
+
+    if (decisions.some((d) => d.kind === 'protected')) {
+      return requireSession(request);
+    }
+    return NextResponse.next();
   };
 }
 
@@ -387,6 +409,33 @@ async function isFeatureFlagRequirementMet(
 
   // Unknown requirement shape — fail-closed.
   return false;
+}
+
+/**
+ * Canonical form of a request path for rule matching (TBP-666): percent-
+ * encoding decoded once, duplicate slashes collapsed, `.`/`..` segments
+ * resolved, trailing slash stripped (except for `/`). The middleware checks
+ * the rules for this form AND the raw path and applies the stricter result,
+ * so normalising can only add protection. A path that cannot be decoded is
+ * returned in its raw spelling.
+ */
+export function normalizePathname(pathname: string): string {
+  let path = pathname || '/';
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // malformed escape: keep the raw spelling
+  }
+  const out: string[] = [];
+  for (const segment of path.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      out.pop();
+      continue;
+    }
+    out.push(segment);
+  }
+  return '/' + out.join('/');
 }
 
 /**

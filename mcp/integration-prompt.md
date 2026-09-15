@@ -143,7 +143,7 @@ export default function DashboardPage() {
 
 ### Which layer guards what
 
-- **Hosted login (no `loginRoute`):** the session is a cookie, and `withBridgeAuth` is the route guard. It enforces unmatched routes under `defaultAccess: 'protected'` and any rule without `public: true` (under either `defaultAccess`), and denies when it cannot check the session.
+- **Hosted login (no `loginRoute`):** the session is a cookie, and `withBridgeAuth` is the route guard. It enforces unmatched routes under `defaultAccess: 'protected'` and any rule without `public: true` (under either `defaultAccess`). It verifies the session token: its PS256 signature against the Bridge JWKS (`<apiBaseUrl>/auth/.well-known/jwks.json`), issuer `<apiBaseUrl>/auth`, audience containing your `appId`, and expiry; anything else counts as signed out, and a failed check denies.
 - **SDK auth (`<LoginForm />`, `loginRoute` set):** tokens live in the browser, invisible to middleware. `withBridgeAuth` steps aside for requests without a Bridge session cookie (one dev-only warning), so wrap every protected page in `<ProtectedRoute>`.
 - **Neither is authorization.** Every API route must verify the user's token itself.
 
