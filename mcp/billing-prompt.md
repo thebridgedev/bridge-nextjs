@@ -141,7 +141,7 @@ Returns `false` until hydrated (fail-closed), updates live on plan change or quo
 
 ## Step 4 — Billing portal
 
-To let users manage their payment method or cancel, add a button that calls `getBridgeAuth().getPortalUrl()` and redirects to the returned URL. Import `getBridgeAuth` from `@nebulr-group/bridge-nextjs/client`.
+To let users manage their payment method or cancel, add a button that calls `getBridgeAuth().getBillingPortalUrl()` and redirects to the returned URL. Import `getBridgeAuth` from `@nebulr-group/bridge-nextjs/client`.
 
 ## Reading subscription state
 
