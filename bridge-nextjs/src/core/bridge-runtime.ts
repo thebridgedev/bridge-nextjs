@@ -34,6 +34,7 @@
  */
 import {
   RealtimeClient,
+  fetchBillingState,
   type RealtimeClientConfig,
   type RealtimeStatus,
   type SessionSnapshotMessage,
@@ -46,6 +47,7 @@ import {
   applyEntitlementsChanged,
   applySessionSnapshot,
   applySubscriptionPlanChanged,
+  applySubscriptionState,
 } from './snapshot-stores';
 import { bridgeEvents } from './events';
 import { _setRealtimeStatus, _setRealtimeStatusDetail } from './realtime-status';
@@ -62,7 +64,8 @@ export type BridgeAuthorizationChangeReason =
   | 'entitlements.changed'
   | 'user.state_changed'
   | 'token'
-  | 'flag';
+  | 'flag'
+  | 'reconnect';
 
 const DEFAULT_API_BASE_URL = 'https://api.thebridge.dev';
 
@@ -95,6 +98,74 @@ function authorizationChanged(reason: BridgeAuthorizationChangeReason): void {
   for (const fn of _onAuthorizationChangeSubs) {
     try { fn(reason); } catch { /* subscriber errors swallowed */ }
   }
+}
+
+// TBP-660 — AppSync Events has no replay: anything published while the socket
+// is down or being replaced is gone. The replacement is routine — a plan change
+// sends `user.state_changed`, the runtime refreshes the token, the new token
+// reauthorizes (close + reopen), and a `subscription.plan_changed` published
+// during that swap never arrived (1 in 8 stage runs on bridge-svelte, which
+// shares this wiring). So after EVERY reconnect, the one reauthorize caused
+// included, re-read what the pushes would have told us: `GET /billing/state`
+// and `GET /entitlements`, once each per reconnect. Nothing here touches tokens,
+// so the catch-up cannot itself cause another reauthorize.
+let _catchUpInFlight: Promise<void> | undefined;
+// A live push that lands while the catch-up fetch is in flight is newer than
+// what the fetch may have read; the counters let the fetch result yield to it.
+let _planPushSeq = 0;
+let _entitlementsPushSeq = 0;
+
+function catchUpAfterReconnect(): Promise<void> {
+  if (_catchUpInFlight) return _catchUpInFlight; // a burst of opens shares one catch-up
+  _catchUpInFlight = (async () => {
+    authorizationChanged('reconnect');
+    let ctx: { apiBaseUrl: string; appId: string; accessToken: string | null };
+    try {
+      ctx = getBridgeAuth().getApiContext();
+    } catch {
+      return;
+    }
+    // The token the socket itself authenticates with (see getAuthToken above).
+    const accessToken = _currentAuthToken ?? ctx.accessToken;
+    if (!accessToken) return; // signed out: no workspace state to repair
+    const apiBaseUrl = (ctx.apiBaseUrl ?? DEFAULT_API_BASE_URL).replace(/\/+$/, '');
+    let billing: ReturnType<typeof useBillingBridge> | undefined;
+    try { billing = useBillingBridge(); } catch { billing = undefined; }
+
+    const planSeq = _planPushSeq;
+    const entitlementsSeq = _entitlementsPushSeq;
+    await Promise.all([
+      (async () => {
+        try {
+          const state = await fetchBillingState({ apiBaseUrl, accessToken, appId: ctx.appId });
+          if (!state || planSeq !== _planPushSeq) return;
+          try { billing?.subscription.hydrate(state); } catch { /* defensive */ }
+          applySubscriptionState(state);
+        } catch (err) {
+          logger.debug('[bridge-runtime] reconnect catch-up: billing state skipped:', err);
+        }
+      })(),
+      (async () => {
+        try {
+          const res = await fetch(`${apiBaseUrl}/entitlements`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (!res.ok) return;
+          const body = (await res.json()) as { entitlements?: unknown } | null;
+          const map = body?.entitlements;
+          if (!map || typeof map !== 'object' || Array.isArray(map)) return;
+          if (entitlementsSeq !== _entitlementsPushSeq) return;
+          try { billing?.entitlementsStore.applyEntitlementsChanged(map as Record<string, boolean>); } catch { /* defensive */ }
+          applyEntitlementsChanged({ entitlements: map });
+        } catch (err) {
+          logger.debug('[bridge-runtime] reconnect catch-up: entitlements skipped:', err);
+        }
+      })(),
+    ]);
+  })().finally(() => {
+    _catchUpInFlight = undefined;
+  });
+  return _catchUpInFlight;
 }
 
 /**
@@ -174,6 +245,11 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
     if (_connectedOnce && !causedByReauthorize) {
       getBridgeAuth().refreshTokens().catch(() => { /* best-effort */ });
     }
+    // TBP-660 — every reconnect, including the one our own reauthorize()
+    // caused, may have missed pushes. Repair the billing + entitlement state
+    // once. (The token refresh above stays skipped for a self-induced
+    // reconnect: that is the loop guard, and the catch-up never touches tokens.)
+    if (_connectedOnce) void catchUpAfterReconnect();
     _connectedOnce = true;
     for (const fn of _onOpenSubs) {
       try { fn(); } catch { /* subscriber errors swallowed */ }
@@ -250,6 +326,7 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
     // are deliberately not mirrored: their payloads carry no status.
     billing.handle({
       'subscription.plan_changed': (m) => {
+        _planPushSeq += 1; // newer than any in-flight reconnect catch-up (TBP-660)
         try { applySubscriptionPlanChanged(m); } catch { /* store updates shouldn't throw, defensive */ }
         authorizationChanged('subscription.plan_changed');
         bridgeEvents._dispatch(m);
@@ -271,6 +348,7 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
       'quota.updated': (m) => bridgeEvents._dispatch(m),
       'entitlements.changed': (m) => {
         // Only the payload-carrying variant has a map; the signal-only one is a no-op here.
+        if ((m as { entitlements?: unknown }).entitlements) _entitlementsPushSeq += 1; // TBP-660
         try { applyEntitlementsChanged(m as { entitlements?: unknown }); } catch { /* defensive */ }
         authorizationChanged('entitlements.changed');
         bridgeEvents._dispatch(m);
@@ -450,6 +528,7 @@ export function __resetBridgeRuntime(): void {
   _onUserStateSubs.clear();
   _onStatusSubs.clear();
   _onAuthorizationChangeSubs.clear();
+  _catchUpInFlight = undefined;
   _currentAuthToken = undefined;
   if (_unsubscribeAuth) {
     _unsubscribeAuth();
