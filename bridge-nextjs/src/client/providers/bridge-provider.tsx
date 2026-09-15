@@ -5,6 +5,7 @@ import { FC, ReactNode, useEffect, useMemo, useRef } from 'react';
 import { ensureAppConfig, getBridgeAuth, initBridge, markReady, useBridgeStore } from '../../core/bridge-instance';
 import { startBridgeRuntime, stopBridgeRuntime } from '../../core/bridge-runtime';
 import { createBridgeFlags, type BridgeFlagsBundle } from '../../flags/bootstrap';
+import { RealtimeDevBadge } from '../components/developer/RealtimeDevBadge';
 import { logger, setLoggerDebug } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
 
@@ -282,5 +283,13 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     };
   }, [pathname, paywallRoute, paymentErrorRoute, paywallAppId, router]);
 
-  return <>{children}</>;
+  // TBP-644 — the "Live updates off — why?" badge, mounted here so every app
+  // gets it without code changes. Development builds only (the component
+  // checks NODE_ENV); `config.devBadge: false` turns it off there too.
+  return (
+    <>
+      {children}
+      <RealtimeDevBadge enabled={mergedConfig.devBadge !== false} />
+    </>
+  );
 };

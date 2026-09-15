@@ -42,8 +42,21 @@ export {
   type BridgeEventHandlers,
 } from './core/events';
 // Reactive realtime connection status — surface offline indicators / retry banners.
-export { realtimeStatus, useRealtimeStatus } from './core/realtime-status';
-export type { ConnectionState } from '@nebulr-group/bridge-auth-core';
+// TBP-644 — `realtimeStatus` / `useRealtimeStatus` stay a plain state string;
+// the `*Detail` siblings add the reason, whose side it is and whether it
+// still retries. `onBridgeRealtimeStatus` is the event-style subscription.
+export {
+  realtimeStatus,
+  useRealtimeStatus,
+  realtimeStatusDetail,
+  useRealtimeStatusDetail,
+} from './core/realtime-status';
+export {
+  onBridgeAuthorizationChange,
+  onBridgeRealtimeStatus,
+  type BridgeAuthorizationChangeReason,
+} from './core/bridge-runtime';
+export type { ConnectionState, RealtimeStatus } from '@nebulr-group/bridge-auth-core';
 
 // ── Reactive hooks (auth-core-backed) ─────────────────────────────────────────
 export { useAppConfig } from './client/hooks/use-app-config';
@@ -213,6 +226,12 @@ export type {
 
 // ── Developer ─────────────────────────────────────────────────────────────────
 export { ApiTokenManagement } from './client/components/developer/ApiTokenManagement';
+// TBP-644 — dev-only live-updates badge. <BridgeProvider> already mounts it;
+// exported for apps that compose their own provider.
+export {
+  RealtimeDevBadge,
+  type RealtimeDevBadgeProps,
+} from './client/components/developer/RealtimeDevBadge';
 
 // ── Conversion tracking (Reddit / GA4 via GTM dataLayer) ─────────────────────
 export {

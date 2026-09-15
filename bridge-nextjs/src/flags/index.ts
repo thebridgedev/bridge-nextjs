@@ -33,7 +33,15 @@ export { FeatureFlag, default as FeatureFlagComponent, type FeatureFlagProps } f
 
 // Reactive realtime connection status (subscribe in components to show
 // offline indicators, retry banners, etc.).
-export { realtimeStatus, useRealtimeStatus } from './realtime-status';
+export {
+  realtimeStatus,
+  useRealtimeStatus,
+  realtimeStatusDetail,
+  useRealtimeStatusDetail,
+} from './realtime-status';
+// TBP-644 — why live updates are off, whose side it is, and whether it retries.
+export { onBridgeRealtimeStatus } from '../core/bridge-runtime';
+export type { RealtimeStatus } from '@nebulr-group/bridge-auth-core';
 
 // Auth-core re-exports — consumers can stay on the `./client` path without
 // adding a direct dependency on `@nebulr-group/bridge-auth-core`. Mirrors

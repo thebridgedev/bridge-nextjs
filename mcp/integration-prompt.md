@@ -170,7 +170,7 @@ Use `getBridgeAuth()` for the access token:
 import { getBridgeAuth } from '@nebulr-group/bridge-nextjs/client';
 
 export async function fetchUserData() {
-  const token = await getBridgeAuth().getAccessToken();
+  const token = getBridgeAuth().getTokens()?.accessToken;
   const res = await fetch('/api/user', {
     headers: { Authorization: `Bearer ${token}` },
   });
