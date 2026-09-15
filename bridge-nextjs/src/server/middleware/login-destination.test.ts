@@ -52,9 +52,9 @@ const { withAuth } = require('./auth-middleware');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { withBridgeAuth } = require('./with-bridge-auth');
 
-function pageRequest(path: string): NextRequest {
+function pageRequest(path: string, cookie?: string): NextRequest {
   return new NextRequest(`http://localhost:3000${path}`, {
-    headers: { accept: 'text/html,application/xhtml+xml' },
+    headers: { accept: 'text/html,application/xhtml+xml', ...(cookie ? { cookie } : {}) },
   });
 }
 
@@ -106,9 +106,11 @@ describe('featureFlag route, signed out', () => {
     expect(stashedReturnTo(res)).toBe('/beta?y=2');
   });
 
-  it("SDK mode goes to the app's own login page with the deep link on the URL", async () => {
+  it("SDK mode, with a Bridge session cookie it can check, goes to the app's own login page with the deep link", async () => {
+    // Without a visible session the middleware steps aside in SDK mode (TBP-666,
+    // with-bridge-auth-modes.test.ts); an expired cookie is a session it can see.
     process.env[ENV_KEY] = '/auth/login';
-    const res = await withBridgeAuth({ rules })(pageRequest('/beta?y=2'));
+    const res = await withBridgeAuth({ rules })(pageRequest('/beta?y=2', 'bridge_access_token=expired'));
 
     const location = new URL(res.headers.get('location')!);
     expect(location.pathname).toBe('/auth/login');

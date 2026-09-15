@@ -91,7 +91,7 @@ If you set `loginRoute`, unauthenticated users who hit a protected route are red
 
 If you leave `loginRoute` unset, Bridge uses hosted auth instead: unauthenticated users are redirected to Bridge's hosted login page (served from `hostedUrl`). Unset is the default, so hosted login is what you get out of the box.
 
-> **Framework note:** in Next.js the redirect to an in-app login page is performed client-side by `<ProtectedRoute redirectTo="/auth/login">`; the server-side `withBridgeAuth` middleware always redirects to the hosted login page. See [Route guards](/auth/securing/route-guards/).
+> **Framework note:** in Next.js, `LoginForm` sign-ins keep their tokens in the browser, where the `withBridgeAuth` middleware cannot see them, so the redirect to your in-app login page is performed client-side by `<ProtectedRoute redirectTo="/auth/login">`. With `loginRoute` set, the middleware steps aside for requests without a Bridge session cookie; it redirects to `loginRoute` only for a cookie session it can check. See [Route guards](/auth/securing/route-guards/#which-layer-guards-what).
 
 ## All config options
 

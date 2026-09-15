@@ -51,7 +51,7 @@ Every flow has a ready-made component, imported from `@nebulr-group/bridge-nextj
 
 Pass a rules config to `withBridgeAuth` in `middleware.ts` to mark routes public or protected. Unauthenticated users are redirected to Bridge's hosted login page. See [Route guards](/auth/securing/route-guards/) and the [config reference](/auth/config/).
 
-> **Framework note:** Next.js splits route protection across the server/client boundary. `withBridgeAuth` runs in `middleware.ts` and reads the cookie-based session set by the hosted-login callback; apps using the drop-in `LoginForm` (tokens in `localStorage`) protect pages client-side with `<ProtectedRoute redirectTo="/auth/login">` instead. See [Route guards](/auth/securing/route-guards/).
+> **Framework note:** Next.js splits route protection across the server/client boundary. `withBridgeAuth` runs in `middleware.ts` and guards hosted-login sessions, which live in cookies. Apps using the drop-in `LoginForm` (`loginRoute` set, tokens in the browser) are guarded by `<ProtectedRoute redirectTo="/auth/login">` and their API; the middleware steps aside for them. Neither route guard replaces verifying the token in your API. See [Route guards](/auth/securing/route-guards/#which-layer-guards-what).
 
 ## Identity, roles, and workspaces
 
