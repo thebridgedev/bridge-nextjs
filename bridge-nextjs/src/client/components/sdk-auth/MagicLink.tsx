@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { MessageOverrides, Translator } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage } from './shared/auth-error';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -65,7 +66,7 @@ export function MagicLink({
       setSent(true);
       onSent?.();
     } catch (err: any) {
-      setError(err.message || t('magicLink.error.send'));
+      setError(authErrorMessage(err, t, 'magicLink.error.send'));
       onError?.(err);
     } finally {
       setLoading(false);

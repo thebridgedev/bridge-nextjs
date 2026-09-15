@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage, isOriginNotAllowed } from './shared/auth-error';
 import { Spinner } from './shared/Spinner';
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'> {
@@ -48,7 +49,10 @@ export function PasskeyLogin({
         throw new Error(result.error || t('passkey.error.auth'));
       }
     } catch (err: any) {
-      onError?.(new Error(err.message || t('passkey.error.auth')));
+      const message = authErrorMessage(err, t, 'passkey.error.auth');
+      // TBP-669: an origin refusal is handed on as-is (status 403 and body
+      // intact) so LoginForm can recognise it and show the fix.
+      onError?.(isOriginNotAllowed(err) ? err : new Error(message));
     } finally {
       setLoading(false);
     }

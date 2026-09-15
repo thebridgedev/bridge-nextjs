@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
+import { authErrorMessage } from './shared/auth-error';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -54,7 +55,7 @@ export function MfaChallenge({
       setCode('');
       setResendCountdown(60);
     } catch (err: any) {
-      setError(err.message || t('mfa.error.resend'));
+      setError(authErrorMessage(err, t, 'mfa.error.resend'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -70,7 +71,7 @@ export function MfaChallenge({
       await (getBridgeAuth() as any).verifyMfa(code);
       onVerified?.();
     } catch (err: any) {
-      setError(err.message || t('mfa.error.invalidCode'));
+      setError(authErrorMessage(err, t, 'mfa.error.invalidCode'));
       onError?.(err);
     } finally {
       setLoading(false);
@@ -86,7 +87,7 @@ export function MfaChallenge({
       await (getBridgeAuth() as any).resetMfa(backupCode);
       onVerified?.();
     } catch (err: any) {
-      setError(err.message || t('mfa.error.invalidRecoveryCode'));
+      setError(authErrorMessage(err, t, 'mfa.error.invalidRecoveryCode'));
       onError?.(err);
     } finally {
       setLoading(false);
