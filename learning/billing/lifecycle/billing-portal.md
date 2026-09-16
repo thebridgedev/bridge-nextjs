@@ -2,29 +2,24 @@
 
 Give users a "Manage billing" entry point to the **Stripe billing portal**, where they can update their payment method, view invoices, or cancel. Bridge exposes the portal as a REST endpoint: `GET /account/subscription/portal` returns a one-time `portalUrl` to redirect to.
 
-There's no SDK wrapper for it yet, so call the endpoint directly with the signed-in user's access token. The example uses the default API base URL, `https://api.thebridge.dev`; if you set `apiBaseUrl` in your bridge config, call that base URL instead.
+The SDK wraps it: `getBridgeAuth().getBillingPortalUrl()` returns the one-time URL. It builds the request from the configured API base URL and attaches the signed-in user's token and app ID for you, so the same code works on stage and local dev. Call it at click time — the portal session is short-lived, so don't cache the result.
 
 ```tsx
 'use client';
-import { useBridgeTokens } from '@nebulr-group/bridge-nextjs/client';
+import { getBridgeAuth } from '@nebulr-group/bridge-nextjs/client';
 
 export function ManageBillingButton() {
-  const tokens = useBridgeTokens();
-
   async function openPortal() {
-    const res = await fetch('https://api.thebridge.dev/account/subscription/portal', {
-      headers: {
-        Authorization: `Bearer ${tokens?.accessToken}`,
-        'x-app-id': process.env.NEXT_PUBLIC_BRIDGE_APP_ID!,
-      },
-    });
-    const { portalUrl } = await res.json();
-    window.location.href = portalUrl;
+    window.location.href = await getBridgeAuth().getBillingPortalUrl();
   }
 
   return <button onClick={openPortal}>Manage billing</button>;
 }
 ```
+
+Prefer this over a hand-rolled `fetch`: hardcoding `https://api.thebridge.dev` sends a stage or local app to the production API, where its app ID doesn't exist. `NEXT_PUBLIC_BRIDGE_API_BASE_URL` is what points the SDK elsewhere.
+
+Only the workspace owner may open the portal. `getBridgeAuth().canManageBilling()` returns whether the signed-in user qualifies — use it to hide or disable the button rather than letting the call fail.
 
 See [Subscriptions & Entitlements → Open the billing portal](/api-reference/subscriptions/#open-the-billing-portal) for the endpoint reference.
 
