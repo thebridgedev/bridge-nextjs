@@ -39,13 +39,23 @@ Create `.env.local` at the project root:
 ```env
 NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id
 # Optional overrides (all start with NEXT_PUBLIC_BRIDGE_):
-# NEXT_PUBLIC_BRIDGE_API_BASE_URL=https://api.thebridge.dev
 # NEXT_PUBLIC_BRIDGE_CALLBACK_URL=http://localhost:3000/auth/oauth-callback
 # NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/
 # NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login
 # NEXT_PUBLIC_BRIDGE_SIGNUP_ROUTE=/auth/signup
 # NEXT_PUBLIC_BRIDGE_DEBUG=true
 ```
+
+**For a non-production app, set `NEXT_PUBLIC_BRIDGE_API_BASE_URL` too.** It defaults to production, and the failure is silent: a stage or local app ID pointed at the production API does not exist there, so signup comes back `Not Found` with nothing in the console naming the real cause.
+
+```env
+# Stage
+NEXT_PUBLIC_BRIDGE_API_BASE_URL=https://api-stage.thebridge.dev
+```
+
+Leave it unset only when the app ID really is a production one.
+
+Both halves of the SDK read this from the environment independently — `<BridgeProvider>` on the client and `getConfig()` / `withBridgeAuth` on the server — so `.env.local` is the only place that reaches both. Note also that `<BridgeProvider>` merges env vars **over** the `config` prop, so a value you passed in code is overridden by a matching `NEXT_PUBLIC_BRIDGE_*` variable. Worth knowing when a config value appears to be ignored.
 
 ## Wire the root layout
 
