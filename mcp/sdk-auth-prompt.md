@@ -2,6 +2,38 @@
 
 You are integrating in-app authentication UI (no redirect to bridge hosted auth) into a Next.js 15+ App Router project using **`@nebulr-group/bridge-nextjs`**. The plugin ships SDK auth components — login, signup, MFA, magic link, passkey, password reset, tenant/workspace selection — that render directly inside your app.
 
+## Decide first — hosted or in-app?
+
+| You want | Mode | What you build | Config |
+|---|---|---|---|
+| Bridge owns the login UI | **Hosted** (default) | Nothing — no login page | No `loginRoute` |
+| Login inside your app, your styling | **SDK auth** | Your own routes rendering `<LoginForm />`, `<SignupForm />` … | `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login` |
+
+**One config value is the whole switch.** Setting `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` (or the `loginRoute` option on `withBridgeAuth`) turns hosted mode off. If you are being redirected to a route you never built, that is why.
+
+> **Choosing SDK auth moves the route guard, and this is the easiest thing to get wrong in this package.** SDK-auth tokens live in the browser, where `withBridgeAuth` cannot see them, so the middleware steps aside for those requests (one dev-only warning) and **`<ProtectedRoute>` plus your own API become the guard**. A page protected only in `middleware.ts` is not protected in this mode.
+
+If the user has not said which they want, ask. A wrong guess here means rewriting the auth pages.
+
+The rest of this guide covers **SDK auth**.
+
+## Then — which component? Reach for these, do not hand-roll
+
+| Need | Component |
+|---|---|
+| Sign in | `<LoginForm />` |
+| Sign up | `<SignupForm />` |
+| Forgot password / set a new one | `<ForgotPassword />` (also inline in the login form; takes `token` for the set-password link) |
+| Magic link | `<MagicLink />` |
+| Passkey login / setup | `<PasskeyLogin />`, `<PasskeySetup />`, `<PasskeyRequestSetupLink />` |
+| MFA challenge / setup | `<MfaChallenge />`, `<MfaSetup />` |
+| Workspace ("tenant") selection | `<WorkspaceSelector />`, `<TenantSelector />` |
+| SSO button | `<SsoButton />` |
+
+> **`<LoginForm />` is not just an email and password box.** It drives forgot-password, magic link, passkeys, MFA and workspace selection as inline steps, and it decides which methods to show from the app's own configuration — which the client cannot see. Rebuilding any of it means reimplementing a flow that already exists, then keeping it in sync with settings you have no visibility of.
+
+All of these import from `@nebulr-group/bridge-nextjs/client` and must live in a `'use client'` file.
+
 ## Prerequisites
 
 - The integration prompt (`mcp/integration-prompt.md`) is complete: `BridgeProvider` wired, styles imported, OAuth callback route created.

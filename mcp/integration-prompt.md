@@ -2,6 +2,23 @@
 
 You are integrating **`@nebulr-group/bridge-nextjs`** (the Next.js plugin of the Bridge SDK platform) into a Next.js 15+ App Router project. Follow these steps in order. Do not skip steps.
 
+## Decide first — which layer guards your routes?
+
+Next.js has a server layer the other frontends do not, so the first question is not *which components* but *which layer decides who gets in*. Answer it before you write a route — it is the mistake with the largest blast radius in this package.
+
+| Your app signs in with | Guarded by | What `withBridgeAuth` does |
+|---|---|---|
+| **Hosted login** (default) — Bridge owns the login UI, the session is a cookie | `withBridgeAuth` in `middleware.ts`, before the page loads | Enforces every route that needs a session, and verifies the `bridge_access_token` cookie: PS256 signature against the Bridge JWKS, issuer `<apiBaseUrl>/auth`, audience containing your `appId`, expiry. Missing, forged, foreign or expired counts as signed out. If the check itself fails, the request is denied. |
+| **SDK auth** — the drop-in `<LoginForm />`, tokens live in the browser | `<ProtectedRoute>` in each protected page, **and your API** | Steps aside. It cannot see a browser-held session, and redirecting would loop a signed-in user, so a request without a Bridge session cookie is let through. One dev-only warning says so. |
+
+**Setting `loginRoute` is the entire switch** — either the `loginRoute` option on `withBridgeAuth` or `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE`. Without it you get hosted; with it the middleware is explicitly **not** the guard.
+
+> **A page you protect only in `middleware.ts` is not protected in SDK-auth mode.** The middleware lets it through by design, the page renders, and nothing looks wrong — until someone opens the URL signed out. Every SDK-auth page needs `<ProtectedRoute>`.
+
+**Neither route guard is authorization.** They decide what the browser is shown; every API route must still verify the user's token itself.
+
+If the user has not said which mode they want, ask.
+
 ## Prerequisites
 
 - Next.js **15.x or later** with the **App Router** (`app/` directory).

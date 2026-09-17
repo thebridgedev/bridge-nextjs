@@ -2,6 +2,28 @@
 
 You are adding **Feature Flags** to a Next.js 15+ App Router application that uses The Bridge. The goal is to ship code behind a switch you control from the Bridge dashboard — no redeploy needed. Next.js can read flags on the **client** (realtime) and on the **server** (per request) — both are covered below.
 
+## Decide first — where is the flag read, and what does it gate?
+
+Next.js reads flags in two places with different guarantees, and picking the wrong one fails silently: the read returns its default and looks like a flag that is simply off.
+
+| You are gating | Read it with | Import from |
+|---|---|---|
+| Markup in a **client** component | `<FeatureFlag flagKey="…">` | `/client` |
+| Markup in a **server** component | `<ServerFeatureFlag flagName="…">` | `/server` |
+| Behaviour or a **value** — a limit, an endpoint, a `string`/`number`/JSON flag | `useFlag(key, default)`, or `flagStore(key, default)` outside React | `/client` |
+| A value on the server | `FeatureFlagServer.getInstance().flagServer(key, default, request)` | `/server` |
+| A whole **path tree** | `withFeatureFlags([...])` in `middleware.ts`, or a `featureFlag` rule on `withBridgeAuth` | `/server` |
+| One **route handler** | `requireFeatureFlagForRoute(key, handler)` | `/server` |
+| Client-side navigation, when the middleware is not the guard | `createRouteGuard({ rules: [...] })` | `/client` |
+
+The prop name differs between the two components — `flagKey` on the client one, `flagName` on the server one. Neither errors on the wrong name; the read just returns the default.
+
+> **The client and the server do not see the same identity.** The server builds its eval context from the `bridge_access_token` cookie, which only the **hosted-auth** callback route writes. An SDK-auth app keeps tokens in `localStorage`, so the server sees no identity at all: every rule targeting `user.*` / `tenant.*`, and any `rolloutPct < 100`, falls back to the safe default. If the app signs in with `<LoginForm />`, gate on the client.
+
+**Client reads are realtime; server reads are a 30s pull cache.** Expect up to one TTL window of lag after a toggle before server-rendered output changes — and keep the route dynamic, or a cached route bakes in the old verdict.
+
+If both would work, prefer the client: it updates live, and a client eval is the only thing that auto-creates an unknown flag key in the dashboard.
+
 ## Prerequisites check
 
 Before starting, verify that Bridge is set up in this project:

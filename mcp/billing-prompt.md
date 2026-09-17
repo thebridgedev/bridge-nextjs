@@ -4,6 +4,27 @@ You are wiring **billing UI** into a Next.js 15+ App Router application that use
 
 > `<BridgeProvider>` (in your root layout) auto-bootstraps the billing surface — it reads `NEXT_PUBLIC_BRIDGE_APP_ID`, connects the live channel, and wires the reactive billing stores. The drop-in components below need no extra setup beyond being rendered inside the provider.
 
+## Decide first — which billing surface do you need?
+
+Plans, prices, quotas and Stripe are configured in the Bridge admin, not in code. What you choose here is which drop-in to mount. Every one of them is reactive and needs nothing beyond being rendered inside `<BridgeProvider>`.
+
+| You need | Mount | Notes |
+|---|---|---|
+| A signed-in tenant with no plan must pick one before using the app | `<BridgePaywall>` wrapping `{children}` | Fullscreen overlay; the recommended Next.js paywall. Alternative: a `/welcome` route mounting `<PlanSelector />` |
+| A dedicated plan-picking page | `<PlanSelector />` on your own route | Needs absolute `successUrl` / `cancelUrl` |
+| Current plan + status badge anywhere | `<BridgeSubscriptionStatus />` | No props required |
+| Lifecycle warnings — past due, trial ending, locked | `<BridgeBillingNotice />` | `mode="hard"` turns it into a blocking lockscreen when the workspace is locked |
+| A live quota counter | `<BridgeQuotaBanner metric="…" />` | Renders nothing if the current plan has no such quota |
+| Gate a feature by entitlement | `useBridgeBilling().entitlements.can('…')` | Fail-closed until hydrated |
+| Let users manage their payment method or cancel | `getBridgeAuth().getBillingPortalUrl()`, then redirect | |
+| Read plan / status in your own UI | `useSubscription()`, or `useBridgeBilling().subscription` for canonical live state | |
+
+**Set up the paywall unless the user says otherwise.** Without one, a signed-in tenant that never picked a plan uses the whole app for free.
+
+> **Never hardcode a billing-portal or Stripe URL.** `getBillingPortalUrl()` mints a portal session for the signed-in tenant; a pasted URL either expires or points at whichever workspace it was minted for. This has shipped as a bug before.
+
+Everything above is client-side: `'use client'`, importing from `@nebulr-group/bridge-nextjs/client`.
+
 ## Prerequisites
 
 - The integration prompt is complete (`<BridgeProvider>` in `app/layout.tsx`, OAuth callback route, `NEXT_PUBLIC_BRIDGE_APP_ID` set).
