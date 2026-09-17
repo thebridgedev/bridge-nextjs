@@ -416,6 +416,7 @@ export function LoginForm({
               mode={ssoMode}
               onSuccess={onLogin}
               onError={onError}
+              messages={messages}
               className="bridge-btn bridge-btn-secondary bridge-sso-btn"
               icon={<SsoProviderIcon type={conn.type} />}
             />

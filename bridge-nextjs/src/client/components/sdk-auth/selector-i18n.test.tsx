@@ -18,6 +18,8 @@
  * `act` directly, the same way strictmode-remount.test.tsx does.
  */
 import * as React from 'react';
+import fs from 'node:fs';
+import path from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { en, sv } from '@nebulr-group/bridge-auth-core';
 
@@ -284,18 +286,149 @@ describe('SsoButton errors (TBP-634)', () => {
   });
 });
 
-describe('LoginForm → TenantSelector fan-out (TBP-634)', () => {
-  it('passes messages down, the way it already does to MfaChallenge', async () => {
-    // Only renders on the multi-workspace auth state, which is why it is the
-    // fan-out that gets forgotten.
-    boot('sv');
-    useBridgeStore.setState({
-      authState: 'tenant-selection',
-      tenantUsers: [TENANT],
-    } as never);
+// ===========================================================================
+// LoginForm messages fan-out (TBP-634)
+//
+// SsoButton declared `messages?: MessageOverrides`, used it, and LoginForm
+// simply never passed it — so a per-component override reached MfaChallenge,
+// MfaSetup, TenantSelector and PasskeyLogin but died at the SSO buttons.
+//
+// The obvious fix is a test per child. That reproduces the exact blind spot
+// that shipped the bug: the list is written by hand, so the child nobody
+// thought of is the child nobody tests. This DERIVES the list instead — read
+// LoginForm's own imports, keep the ones whose source declares a `messages`
+// prop, and require every one of them to be driven. Adding a sixth
+// messages-taking child to LoginForm fails this suite until it is wired up and
+// given a driver, which is the failure that was missing.
+//
+// Each case asserts BEHAVIOUR, not source text: the child is rendered through
+// a real LoginForm in the auth state that shows it, and the override has to
+// come out the other end as visible copy.
+// ===========================================================================
 
-    await mount(<LoginForm messages={{ 'tenant.chooseHeading': 'Välj kund' }} />);
-    expect(text()).toContain('Välj kund');
-    expect(text()).not.toContain(sv['tenant.chooseHeading']);
+const SDK_AUTH_DIR = path.join(__dirname);
+
+/** Component names LoginForm imports from its own directory. */
+function loginFormChildImports(): string[] {
+  const source = fs.readFileSync(path.join(SDK_AUTH_DIR, 'LoginForm.tsx'), 'utf8');
+  const names = new Set<string>();
+  // `import { Foo } from './Foo';` and `from './shared/Foo';`
+  for (const m of source.matchAll(/import\s*\{([^}]+)\}\s*from\s*'(\.\/[^']+)'/g)) {
+    for (const raw of m[1].split(',')) {
+      const name = raw.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim();
+      if (name) names.add(name);
+    }
+  }
+  return [...names];
+}
+
+/** Does `<dir>/<name>.tsx` declare a `messages` prop of its own? */
+function declaresMessagesProp(name: string): boolean {
+  for (const rel of [`${name}.tsx`, path.join('shared', `${name}.tsx`)]) {
+    const full = path.join(SDK_AUTH_DIR, rel);
+    if (!fs.existsSync(full)) continue;
+    return /^\s*messages\?:\s*MessageOverrides;/m.test(fs.readFileSync(full, 'utf8'));
+  }
+  return false;
+}
+
+const MESSAGE_TAKING_CHILDREN = loginFormChildImports().filter(declaresMessagesProp).sort();
+
+/**
+ * How to make LoginForm render each child, and a key that child renders, so the
+ * override can be observed as visible copy rather than inferred from markup.
+ */
+const FAN_OUT_DRIVERS: Record<
+  string,
+  {
+    props?: Record<string, unknown>;
+    state?: Record<string, unknown>;
+    key: string;
+    override: string;
+    expect: string;
+    /** The built-in copy the override must have displaced. */
+    displaces: string;
+  }
+> = {
+  MfaChallenge: {
+    state: { authState: 'mfa-required' },
+    key: 'mfa.challengeHeading',
+    override: 'ÖVERRIDE tvåfaktor',
+    expect: 'ÖVERRIDE tvåfaktor',
+    displaces: sv['mfa.challengeHeading'],
+  },
+  MfaSetup: {
+    state: { authState: 'mfa-setup-required' },
+    key: 'mfaSetup.heading',
+    override: 'ÖVERRIDE ställ in tvåfaktor',
+    expect: 'ÖVERRIDE ställ in tvåfaktor',
+    displaces: sv['mfaSetup.heading'],
+  },
+  TenantSelector: {
+    state: { authState: 'tenant-selection', tenantUsers: [TENANT] },
+    key: 'tenant.chooseHeading',
+    override: 'ÖVERRIDE välj kund',
+    expect: 'ÖVERRIDE välj kund',
+    displaces: sv['tenant.chooseHeading'],
+  },
+  PasskeyLogin: {
+    props: { showPasskeys: true },
+    key: 'passkey.loginButton',
+    override: 'ÖVERRIDE logga in med nyckel',
+    expect: 'ÖVERRIDE logga in med nyckel',
+    displaces: sv['passkey.loginButton'],
+  },
+  SsoButton: {
+    // The one that was missed. Rendered only when LoginForm has connections
+    // AND no `onSsoClick` — the app-supplied handler branch renders a plain
+    // button instead, which is why the SsoButton path is easy to overlook.
+    props: { ssoConnections: [CONNECTION] },
+    key: 'sso.continueWith',
+    override: 'ÖVERRIDE fortsätt via {provider}',
+    expect: 'ÖVERRIDE fortsätt via Google',
+    displaces: sv['sso.continueWith'].replace('{provider}', 'Google'),
+  },
+};
+
+describe('LoginForm messages fan-out (TBP-634)', () => {
+  it('derives a sane list of messages-taking children from LoginForm itself', () => {
+    // Without this the derivation could silently resolve to [] — every
+    // generated case would then pass by never running.
+    expect(MESSAGE_TAKING_CHILDREN.length).toBeGreaterThanOrEqual(2);
+    expect(MESSAGE_TAKING_CHILDREN).toContain('TenantSelector');
+    expect(MESSAGE_TAKING_CHILDREN).toContain('SsoButton');
+    // And children that take no `messages` must not have crept in, or the
+    // filter is passing everything.
+    expect(MESSAGE_TAKING_CHILDREN).not.toContain('SsoProviderIcon');
+    expect(MESSAGE_TAKING_CHILDREN).not.toContain('Spinner');
   });
+
+  it('has a driver for every messages-taking child it imports', () => {
+    // A new child added to LoginForm lands here first. Wire a driver rather
+    // than deleting the name — an untested fan-out is the whole bug.
+    expect(MESSAGE_TAKING_CHILDREN.filter((c) => !FAN_OUT_DRIVERS[c])).toEqual([]);
+  });
+
+  for (const child of MESSAGE_TAKING_CHILDREN) {
+    it(`fans messages down to ${child}`, async () => {
+      const driver = FAN_OUT_DRIVERS[child];
+      if (!driver) throw new Error(`No fan-out driver for ${child}`);
+
+      boot('sv');
+      if (driver.state) useBridgeStore.setState(driver.state as never);
+
+      await mount(
+        <LoginForm
+          {...(driver.props ?? {})}
+          messages={{ [driver.key]: driver.override } as never}
+        />,
+      );
+
+      expect(text()).toContain(driver.expect);
+      // Displaced, not merely accompanied — a child that ignored `messages`
+      // and rendered the catalogue copy alongside would pass a `toContain`
+      // on the override alone if the override happened to appear elsewhere.
+      expect(text()).not.toContain(driver.displaces);
+    });
+  }
 });
