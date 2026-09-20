@@ -1,7 +1,7 @@
 'use client';
 
 import type { HTMLAttributes } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MessageOverrides, Translator } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
@@ -72,6 +72,42 @@ export function MagicLink({
       setLoading(false);
     }
   }
+
+  // TBP-682: the emailed link returns to the page the request was made from,
+  // so this component must redeem the token as well as send it. Without this
+  // effect a link requested here lands back here and does nothing — the token
+  // sits in the address bar and the user stays signed out. Mirrors LoginForm,
+  // which has always redeemed on mount.
+  //
+  // Safe under StrictMode's dev-only double-invoke without a ref guard, for the
+  // same reason LoginForm is: the token is removed from the URL synchronously,
+  // before the redeem is started, so the second run finds no token and returns
+  // at the guard above it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const magicToken = params.get('bridge_magic_link_token');
+    if (!magicToken) return;
+
+    // Drop the token from the URL before redeeming, so a reload or a shared
+    // link cannot replay it.
+    params.delete('bridge_magic_link_token');
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+    window.history.replaceState({}, '', newUrl);
+
+    setLoading(true);
+    setError(null);
+    (getBridgeAuth() as any)
+      .authenticateWithMagicLinkToken(magicToken)
+      .catch((err: any) => {
+        setError(authErrorMessage(err, t, 'magicLink.error.auth'));
+        onError?.(err);
+      })
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AuthFormWrapper
