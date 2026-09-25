@@ -8,7 +8,11 @@
  * See bridge-api docs/tests/PLAYWRIGHT_PATTERNS.md for patterns and guidelines.
  */
 
-import { EnvironmentConfig } from '../config/environments';
+import {
+  DEFAULT_PROD_API_BASE_URL,
+  DEFAULT_STAGE_API_BASE_URL,
+  EnvironmentConfig,
+} from '../config/environments';
 
 /**
  * Playwright test account data returned from the API.
@@ -510,24 +514,30 @@ export class TestDataClient {
  *
  * The test data API URL is resolved per environment:
  * - Local: LOCAL_TEST_DATA_API_URL or http://localhost:3200
- * - Stage: STAGE_TEST_DATA_API_URL
- * - Prod: PROD_TEST_DATA_API_URL
+ * - Stage: STAGE_TEST_DATA_API_URL or the public stage API
+ * - Prod: PROD_TEST_DATA_API_URL or the public prod API
+ *
+ * @param appDomain - Target a specific app domain instead of `APP_DOMAIN`.
+ *   The fallback used to be `BRIDGE_SVELTE_TEST_DASHBOARD` — a copy-paste from
+ *   bridge-svelte — so global-setup's purge swept bridge-svelte's test app
+ *   (possibly mid-run) and never this suite's own (TBP-721).
  */
-export function createTestDataClientFromEnv(): TestDataClient {
+export function createTestDataClientFromEnv(appDomain?: string): TestDataClient {
   const projectName = process.env.PLAYWRIGHT_PROJECT_NAME || '';
   let testDataApiUrl: string;
 
   if (projectName.includes('prod')) {
-    testDataApiUrl = process.env.PROD_TEST_DATA_API_URL || '';
+    testDataApiUrl = process.env.PROD_TEST_DATA_API_URL || DEFAULT_PROD_API_BASE_URL;
   } else if (projectName.includes('stage')) {
-    testDataApiUrl = process.env.STAGE_TEST_DATA_API_URL || '';
+    testDataApiUrl = process.env.STAGE_TEST_DATA_API_URL || DEFAULT_STAGE_API_BASE_URL;
   } else {
     testDataApiUrl =
       process.env.LOCAL_TEST_DATA_API_URL || 'http://localhost:3200';
   }
 
   const testDataApiKey = process.env.PLAYWRIGHT_TEST_API_KEY;
-  const appDomain = process.env.APP_DOMAIN || 'BRIDGE_SVELTE_TEST_DASHBOARD';
+  const resolvedAppDomain =
+    appDomain || process.env.APP_DOMAIN || 'BRIDGE_NEXTJS_TEST_DASHBOARD';
 
   if (!testDataApiKey) {
     throw new Error('PLAYWRIGHT_TEST_API_KEY environment variable is required');
@@ -538,8 +548,9 @@ export function createTestDataClientFromEnv(): TestDataClient {
     baseUrl: '',
     testDataApiUrl,
     testDataApiKey,
+    apiBaseUrl: '',
     appId: process.env.BRIDGE_TEST_APP_ID || '',
-    appDomain,
+    appDomain: resolvedAppDomain,
     isContainer: false,
   });
 }

@@ -60,10 +60,11 @@ The demo application in this repository contains runnable examples of the usage 
 E2E tests use Playwright. Run them from the repo root.
 
 1. **Configure env:** Copy `config/.env.test.local.example` to `config/.env.test.local` and fill in the values (test data API key, etc.).
-2. **Pre-setup:** The first step of `test:e2e` runs a pre-setup script that creates/gets the test app and writes `NEXT_PUBLIC_BRIDGE_APP_ID` into `demo/.env.test.local` so the demo starts with the correct app.
-3. **Install browsers (once):** `npx playwright install`
-4. **Run tests:**
-   - `npm run test:e2e` — local (starts demo on port 3001, runs Playwright)
+2. **Pre-setup:** The first step of `test:e2e` runs a pre-setup script that creates/gets the test app and, for local runs only, writes `config/.env.demo.test.local` (the local API root depends on your slot). `config/.env.demo.test.stage` and `config/.env.demo.test.prod` are tracked in git with every key explicit.
+3. **Global setup:** resolves the app id from the test-data API and seeds it into the browser as `localStorage['bridge:appId']`, which the demo passes to `BridgeProvider` — the demo env files deliberately leave `NEXT_PUBLIC_BRIDGE_APP_ID` empty. It then asserts that the demo is serving the environment the Playwright project targets (env pill, API root, and the requests the SDK makes on boot), so a stage run can never quietly drive a local or production backend.
+4. **Install browsers (once):** `npx playwright install`
+5. **Run tests** (always through these scripts — they pass the environment to the webServer that starts the demo on port 3010):
+   - `npm run test:e2e` — local
    - `npm run test:e2e:stage` — stage
    - `npm run test:e2e:prod` — prod
    - `npm run test:e2e:headed` — local with browser visible
