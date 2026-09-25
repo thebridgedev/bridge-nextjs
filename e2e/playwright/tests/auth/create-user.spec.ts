@@ -14,7 +14,10 @@ test.describe('Create User (Sign Up) Flow', () => {
     page,
     testDataClient,
   }) => {
-    const signupEmail = `playwright-test-signup-${Date.now()}@thebridge.io`;
+    // Safe-sender pattern: bridge-api's remove/purge endpoints only act on
+    // `iman+playwright-test-*@nebulr.group`, so the old `…@thebridge.io`
+    // accounts were never cleaned up (TBP-721).
+    const signupEmail = `iman+playwright-test-signup-${Date.now()}@nebulr.group`;
 
     try {
       await page.goto('/auth/signup');
