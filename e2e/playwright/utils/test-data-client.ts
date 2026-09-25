@@ -285,6 +285,7 @@ export class TestDataClient {
     paymentsAutoRedirect?: boolean;
     stripeEnabled?: boolean;
     redirectUris?: string[];
+    allowedOrigins?: string[];
     defaultCallbackUri?: string;
     stripePublicKey?: string;
     stripeSecretKey?: string;
@@ -447,6 +448,42 @@ export class TestDataClient {
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Failed to set tenant plan: ${response.status} ${error}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Clears a tenant's plan, putting it in the "never onboarded" state so the
+   * paywall redirect fires.
+   *
+   * `createPlaywrightTestAccount` binds every new tenant to a TEAM trial, so a
+   * fresh fixture account reports `shouldSelectPlan: false` and can never reach
+   * the plan-selection flow. Use this instead of deleting the app's plan and
+   * recreating it in a `finally` — that mutates state every spec shares, so a
+   * concurrently-running test sees an app with no TEAM plan (bridge-svelte
+   * TBP-370; the same deletion caused 23 stage failures here, TBP-721).
+   *
+   * @param tenantId - Tenant ID to clear
+   */
+  async clearTenantPlan(
+    tenantId: string,
+  ): Promise<{ shouldSelectPlan: boolean; shouldSetupPayments: boolean; plan?: string }> {
+    const response = await fetch(`${this.baseUrl}/account/test/playwright/clear-tenant-plan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-playwright-api-key': this.apiKey,
+      },
+      body: JSON.stringify({
+        appDomain: this.appDomain,
+        tenantId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to clear tenant plan: ${response.status} ${error}`);
     }
 
     return response.json();

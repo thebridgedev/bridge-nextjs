@@ -15,7 +15,7 @@
  * used by `bridge-init.spec.ts`).
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures/auth';
 import { MED_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('Unified bridge surface — session.snapshot end-to-end', () => {

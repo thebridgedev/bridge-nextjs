@@ -8,7 +8,7 @@
  * feature-flags.spec.ts XOR check. Assertions strengthened, never weakened.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures/auth';
 import { MED_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('Feature flags', () => {

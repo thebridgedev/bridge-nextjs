@@ -70,6 +70,10 @@ E2E tests use Playwright. Run them from the repo root.
    - `npm run test:e2e:headed` — local with browser visible
    - `npm run test:e2e:report` — open last HTML report
 
+### Parallelism: one Bridge app per worker
+
+`paymentsAutoRedirect`, `stripeEnabled`, the SSO flags and the plan catalogue are **app-level** settings. Global setup therefore provisions one Bridge app per Playwright worker (`BRIDGE_NEXTJS_TEST_DASHBOARD`, `…_W1`, `…_W2`, … — idempotent by domain and reused across runs; worker 0 keeps the unsuffixed domain), ensures the `TEAM` plan every test account is created on, and seeds each worker's app id into that worker's browser storage. A spec that changes an app-level setting restores it in a `finally`; the `appConfigBaseline` fixture re-applies the baseline if a spec died before its `finally` ran. No spec may delete or rename a plan other specs depend on — use `clearTenantPlan` to put one tenant in the "no plan" state.
+
 ## Publishing & Release
 
 Bridge Next.js is published to npm via GitHub Actions. To release a new version, update the version in `bridge-nextjs/package.json`, merge to `main`, and tag the release (e.g. `v0.1.0`).

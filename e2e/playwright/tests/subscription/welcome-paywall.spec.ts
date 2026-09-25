@@ -24,6 +24,7 @@
  */
 
 import { test, expect, loginViaSdkAuth } from '../../fixtures/auth';
+import { PAYWALL_PLAN } from '../../fixtures/plans';
 import { LONG_TIMEOUT, MED_TIMEOUT } from '../../fixtures/timeouts';
 
 const STRIPE_TEST_PK = process.env.STRIPE_TEST_PK || '';
@@ -72,7 +73,11 @@ test.describe('Welcome Paywall — first-time user flow', () => {
     // ONCE; every subsequent run reuses them with NO Stripe re-sync, so by
     // checkout time the price has been active+checkout-ready for ages. The plan is
     // intentionally NOT deleted in teardown — it persists for reuse. See TBP-408.
-    const planKey = 'e2e-paywall-pro';
+    //
+    // TBP-721: global-setup now `ensurePlan`s this on every worker app before the
+    // run, so even a brand-new worker app arrives here with a synced price. The
+    // call below stays as the fallback for anyone running this spec in isolation.
+    const planKey = PAYWALL_PLAN.key;
 
     try {
       // ---- Arrange: configure the app for Stripe + paywall, and ensure the paid plan
@@ -81,29 +86,27 @@ test.describe('Welcome Paywall — first-time user flow', () => {
         stripeEnabled: true,
         stripePublicKey: STRIPE_TEST_PK,
         stripeSecretKey: STRIPE_TEST_SK,
-        currency: 'USD',
+        currency: PAYWALL_PLAN.currency,
       });
 
       // Create-if-absent: on the first ever run this creates the plan and syncs
       // its Stripe price once; on every later run it returns the existing plan
       // WITHOUT re-triggering the Stripe archive sweep (the flake source).
-      await testDataClient.ensurePlan({
-        key: planKey,
-        name: 'Paywall Pro',
-        description: 'Paid plan for welcome-paywall E2E (stable, reused across runs)',
-        trial: false,
-        trialDays: 0,
-        prices: [{ amount: 2900, currency: 'USD', recurrenceInterval: 'month' }],
-      });
+      await testDataClient.ensurePlan({ ...PAYWALL_PLAN.definition });
 
       // ---- 1a. Force the "no plan selected" state. createPlaywrightTestAccount
       //          auto-binds the new tenant to the app's hardcoded `TEAM` trial
       //          plan, so `shouldSelectPlan` would be `false` out of the gate.
-      //          Deleting the TEAM plan leaves the tenant pointing at a plan
-      //          key that no longer exists in the app → the API flips
-      //          shouldSelectPlan back to `true`. We recreate TEAM in finally
-      //          to restore the app's seeded shape.
-      await testDataClient.deletePlan('TEAM').catch(() => {});
+      //
+      //          TBP-721: this used to delete the app's TEAM plan and recreate it
+      //          in a `finally`. TEAM is the plan EVERY test account is created
+      //          on, and four other workers were creating accounts on the same
+      //          app meanwhile — 23 stage failures were `404 The app … has no
+      //          plan with key: TEAM`, and a timed-out run left it deleted for
+      //          good. `clearTenantPlan` reaches the same state by clearing the
+      //          field on THIS tenant only (bridge-svelte TBP-370).
+      const cleared = await testDataClient.clearTenantPlan(testUser.tenantId);
+      expect(cleared.shouldSelectPlan).toBe(true);
 
       // ---- 1. Sign in the fresh test user via SDK auth (no plan selected yet).
       //         loginViaSdkAuth establishes the tokens in localStorage. We do NOT
@@ -249,23 +252,16 @@ test.describe('Welcome Paywall — first-time user flow', () => {
       expect(finalPath).not.toBe('/welcome');
       expect(finalPath).toBe('/protected');
     } finally {
-      // ---- Cleanup: restore the TEAM trial plan that other tests rely on and
-      //               disable Stripe on the test app. The testUser is auto-cleaned
-      //               by the fixture.
+      // ---- Cleanup: disable Stripe and the paywall on this worker's app. The
+      //               testUser is auto-cleaned by the fixture.
+      //
+      // The TEAM plan no longer needs restoring: the setup above no longer
+      // touches it (TBP-721).
       //
       // We do NOT delete the stable `e2e-paywall-pro` plan: it is meant to persist
       // and be reused across runs so its Stripe price stays synced+active. Deleting
       // it would re-run the Stripe archive sweep AND force the next run to recreate
       // (and re-race) the price — exactly the flake this change removes.
-      await testDataClient
-        .createPlan({
-          key: 'TEAM',
-          name: 'Team',
-          trial: true,
-          trialDays: 14,
-          prices: [{ amount: 99, currency: 'EUR', recurrenceInterval: 'month' }],
-        })
-        .catch(() => {});
       await testDataClient
         .configureApp({ paymentsAutoRedirect: false, stripeEnabled: false })
         .catch(() => {});

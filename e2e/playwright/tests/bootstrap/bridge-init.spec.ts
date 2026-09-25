@@ -2,9 +2,8 @@
  * Bootstrap / Bridge initialization tests for bridge-nextjs demo.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, waitForHydration } from '../../fixtures/auth';
 import { MED_TIMEOUT } from '../../fixtures/timeouts';
-import { waitForHydration } from '../../fixtures/auth';
 
 test.describe('Bridge Initialization', () => {
   test('demo app loads without critical console errors', async ({ page }) => {

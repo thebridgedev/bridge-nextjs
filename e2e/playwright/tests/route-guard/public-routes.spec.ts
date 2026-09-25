@@ -2,7 +2,7 @@
  * Public routes — home page accessible without login.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures/auth';
 import { MED_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('Public routes', () => {
