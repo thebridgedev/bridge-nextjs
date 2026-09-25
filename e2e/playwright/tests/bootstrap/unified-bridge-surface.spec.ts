@@ -21,7 +21,6 @@ import { MED_TIMEOUT } from '../../fixtures/timeouts';
 test.describe('Unified bridge surface — session.snapshot end-to-end', () => {
   test('snapshot lands and populates bridge.tenant + bridge.user', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
 
     // The demo exposes `window.bridge` for e2e access (see BridgeWindowExpose).
     const result = await page.waitForFunction(
@@ -59,7 +58,6 @@ test.describe('Unified bridge surface — session.snapshot end-to-end', () => {
 
   test('entitlements.can() answers from the snapshot map', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
 
     const canApp = await page.waitForFunction(
       () => {
@@ -77,7 +75,14 @@ test.describe('Unified bridge surface — session.snapshot end-to-end', () => {
 
   test('bridge.app.plans is lazy — null until .load(), populated after', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    // What the first evaluate needs is `window.bridge`, so wait for that. Waiting
+    // for the network to go idle would never return once the SDK holds its
+    // realtime WebSocket (TBP-721).
+    await page.waitForFunction(
+      () => !!(window as unknown as { bridge?: unknown }).bridge,
+      undefined,
+      { timeout: MED_TIMEOUT },
+    );
 
     // Initially null.
     const initial = await page.evaluate(() => {

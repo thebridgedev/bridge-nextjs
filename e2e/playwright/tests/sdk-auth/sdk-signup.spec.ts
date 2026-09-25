@@ -1,10 +1,12 @@
-import { test, expect } from '../../fixtures/auth';
+import { test, expect, waitForHydration } from '../../fixtures/auth';
 import { MED_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('SDK Signup', () => {
   test('fill form → submit → "Check your email" shown', async ({ page }) => {
     await page.goto('/auth/signup');
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     const emailInput = page.locator('#signup-email');
     await emailInput.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
@@ -27,7 +29,6 @@ test.describe('SDK Signup', () => {
 
   test('shows login link', async ({ page }) => {
     await page.goto('/auth/signup');
-    await page.waitForLoadState('networkidle');
 
     const loginLink = page.locator('a[href="/auth/login"]:has-text("Log in")');
     await loginLink.waitFor({ state: 'visible', timeout: MED_TIMEOUT });

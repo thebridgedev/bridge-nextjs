@@ -13,7 +13,6 @@ test.describe('Subscription Plans', () => {
     const page = authenticatedPage;
 
     await page.goto('/subscription');
-    await page.waitForLoadState('networkidle');
 
     // Wait for plan selector to stop loading
     const planSelector = page.locator('[data-bridge-plan-selector]');
@@ -36,7 +35,6 @@ test.describe('Subscription Plans', () => {
     const page = authenticatedPage;
 
     await page.goto('/subscription');
-    await page.waitForLoadState('networkidle');
 
     const planSelector = page.locator('[data-bridge-plan-selector]');
     await expect(planSelector).toBeVisible({ timeout: MED_TIMEOUT });
@@ -93,7 +91,6 @@ test.describe('Subscription Plans', () => {
     });
 
     await page.goto('/subscription');
-    await page.waitForLoadState('networkidle');
 
     const planSelector = page.locator('[data-bridge-plan-selector]');
     await expect(planSelector).not.toHaveAttribute('data-loading', 'true', { timeout: LONG_TIMEOUT });
@@ -156,7 +153,6 @@ test.describe('Subscription Plans', () => {
     });
 
     await page.goto('/subscription');
-    await page.waitForLoadState('networkidle');
 
     const planSelector = page.locator('[data-bridge-plan-selector]');
     await expect(planSelector).not.toHaveAttribute('data-loading', 'true', { timeout: LONG_TIMEOUT });
@@ -203,7 +199,6 @@ test.describe('Subscription Plans', () => {
     });
 
     await page.goto('/subscription');
-    await page.waitForLoadState('networkidle');
 
     const planSelector = page.locator('[data-bridge-plan-selector]');
     await expect(planSelector).not.toHaveAttribute('data-loading', 'true', { timeout: LONG_TIMEOUT });

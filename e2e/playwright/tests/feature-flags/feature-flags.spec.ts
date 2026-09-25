@@ -14,7 +14,6 @@ import { MED_TIMEOUT } from '../../fixtures/timeouts';
 test.describe('Feature flags', () => {
   test('feature flag section is visible on home page', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
 
     await expect(
       page.locator('h2:has-text("Feature Flag Examples")'),
@@ -23,7 +22,6 @@ test.describe('Feature flags', () => {
 
   test('<FeatureFlag> renders exactly one branch for demo-flag', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
 
     // The "Flag with fallback" card renders either the on branch
     // (data-testid="demo-flag-on") or the fallback (data-testid="demo-flag-off")

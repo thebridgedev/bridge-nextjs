@@ -120,7 +120,7 @@ test.describe('Welcome Paywall — first-time user flow', () => {
       //         the localStorage read below is reliable.
       //
       //         waitUntil:'commit' so the demo's persistent live-channel
-      //         WebSocket (which keeps 'load'/'networkidle' from settling) does
+      //         WebSocket (which keeps the load / network-idle states from settling) does
       //         not hang the navigation; the waitForURL below is the real settle.
       //         NOTE: known pre-existing harness limitation (TBP-405/406) — under
       //         `next dev` + Playwright the demo's always-on WebSocket can prevent

@@ -23,7 +23,13 @@ test.describe('Token Persistence', () => {
 
     // Reload the page
     await page.reload();
-    await page.waitForLoadState('networkidle');
+
+    // The claim under test is that the reloaded app comes back authenticated, so
+    // wait for the authenticated nav before reading storage — not for the network
+    // to go idle, which it never does while the SDK holds its WebSocket (TBP-721).
+    await expect(page.locator('button:has-text("Logout")')).toBeVisible({
+      timeout: MED_TIMEOUT,
+    });
 
     // Get tokens after reload
     const tokensAfter = await page.evaluate(() => {
@@ -43,7 +49,6 @@ test.describe('Token Persistence', () => {
     const page = authenticatedPage;
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
 
     // Verify authenticated state
     await expect(page.locator('button:has-text("Logout")')).toBeVisible({
@@ -52,7 +57,6 @@ test.describe('Token Persistence', () => {
 
     // Reload
     await page.reload();
-    await page.waitForLoadState('networkidle');
 
     // Should still be authenticated — Logout button should still be visible
     await expect(page.locator('button:has-text("Logout")')).toBeVisible({
@@ -67,7 +71,6 @@ test.describe('Token Persistence', () => {
 
     // Navigate to protected page
     await page.goto('/protected');
-    await page.waitForLoadState('networkidle');
 
     // Should show profile info
     await expect(page.locator('h1:has-text("Protected Page")')).toBeVisible({
@@ -76,7 +79,6 @@ test.describe('Token Persistence', () => {
 
     // Reload
     await page.reload();
-    await page.waitForLoadState('networkidle');
 
     // Should still show protected page content (not redirect to login)
     await expect(page.locator('h1:has-text("Protected Page")')).toBeVisible({

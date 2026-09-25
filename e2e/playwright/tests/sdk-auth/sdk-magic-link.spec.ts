@@ -1,10 +1,12 @@
-import { test, expect } from '../../fixtures/auth';
+import { test, expect, waitForHydration } from '../../fixtures/auth';
 import { MED_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('SDK Magic Link', () => {
   test('enter email → "Check your email" shown', async ({ page, testUser }) => {
     await page.goto('/auth/magic-link');
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     const emailInput = page.locator('#magic-email');
     await emailInput.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
@@ -21,7 +23,6 @@ test.describe('SDK Magic Link', () => {
 
   test('has back to login link', async ({ page }) => {
     await page.goto('/auth/magic-link');
-    await page.waitForLoadState('networkidle');
 
     const loginLink = page.locator('a[href="/auth/login"]:has-text("Back to login")');
     await loginLink.waitFor({ state: 'visible', timeout: MED_TIMEOUT });

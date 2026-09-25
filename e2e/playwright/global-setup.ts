@@ -125,7 +125,7 @@ export async function verifyDemoBoot(opts: {
   });
 
   try {
-    // Don't wait for 'load'/'networkidle': the SDK opens a realtime WebSocket.
+    // Don't wait for the load or network-idle states: the SDK opens a realtime WebSocket.
     await page.goto(opts.baseURL, { waitUntil: 'domcontentloaded' });
 
     // ConfigStatus renders the app id only once it resolved one.

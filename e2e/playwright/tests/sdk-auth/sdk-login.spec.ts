@@ -1,4 +1,4 @@
-import { test, expect, loginViaSdkAuth } from '../../fixtures/auth';
+import { test, expect, loginViaSdkAuth, waitForHydration } from '../../fixtures/auth';
 import { MED_TIMEOUT, LONG_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('SDK Login', () => {
@@ -21,7 +21,9 @@ test.describe('SDK Login', () => {
 
   test('shows error on wrong credentials', async ({ page, testUser }) => {
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     // Fill email and password on the single-step form
     const emailInput = page.locator('#login-email');
@@ -40,7 +42,9 @@ test.describe('SDK Login', () => {
 
   test('forgot password link shows reset step then back returns to login', async ({ page }) => {
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     // Credentials step should be visible
     await page.locator('#login-email').waitFor({ state: 'visible', timeout: MED_TIMEOUT });

@@ -10,13 +10,12 @@
  * Also tests the basic signup form rendering and validation.
  */
 
-import { test, expect } from '../../fixtures/auth';
+import { test, expect, waitForHydration } from '../../fixtures/auth';
 import { MED_TIMEOUT, LONG_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('SDK Signup', () => {
   test('signup form renders with required fields', async ({ page }) => {
     await page.goto('/auth/signup');
-    await page.waitForLoadState('networkidle');
 
     await expect(page.locator('#signup-email')).toBeVisible({ timeout: MED_TIMEOUT });
     await expect(page.locator('#signup-first-name')).toBeVisible({ timeout: MED_TIMEOUT });
@@ -26,7 +25,6 @@ test.describe('SDK Signup', () => {
 
   test('login link is visible on signup page', async ({ page }) => {
     await page.goto('/auth/signup');
-    await page.waitForLoadState('networkidle');
 
     const loginLink = page.locator('a[href="/auth/login"]:has-text("Log in")');
     await expect(loginLink).toBeVisible({ timeout: MED_TIMEOUT });
@@ -40,7 +38,9 @@ test.describe('SDK Signup', () => {
     const email = `playwright-test-signup-${Date.now()}@thebridge.io`;
 
     await page.goto('/auth/signup');
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     await page.locator('#signup-email').waitFor({ state: 'visible', timeout: MED_TIMEOUT });
     await page.locator('#signup-email').fill(email);
@@ -72,7 +72,9 @@ test.describe('SDK Signup', () => {
 
     // Step 1: Fill and submit signup form
     await page.goto('/auth/signup');
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     await page.locator('#signup-email').waitFor({ state: 'visible', timeout: MED_TIMEOUT });
     await page.locator('#signup-email').fill(email);
@@ -100,7 +102,9 @@ test.describe('SDK Signup', () => {
     // Extract path and navigate within the current origin
     const url = new URL(verificationLink);
     await page.goto(url.pathname);
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     // Step 4: Set a new password
     const passwordInput = page.locator('input[type="password"]').first();
@@ -122,7 +126,9 @@ test.describe('SDK Signup', () => {
 
     // Navigate to login and verify credentials work
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    // Form interaction needs React to own the inputs, not the network to idle
+    // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+    await waitForHydration(page);
 
     await page.locator('#login-email').waitFor({ state: 'visible', timeout: MED_TIMEOUT });
     await page.locator('#login-email').fill(email);
