@@ -63,6 +63,9 @@ const flush = async () => {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 };
 
+/** What the server says before the upgrade — the state the page loaded with. */
+const FREE_STATE = { plan: { slug: 'free', name: 'Free' }, status: 'active' };
+const FREE_ENTITLEMENTS = { entitlements: { app_active: true } };
 /** What the server says after the upgrade whose push was lost. */
 const PRO_STATE = { plan: { slug: 'pro', name: 'Pro' }, status: 'active' };
 const PRO_ENTITLEMENTS = { entitlements: { pro_reports: true, app_active: true } };
@@ -82,25 +85,29 @@ describe('reconnect catch-up (TBP-660)', () => {
   let savedFetch: typeof fetch | undefined;
   // When set, `GET /billing/state` waits on it — the read is in flight.
   let billingGate: Deferred<unknown> | null = null;
+  // Free until the initial connect has caught up, then Pro: the upgrade whose
+  // push the tests below lose.
+  let upgraded = false;
 
   const open = () => (openSpy.mock.calls[openSpy.mock.calls.length - 1][0] as () => void)();
   const calls = (path: string) => apiFetch.mock.calls.filter(([url]) => new URL(String(url)).pathname === path).length;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     __resetBridgeRuntime();
     _resetBridgeInstance();
     __resetSnapshotStores();
     setTokens(null);
     billingGate = null;
+    upgraded = false;
     initBridge({ appId: 'app-1', apiBaseUrl: API } as never);
     savedFetch = globalThis.fetch;
     apiFetch = jest.fn(async (url: string) => {
       const path = new URL(String(url)).pathname;
       if (path === '/billing/state') {
         if (billingGate) await billingGate.promise;
-        return jsonResponse(PRO_STATE);
+        return jsonResponse(upgraded ? PRO_STATE : FREE_STATE);
       }
-      if (path === '/entitlements') return jsonResponse(PRO_ENTITLEMENTS);
+      if (path === '/entitlements') return jsonResponse(upgraded ? PRO_ENTITLEMENTS : FREE_ENTITLEMENTS);
       return { ok: false, status: 404, json: async () => ({}), text: async () => '' };
     });
     globalThis.fetch = apiFetch as unknown as typeof fetch;
@@ -134,7 +141,10 @@ describe('reconnect catch-up (TBP-660)', () => {
     startBridgeRuntime({
       realtime: { websocketFactory: () => new InertWebSocket(), fetchFn: realtimeFetch, reportStatus: false, diagnose: false },
     });
-    open(); // initial connect
+    open(); // initial connect — catches up too (TBP-686), and finds nothing new
+    await flush();
+    apiFetch.mockClear();
+    upgraded = true;
   });
 
   afterEach(async () => {
@@ -145,9 +155,14 @@ describe('reconnect catch-up (TBP-660)', () => {
     setTokens(null);
   });
 
-  it('the initial connect fetches nothing', async () => {
-    await flush();
-    expect(apiFetch).not.toHaveBeenCalled();
+  // TBP-686 — this used to assert "the initial connect fetches nothing". The
+  // first connect is exactly where `session.snapshot` goes missing, so it
+  // catches up like any other open; when that finds nothing new it must not
+  // refresh the token or report an authorization change.
+  it('the initial connect catches up once, and with nothing new starts no refresh', async () => {
+    expect(refreshTokens).not.toHaveBeenCalled();
+    expect(reauthorize).not.toHaveBeenCalled();
+    expect(useSnapshotStore.getState().tenantSubscription?.plan.slug).toBe('free');
   });
 
   it('a reconnect caused by our own reauthorize() catches up exactly once and repairs the stores', async () => {
@@ -192,17 +207,24 @@ describe('reconnect catch-up (TBP-660)', () => {
     expect(useSnapshotStore.getState().tenantSubscription?.plan.slug).toBe('pro');
   });
 
-  it('a burst of reconnects while a catch-up is in flight shares one fetch', async () => {
+  // TBP-686 — this used to assert that the burst shares the ONE in-flight
+  // fetch. The in-flight answer may have been read before the newest socket
+  // went live, so the burst now queues exactly one follow-up instead.
+  it('a burst of reconnects while a catch-up is in flight queues exactly one follow-up', async () => {
     billingGate = deferred<unknown>();
     open();
     await flush();
     open();
     open();
-    billingGate.resolve(undefined);
+    expect(calls('/billing/state')).toBe(1);
+    const gate = billingGate;
+    billingGate = null; // the follow-up's read answers at once
+    gate.resolve(undefined);
+    await flush();
     await flush();
 
-    expect(calls('/billing/state')).toBe(1);
-    expect(calls('/entitlements')).toBe(1);
+    expect(calls('/billing/state')).toBe(2);
+    expect(calls('/entitlements')).toBe(2);
   });
 
   it('a live push that lands during the catch-up wins over the fetched state', async () => {

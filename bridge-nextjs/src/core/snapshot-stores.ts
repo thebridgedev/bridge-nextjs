@@ -165,6 +165,44 @@ export function applySubscriptionState(
   }));
 }
 
+/**
+ * TBP-686 — apply a `GET /session/init` snapshot fetched to catch up after a
+ * connect (the first one included), and report what it changed. The caller has
+ * to know whether the plan (slug or status) or the entitlements actually moved
+ * so it can re-run the route guard the way the lost push would have — and leave
+ * it alone when nothing did.
+ *
+ * A slice that was empty before is hydration, not a change: a delivered
+ * `session.snapshot` push fills it without touching the route guard or the
+ * token, and the catch-up that replaces a lost push must not do more than the
+ * push would have. Otherwise a first connect whose snapshot lost the race would
+ * refresh the token and swap the socket on most page loads. Never throws.
+ */
+export function applyCatchUpSnapshot(data: SessionSnapshotData): {
+  planChanged: boolean;
+  entitlementsChanged: boolean;
+} {
+  const before = useSnapshotStore.getState();
+  applySessionSnapshot(data);
+  const after = useSnapshotStore.getState();
+  return {
+    planChanged:
+      before.tenantSubscription != null &&
+      ((before.tenantSubscription.plan?.slug ?? null) !== (after.tenantSubscription?.plan?.slug ?? null) ||
+        (before.tenantSubscription.status ?? null) !== (after.tenantSubscription?.status ?? null)),
+    entitlementsChanged:
+      before.tenantEntitlements != null && !sameFlags(before.tenantEntitlements, after.tenantEntitlements),
+  };
+}
+
+function sameFlags(a: Record<string, boolean> | null, b: Record<string, boolean> | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((k) => a[k] === b[k]);
+}
+
 /** Test-only: reset every snapshot slice to `null`. */
 export function __resetSnapshotStores(): void {
   useSnapshotStore.setState({
