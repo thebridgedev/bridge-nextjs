@@ -5,9 +5,19 @@
  *   1. Prereq check — port :3010 must be free; bridge-api must respond on
  *      `${testDataApiUrl}/account/test/playwright/health`.
  *   2. Create/fetch the test app via bridge-api's playwright endpoint.
- *   3. Overwrite `demo/.env.test.{local|stage|prod}` with a fresh appId,
- *      callback URL, and apiBaseUrl (auth-core appends `/auth`, `/cloud-views`
- *      itself — never write the legacy `*_AUTH_BASE_URL` here).
+ *   3. LOCAL mode only: write `config/.env.demo.test.local` with the local
+ *      apiBaseUrl (which depends on the slot) and callback URL.
+ *
+ * The app id is NOT written into any demo env file. global-setup.ts resolves it
+ * from the test-data API and seeds it into the browser's localStorage
+ * (`bridge:appId`), which the demo passes to BridgeProvider — see
+ * demo/src/components/demo-app-id.ts (TBP-721).
+ *
+ * The stage and prod demo env files (`config/.env.demo.test.{stage,prod}`) are
+ * tracked in git and written by hand, with every key explicit. pre-setup used to
+ * generate them, which meant a clean checkout had none — and the webServer never
+ * read them anyway: it always booted the demo with the LOCAL file, so the stage
+ * suite drove the browser at http://localhost:3200 (TBP-721).
  *
  * Fails fast with a clear message if prereqs aren't met.
  */
@@ -16,6 +26,11 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
+import {
+  DEFAULT_PROD_API_BASE_URL,
+  DEFAULT_STAGE_API_BASE_URL,
+  expectedDemoApiBaseUrl,
+} from './config/environments';
 
 const rootDir = path.resolve(__dirname, '../..');
 dotenv.config({
@@ -57,11 +72,11 @@ async function preSetup() {
 
   const mode = process.argv[2] || 'test.local';
   // All env files live in `config/`. Demo runtime for tests is one of:
-  //   - `.env.demo.test.local`  (test.local)
-  //   - `.env.demo.test.stage`  (test.stage)
-  //   - `.env.demo.test.prod`   (test.prod)
-  // The playwright webServer command injects the matching file via dotenv-cli
-  // before `next dev` runs, so the demo never reads from `demo/.env.*`.
+  //   - `.env.demo.test.local`  (test.local — generated below)
+  //   - `.env.demo.test.stage`  (test.stage — tracked, hand-written)
+  //   - `.env.demo.test.prod`   (test.prod  — tracked, hand-written)
+  // playwright.config.ts's webServer injects the one matching the project via
+  // dotenv-cli before `next dev` runs, so the demo never reads `demo/.env.*`.
   const envFileName =
     mode === 'test.stage'
       ? '.env.demo.test.stage'
@@ -81,11 +96,9 @@ async function preSetup() {
 
   let testDataApiUrl: string;
   if (mode.includes('prod')) {
-    testDataApiUrl = process.env.PROD_TEST_DATA_API_URL || '';
-    if (!testDataApiUrl) throw new Error('PROD_TEST_DATA_API_URL required for prod');
+    testDataApiUrl = process.env.PROD_TEST_DATA_API_URL || DEFAULT_PROD_API_BASE_URL;
   } else if (mode.includes('stage')) {
-    testDataApiUrl = process.env.STAGE_TEST_DATA_API_URL || '';
-    if (!testDataApiUrl) throw new Error('STAGE_TEST_DATA_API_URL required for stage');
+    testDataApiUrl = process.env.STAGE_TEST_DATA_API_URL || DEFAULT_STAGE_API_BASE_URL;
   } else {
     testDataApiUrl = process.env.LOCAL_TEST_DATA_API_URL || 'http://localhost:3200';
   }
@@ -172,6 +185,20 @@ async function preSetup() {
 
   console.log('[pre-setup] Test app ready, App ID:', appId);
 
+  if (mode !== 'test.local') {
+    // Tracked, hand-written file — never regenerated. Just make sure it exists so
+    // the webServer does not boot a demo with no env at all.
+    if (!fs.existsSync(envFile)) {
+      throw new Error(
+        `${envFile} is missing. It is tracked in git (TBP-721) — restore it with ` +
+          `\`git checkout -- config/${envFileName}\`.`,
+      );
+    }
+    console.log(`[pre-setup] Using tracked demo env file ${envFile}`);
+    console.log('[pre-setup] Done.\n');
+    return;
+  }
+
   const configDir = path.resolve(rootDir, 'config');
   if (!fs.existsSync(configDir)) {
     throw new Error(`Config directory not found: ${configDir}`);
@@ -179,33 +206,28 @@ async function preSetup() {
 
   const callbackUrl = `${APP_URL}/auth/oauth-callback`;
 
-  // Resolve `apiBaseUrl` (the auth-core root — auth-core appends its own
-  // /auth, /cloud-views, etc. paths). Mirrors bridge-svelte's
-  // VITE_BRIDGE_API_BASE_URL approach. We never write the legacy
-  // NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL — auth-core derives that internally.
-  let apiBaseUrl = '';
-  if (mode === 'test.local') {
-    apiBaseUrl = (process.env.LOCAL_API_BASE_URL || testDataApiUrl).replace(/\/$/, '');
-  } else if (mode === 'test.stage' && process.env.STAGE_API_BASE_URL) {
-    apiBaseUrl = process.env.STAGE_API_BASE_URL.replace(/\/$/, '');
-  } else if (mode === 'test.prod' && process.env.PROD_API_BASE_URL) {
-    apiBaseUrl = process.env.PROD_API_BASE_URL.replace(/\/$/, '');
-  }
+  // The local apiBaseUrl depends on the worktree slot (LOCAL_API_BASE_URL /
+  // LOCAL_TEST_DATA_API_URL), which is why this one file is still generated.
+  // auth-core appends its own /auth, /cloud-views, /realtime paths — never write
+  // the legacy NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL.
+  const apiBaseUrl = expectedDemoApiBaseUrl('local');
 
   // pre-setup owns this file — rewrite from scratch every run so we don't
-  // accumulate stale legacy env vars (e.g. NEXT_PUBLIC_BRIDGE_AUTH_BASE_URL
-  // from a previous schema).
+  // accumulate stale legacy env vars. Every key is written, empty where that is
+  // the intent: NEXT_PUBLIC_BRIDGE_APP_ID stays empty so the id global-setup
+  // seeds into localStorage is the one the demo uses (env would win over it).
   const lines = [
-    '# E2E test env — written by pre-setup. Do not edit by hand.',
-    `NEXT_PUBLIC_BRIDGE_APP_ID=${appId}`,
-    apiBaseUrl ? `NEXT_PUBLIC_BRIDGE_API_BASE_URL=${apiBaseUrl}` : null,
+    '# E2E test env (local) — written by pre-setup. Do not edit by hand.',
+    'NEXT_PUBLIC_BRIDGE_APP_ID=',
+    `NEXT_PUBLIC_BRIDGE_API_BASE_URL=${apiBaseUrl}`,
     `NEXT_PUBLIC_BRIDGE_CALLBACK_URL=${callbackUrl}`,
     'NEXT_PUBLIC_BRIDGE_DEBUG=true',
-  ].filter(Boolean);
+    'NEXT_PUBLIC_DEMO_ENVIRONMENT=local',
+  ];
   fs.writeFileSync(envFile, lines.join('\n') + '\n');
 
   console.log(
-    `[pre-setup] Wrote ${envFile}: appId=${appId}, apiBaseUrl=${apiBaseUrl || '(unset)'}, callback=${callbackUrl}`
+    `[pre-setup] Wrote ${envFile}: apiBaseUrl=${apiBaseUrl}, callback=${callbackUrl} (app id seeded by global-setup)`
   );
   console.log('[pre-setup] Done.\n');
 }

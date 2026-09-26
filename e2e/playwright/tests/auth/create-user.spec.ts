@@ -6,7 +6,7 @@
  * - Clean up the created account via test data API
  */
 
-import { expect, test } from '../../fixtures/auth';
+import { expect, test, waitForHydration } from '../../fixtures/auth';
 import { LONG_TIMEOUT, MED_TIMEOUT } from '../../fixtures/timeouts';
 
 test.describe('Create User (Sign Up) Flow', () => {
@@ -14,11 +14,16 @@ test.describe('Create User (Sign Up) Flow', () => {
     page,
     testDataClient,
   }) => {
-    const signupEmail = `playwright-test-signup-${Date.now()}@thebridge.io`;
+    // Safe-sender pattern: bridge-api's remove/purge endpoints only act on
+    // `iman+playwright-test-*@nebulr.group`, so the old `…@thebridge.io`
+    // accounts were never cleaned up (TBP-721).
+    const signupEmail = `iman+playwright-test-signup-${Date.now()}@nebulr.group`;
 
     try {
       await page.goto('/auth/signup');
-      await page.waitForLoadState('networkidle');
+      // Form interaction needs React to own the inputs, not the network to idle
+      // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+      await waitForHydration(page);
 
       // Fill signup form
       await page.locator('#signup-email').waitFor({ state: 'visible', timeout: MED_TIMEOUT });
@@ -42,7 +47,6 @@ test.describe('Create User (Sign Up) Flow', () => {
 
   test('signup page has login link', async ({ page }) => {
     await page.goto('/auth/signup');
-    await page.waitForLoadState('networkidle');
 
     const loginLink = page.locator('a[href="/auth/login"]').first();
     await expect(loginLink).toBeVisible({ timeout: MED_TIMEOUT });

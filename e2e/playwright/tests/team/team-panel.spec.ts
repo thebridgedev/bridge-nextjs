@@ -12,7 +12,7 @@
  * This avoids bounces and protects email reputation (same pattern as bridge-api).
  */
 
-import { test, expect } from '../../fixtures/auth';
+import { test, expect, waitForHydration } from '../../fixtures/auth';
 import { LONG_TIMEOUT, MED_TIMEOUT, SHORT_TIMEOUT } from '../../fixtures/timeouts';
 import { createCleanContext } from '../../fixtures/clean-page';
 
@@ -27,7 +27,9 @@ function testEmail(): string {
 /** Navigate to /team-panel and wait for the panel to finish loading. */
 async function goToTeamPanel(page: import('@playwright/test').Page) {
   await page.goto('/team-panel');
-  await page.waitForLoadState('networkidle');
+  // Form interaction needs React to own the inputs, not the network to idle
+  // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+  await waitForHydration(page);
   await page.locator('[data-bridge-team-panel]').waitFor({ state: 'visible', timeout: MED_TIMEOUT });
 }
 

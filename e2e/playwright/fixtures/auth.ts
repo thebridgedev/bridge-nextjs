@@ -10,27 +10,86 @@ import {
 } from '../config/environments';
 import { type PlaywrightTestAccount, TestDataClient } from '../utils/test-data-client';
 import { LONG_TIMEOUT, MED_TIMEOUT } from './timeouts';
+import {
+  BASELINE_APP_CONFIG,
+  isBaselineConfig,
+  markAppConfigDirty,
+  takeAppConfigDirty,
+  workerAppFor,
+  type WorkerApp,
+} from './worker-app';
 
 export interface AuthFixtures {
   testUser: PlaywrightTestAccount;
   authenticatedPage: Page;
   envConfig: EnvironmentConfig;
   testDataClient: TestDataClient;
+  /** The Bridge app this worker owns — see fixtures/worker-app.ts (TBP-721) */
+  workerApp: WorkerApp;
+  /**
+   * Auto-use guard that puts this worker's app back on {@link BASELINE_APP_CONFIG}
+   * when the previous test in this worker left it off it. Depend on it to order
+   * work after the reset.
+   */
+  appConfigBaseline: void;
 }
 
 export const test = base.extend<AuthFixtures>({
-  envConfig: async ({}, use) => {
-    const env = getCurrentEnvironment();
-    const config = getEnvironmentConfig(env);
-    await use(config);
+  // The Bridge app provisioned for this worker by global-setup.
+  workerApp: async ({}, use, testInfo) => {
+    await use(workerAppFor(testInfo.parallelIndex));
   },
 
+  // Every browser context in this worker boots the demo with THIS worker's app
+  // id (seeded as localStorage `bridge:appId`), which is what stops one worker's
+  // app-level writes from being visible to another. Overrides the config-level
+  // `use.storageState`.
+  storageState: async ({ workerApp }, use) => {
+    await use(workerApp.storageStatePath);
+  },
+
+  // Environment configuration, narrowed to this worker's app.
+  envConfig: async ({ workerApp }, use) => {
+    const env = getCurrentEnvironment();
+    const config = getEnvironmentConfig(env);
+    await use({ ...config, appId: workerApp.appId, appDomain: workerApp.appDomain });
+  },
+
+  // Test data client for API operations. `configureApp` is wrapped so the
+  // baseline guard below knows whether anything actually needs undoing —
+  // without it we would either reset on every single test (one wasted stage
+  // round-trip per test) or not at all.
   testDataClient: async ({ envConfig }, use) => {
     const client = new TestDataClient(envConfig);
+    const configureApp = client.configureApp.bind(client);
+    client.configureApp = async (config) => {
+      if (!isBaselineConfig(config)) markAppConfigDirty();
+      return configureApp(config);
+    };
     await use(client);
   },
 
-  testUser: async ({ testDataClient }, use) => {
+  // Restore the app-level baseline when — and only when — a previous test in
+  // this worker moved off it (e.g. died before its own `finally` restored it).
+  // Safe because the app is this worker's alone and tests within a worker run
+  // serially; cheap because it fires only after a spec that really did change
+  // something.
+  appConfigBaseline: [
+    async ({ testDataClient }, use) => {
+      if (takeAppConfigDirty()) {
+        await testDataClient.configureApp({ ...BASELINE_APP_CONFIG }).catch(() => {});
+      }
+      await use();
+    },
+    { auto: true },
+  ],
+
+  testUser: async ({ testDataClient, appConfigBaseline }, use) => {
+    // `appConfigBaseline` is depended on, not used: it orders the reset before
+    // the account is created, so the new tenant is onboarded against the
+    // baseline app config rather than whatever the last test left behind.
+    void appConfigBaseline;
+
     const account = await testDataClient.createTestAccount();
     await use(account);
     try {
@@ -52,6 +111,32 @@ export const test = base.extend<AuthFixtures>({
 export { expect } from '@playwright/test';
 
 /**
+ * Wait until the Next.js demo has hydrated.
+ *
+ * `next dev` serves server-rendered HTML, so a form is VISIBLE well before React
+ * owns it. A `fill()` that lands in that window is wiped when hydration renders
+ * the controlled input with its initial `''` — the login email came back empty
+ * and "Sign in" stayed disabled for the full 60s test budget. Visibility is
+ * therefore not the wait a form interaction needs; hydration is.
+ *
+ * The demo's root layout mounts `BridgeWindowExpose`, whose effect assigns
+ * `window.bridge` — effects only run once the tree has hydrated, so its presence
+ * is the demo's "React is live" signal on every route.
+ *
+ * This replaces the network-idle load-state waits that used to precede
+ * these interactions and hid the race some of the time: once the SDK holds its
+ * realtime WebSocket the network never goes idle, so that wait could only ever
+ * time the test out (TBP-721, mirrors bridge-svelte TBP-605).
+ */
+export async function waitForHydration(page: Page, timeout: number = LONG_TIMEOUT): Promise<void> {
+  await page.waitForFunction(
+    () => !!(window as unknown as { bridge?: unknown }).bridge,
+    undefined,
+    { timeout },
+  );
+}
+
+/**
  * Login via Bridge auth flow. Assumes demo app is on baseURL.
  */
 export async function loginViaBridgeAuth(
@@ -61,7 +146,7 @@ export async function loginViaBridgeAuth(
   envConfig: EnvironmentConfig
 ): Promise<void> {
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await waitForHydration(page);
 
   const loginButton = page.locator('button:has-text("Login"), button:has-text("login")').first();
   await loginButton.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
@@ -113,7 +198,10 @@ export async function loginViaBridgeAuth(
     { timeout: LONG_TIMEOUT }
   ).catch(() => {});
 
-  await page.waitForLoadState('networkidle');
+  // The next branch reads page.url(), so the document that redirect landed on
+  // has to be parsed first. domcontentloaded states exactly that and always
+  // fires; network idle never does while the SDK holds its WebSocket.
+  await page.waitForLoadState('domcontentloaded');
 
   if (page.url().includes('/choose-user') || page.url().includes('/chooseTenantUser')) {
     const workspaceButtons = page.locator('button:has(h3)');
@@ -123,7 +211,9 @@ export async function loginViaBridgeAuth(
     await page.waitForURL((url) => !url.pathname.includes('/choose-user'), { timeout: LONG_TIMEOUT }).catch(() => {});
   }
 
-  await page.waitForLoadState('networkidle');
+  // Reading localStorage below only needs the landed document's scripts to
+  // have run — i.e. the app to have hydrated on the callback destination.
+  await waitForHydration(page);
 
   const hasTokens = await page.evaluate(() => {
     const token = localStorage.getItem('bridge_access_token');
@@ -149,19 +239,24 @@ export async function loginViaSdkAuth(
 ): Promise<void> {
   console.log(`[sdk-login] Starting SDK login for ${email}`);
 
-  // The demo keeps a persistent live-channel WebSocket open, so 'networkidle'
+  // The demo keeps a persistent live-channel WebSocket open, so network idle
   // can never fire and would hang here. Wait for DOM readiness instead and rely
   // on the explicit element waits below.
   await page.goto('/auth/login', { waitUntil: 'domcontentloaded' });
+  // The form is visible from the server render; filling it before hydration
+  // gets the email wiped (see waitForHydration).
+  await waitForHydration(page);
 
   const emailInput = page.locator('#login-email');
   await emailInput.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
   await emailInput.fill(email);
+  await expect(emailInput).toHaveValue(email);
 
   const passwordInput = page.locator('#login-password');
   await passwordInput.fill(password);
 
   const signInBtn = page.locator('button[type="submit"]:has-text("Sign in")');
+  await expect(signInBtn).toBeEnabled({ timeout: MED_TIMEOUT });
   await signInBtn.click();
 
   await page.waitForFunction(
@@ -182,7 +277,7 @@ export async function loginViaSdkAuth(
   // pushes to '/' on success; with a paywall configured the user is then bounced
   // to '/welcome'. Either way we just need to be off the login page before the
   // caller proceeds. Don't pin a specific destination (it varies by config) and
-  // don't wait on 'networkidle' (the live WS keeps the network busy).
+  // don't wait on network idle (the live WS keeps the network busy).
   await page
     .waitForURL((url) => !url.pathname.startsWith('/auth/login'), { timeout: MED_TIMEOUT })
     .catch(() => {

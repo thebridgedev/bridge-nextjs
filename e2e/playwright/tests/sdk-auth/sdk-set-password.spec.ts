@@ -1,4 +1,4 @@
-import { test, expect } from '../../fixtures/auth';
+import { test, expect, waitForHydration } from '../../fixtures/auth';
 import { MED_TIMEOUT } from '../../fixtures/timeouts';
 
 
@@ -19,7 +19,9 @@ test.describe('SDK Set Password', () => {
       );
 
       await page.goto(`/auth/set-password/${token}`);
-      await page.waitForLoadState('networkidle');
+      // Form interaction needs React to own the inputs, not the network to idle
+      // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+      await waitForHydration(page);
 
       const passwordInput = page.locator('#newPassword');
       await passwordInput.waitFor({ state: 'visible', timeout: MED_TIMEOUT });
@@ -50,7 +52,9 @@ test.describe('SDK Set Password', () => {
       );
 
       await page.goto(`/auth/set-password/${token}`);
-      await page.waitForLoadState('networkidle');
+      // Form interaction needs React to own the inputs, not the network to idle
+      // (it never does once the SDK holds its WebSocket) — see waitForHydration.
+      await waitForHydration(page);
 
       await page.locator('#newPassword').waitFor({ state: 'visible', timeout: MED_TIMEOUT });
       await page.locator('#newPassword').fill('Password123!');

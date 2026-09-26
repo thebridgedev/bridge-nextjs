@@ -5,6 +5,8 @@
 
 export interface EnvironmentConfig {
   baseUrl: string;
+  /** auth-core root the demo talks to (no /auth or /cloud-views suffix). */
+  apiBaseUrl: string;
   authBaseUrl?: string;
   cloudViewsUrl?: string;
   testDataApiUrl: string;
@@ -13,6 +15,41 @@ export interface EnvironmentConfig {
   appDomain: string;
   name: 'local' | 'stage' | 'prod';
   isContainer: boolean;
+}
+
+/**
+ * Public, fixed endpoints for the hosted environments. Defaults rather than
+ * required settings so a clean checkout can run the stage/prod suites without
+ * uncommenting anything (TBP-721, mirrors bridge-svelte TBP-606). Override via
+ * STAGE_* / PROD_* only to point the suite at a different backend.
+ */
+export const DEFAULT_STAGE_API_BASE_URL = 'https://api-stage.thebridge.dev';
+export const DEFAULT_PROD_API_BASE_URL = 'https://api.thebridge.dev';
+export const DEFAULT_LOCAL_API_BASE_URL = 'http://localhost:3200';
+
+/** The demo harness port — must match playwright.config.ts's webServer. */
+export const DEFAULT_DEMO_BASE_URL = 'http://localhost:3010';
+
+/**
+ * The API root the DEMO must be talking to for a given environment. global-setup
+ * asserts the running demo against this, so the boundary between "the backend the
+ * test-data client provisions on" and "the backend the browser drives" cannot
+ * silently diverge again (TBP-721: the stage suite drove the browser at the local
+ * API).
+ */
+export function expectedDemoApiBaseUrl(environment: 'local' | 'stage' | 'prod'): string {
+  switch (environment) {
+    case 'stage':
+      return (process.env.STAGE_API_BASE_URL || DEFAULT_STAGE_API_BASE_URL).replace(/\/$/, '');
+    case 'prod':
+      return (process.env.PROD_API_BASE_URL || DEFAULT_PROD_API_BASE_URL).replace(/\/$/, '');
+    default:
+      return (
+        process.env.LOCAL_API_BASE_URL ||
+        process.env.LOCAL_TEST_DATA_API_URL ||
+        DEFAULT_LOCAL_API_BASE_URL
+      ).replace(/\/$/, '');
+  }
 }
 
 function isRunningInContainer(): boolean {
@@ -52,7 +89,7 @@ export function getEnvironmentConfig(environment: 'local' | 'stage' | 'prod'): E
 
   const baseUrl = isContainer
     ? getServiceUrl('bridge-nextjs', 3001, 3001, isContainer)
-    : process.env.LOCAL_BASE_URL || 'http://localhost:3001';
+    : process.env.LOCAL_BASE_URL || DEFAULT_DEMO_BASE_URL;
 
   const appId = requireEnv('BRIDGE_TEST_APP_ID');
 
@@ -71,7 +108,7 @@ export function getEnvironmentConfig(environment: 'local' | 'stage' | 'prod'): E
       // Subscription / feature-flag specs use it as the base for `page.route(...)` mocks.
       const apiBaseUrl = isContainer
         ? getServiceUrl('bridge-api', 3000, 3200, isContainer)
-        : process.env.LOCAL_API_BASE_URL || 'http://localhost:3200';
+        : expectedDemoApiBaseUrl('local');
 
       return {
         name: 'local',
@@ -90,10 +127,10 @@ export function getEnvironmentConfig(environment: 'local' | 'stage' | 'prod'): E
       return {
         name: 'stage',
         baseUrl,
-        apiBaseUrl: requireEnv('STAGE_API_BASE_URL'),
+        apiBaseUrl: expectedDemoApiBaseUrl('stage'),
         authBaseUrl: process.env.STAGE_AUTH_BASE_URL,
         cloudViewsUrl: process.env.STAGE_CLOUD_VIEWS_URL,
-        testDataApiUrl: requireEnv('STAGE_TEST_DATA_API_URL'),
+        testDataApiUrl: process.env.STAGE_TEST_DATA_API_URL || DEFAULT_STAGE_API_BASE_URL,
         testDataApiKey,
         appId,
         appDomain,
@@ -103,8 +140,8 @@ export function getEnvironmentConfig(environment: 'local' | 'stage' | 'prod'): E
       return {
         name: 'prod',
         baseUrl,
-        apiBaseUrl: requireEnv('PROD_API_BASE_URL'),
-        testDataApiUrl: requireEnv('PROD_TEST_DATA_API_URL'),
+        apiBaseUrl: expectedDemoApiBaseUrl('prod'),
+        testDataApiUrl: process.env.PROD_TEST_DATA_API_URL || DEFAULT_PROD_API_BASE_URL,
         testDataApiKey,
         appId,
         appDomain,
