@@ -235,11 +235,54 @@ export function waitForBridge(): Promise<void> {
 
 // ── Subscription ──────────────────────────────────────────────────────────────
 
+// ── Stripe Checkout return (TBP-742) ────────────────────────────────────────
+//
+// On the return from Stripe the access token still predates the payment. The
+// first `getSubscriptionStatus()` of the page confirms the checkout server-side
+// and CONSUMES the session id (strips `?session_id=`, clears sessionStorage).
+// The billing pages read the subscription from a child effect, which React runs
+// before `<BridgeProvider>`'s paywall effect — so the child consumed the id, the
+// provider saw no checkout return, trusted the pre-payment claim and sent the
+// paying customer back to the plan picker. Found on stage with 0.8.0-beta.1.
+//
+// So the provider starts the confirmation during its own init — before any
+// child mounts — and both the subscription read and the paywall check wait for
+// it (bridge-react keeps the same ordering; bridge-svelte confirms in its load).
+
+let _checkoutReturn: Promise<SubscriptionStatus | null> | null = null;
+
+/** The pending checkout-return confirmation, if this page load returned from Stripe. */
+export function pendingCheckoutReturn(): Promise<SubscriptionStatus | null> | null {
+  return _checkoutReturn;
+}
+
+/** Forget the checkout return once its outcome has been acted on. */
+export function clearCheckoutReturn(): void {
+  _checkoutReturn = null;
+}
+
+/**
+ * Start confirming a Stripe Checkout the page just returned from — once, and
+ * only when a session id is pending and someone is signed in. Resolves to the
+ * post-confirmation status (`null` when the read failed).
+ */
+export function beginCheckoutReturn(sessionId: string | null): Promise<SubscriptionStatus | null> | null {
+  if (_checkoutReturn || !sessionId) return _checkoutReturn;
+  const auth = getBridgeAuth();
+  if (!auth.isAuthenticated()) return null;
+  _checkoutReturn = auth.getSubscriptionStatus().catch(() => null);
+  return _checkoutReturn;
+}
+
 export async function loadSubscription(): Promise<void> {
   useBridgeStore.setState((s) => ({
     subscription: { ...s.subscription, loading: true, error: null },
   }));
   try {
+    // Never read ahead of a checkout confirmation: it would consume the
+    // session id, and its answer would still be the pre-payment one.
+    const pending = _checkoutReturn;
+    if (pending) await pending;
     const [status, plans] = await Promise.all([
       getBridgeAuth().getSubscriptionStatus(),
       getBridgeAuth().getPlans(),
@@ -274,6 +317,7 @@ export function _resetBridgeInstance(): void {
   _initConfig = null;
   _appConfigPromise = null;
   _resolveReady = null;
+  _checkoutReturn = null;
   useBridgeStore.setState({
     tokens: null,
     appConfig: null,

@@ -27,9 +27,10 @@
  * over one page by creating it (`app/subscription/plan/page.tsx`); headless:
  * `PlanSelector`, `BridgeSubscriptionStatus`, `BillingPortalButton`.
  */
-import { notFound, useParams, usePathname } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
-import { loadSubscription, useBridgeStore } from '../../../core/bridge-instance';
+import { withReturnTo } from '@nebulr-group/bridge-auth-core';
+import { notFound, useParams, usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState, type ReactNode } from 'react';
+import { getBridgeConfig, loadSubscription, useBridgeStore } from '../../../core/bridge-instance';
 import { BRIDGE_AUTH_ROUTE_PARAM, bridgeAuthBase } from '../../auth-routes';
 import { parseBridgeBillingRoute, type BridgeBillingPage } from '../../billing-routes';
 import { BillingPortalButton } from './BillingPortalButton';
@@ -61,17 +62,48 @@ export function BridgeBillingRoutes({ frame, heading, redirectTo = '/' }: Bridge
   const at = (sub: string) => (base === '/' ? `/${sub}` : `${base}/${sub}`);
   const page = route?.page;
   const hasStatus = useBridgeStore((s) => s.subscription.status !== null);
+  const authenticated = useBridgeStore((s) => !!s.tokens?.accessToken);
+  const router = useRouter();
+  const loginRoute = (() => {
+    try {
+      return getBridgeConfig().loginRoute ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // TBP-742 — every page here needs a session. A signed-out visitor saw
+  // "Subscription unavailable / Not authenticated" (found on stage with
+  // 0.8.0-beta.1); send them to sign in and back, as bridge-svelte's route
+  // guard does. Hosted-mode apps guard these pages in `withBridgeAuth`.
+  // Decided after mount: the server render has no session, and deciding there
+  // would make every signed-in page fail hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedOut = !authenticated && !!loginRoute;
+  const mustSignIn = mounted && signedOut;
+  useEffect(() => {
+    if (!mustSignIn || !loginRoute) return;
+    let back = pathname;
+    try {
+      back = `${window.location.pathname}${window.location.search}`;
+    } catch {
+      /* keep the pathname */
+    }
+    router.replace(withReturnTo(loginRoute, back));
+  }, [mustSignIn, loginRoute, pathname, router]);
 
   // The success page always re-reads: the checkout just changed the plan, and
   // whatever the store holds predates that. Other pages read once.
   useEffect(() => {
-    if (!page) return;
+    if (!page || signedOut) return;
     if (page === 'success' || !hasStatus) void loadSubscription();
     // Keyed on the page: moving between these pages reuses this component.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [page, signedOut]);
 
   if (!route) notFound();
+  if (mustSignIn) return null;
   const current = route.page;
 
   let body: ReactNode = null;

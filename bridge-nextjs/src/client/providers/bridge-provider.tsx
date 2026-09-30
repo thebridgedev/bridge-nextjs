@@ -2,7 +2,16 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { FC, ReactNode, useEffect, useMemo, useRef } from 'react';
-import { ensureAppConfig, getBridgeAuth, initBridge, markReady, useBridgeStore } from '../../core/bridge-instance';
+import {
+  beginCheckoutReturn,
+  clearCheckoutReturn,
+  ensureAppConfig,
+  getBridgeAuth,
+  initBridge,
+  markReady,
+  pendingCheckoutReturn,
+  useBridgeStore,
+} from '../../core/bridge-instance';
 import { startBridgeRuntime, stopBridgeRuntime } from '../../core/bridge-runtime';
 import { createBridgeFlags, type BridgeFlagsBundle } from '../../flags/bootstrap';
 import { RealtimeDevBadge } from '../components/developer/RealtimeDevBadge';
@@ -94,6 +103,17 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     }
 
     initBridge(mergedConfig);
+    // TBP-742 — confirm a Stripe Checkout return now, before any child mounts:
+    // a billing page's subscription read would otherwise consume the session
+    // id first and the paywall below would bounce the paying customer.
+    try {
+      beginCheckoutReturn(
+        new URL(window.location.href).searchParams.get('session_id') ??
+          (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('bridge_checkout_session_id') : null),
+      );
+    } catch {
+      /* sessionStorage may be disabled — non-fatal */
+    }
     useBridgeStore.setState({ billing: mergedConfig.billing ?? null });
     markReady();
     // Mount the core Bridge runtime (realtime channel + session.snapshot fanout
@@ -244,11 +264,15 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
           /* sessionStorage may be disabled — non-fatal */
         }
 
-        // Path 1 — returning from Stripe Checkout.
-        if (pendingSessionId) {
+        // Path 1 — returning from Stripe Checkout. The confirmation started at
+        // init (TBP-742); a billing page may have consumed the session id since,
+        // so the pending confirmation — not the URL — says this is a return.
+        const checkoutReturn = pendingCheckoutReturn();
+        if (checkoutReturn || pendingSessionId) {
           if (!bridge.isAuthenticated()) return;
-          const status = await bridge.getSubscriptionStatus();
+          const status = checkoutReturn ? await checkoutReturn : await bridge.getSubscriptionStatus();
           if (cancelled) return;
+          clearCheckoutReturn();
 
           if (status?.paymentFailed === true) {
             try {
