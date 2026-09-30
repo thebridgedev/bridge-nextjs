@@ -26,10 +26,10 @@ export {
 } from './registry';
 
 // React reactive helpers — pull in hooks, only safe inside client components.
-export { useFlag, flagStore, type FlagStore } from './use-flag';
+export { useFlag, flagStore, type FlagStore, type FlagState } from './use-flag';
 
 // Component
-export { FeatureFlag, default as FeatureFlagComponent, type FeatureFlagProps } from '../client/components/FeatureFlag';
+export { FeatureFlag, default as FeatureFlagComponent, type FeatureFlagProps, type FeatureFlagOffInfo } from '../client/components/FeatureFlag';
 
 // Reactive realtime connection status (subscribe in components to show
 // offline indicators, retry banners, etc.).

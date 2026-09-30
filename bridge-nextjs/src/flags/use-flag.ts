@@ -83,6 +83,20 @@ function sameValue(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/** What `useFlag` returns. */
+export interface FlagState<T> {
+  readonly value: T;
+  readonly passed: boolean;
+  /**
+   * TBP-756 — why the feature is off: `'plan'` (an upgrade alone would turn it
+   * on), `'permission'` (this person's role or privileges), `'off'`, `'rule'`
+   * or `'rollout'`. Undefined when it is on, or before Bridge has said.
+   */
+  readonly reason?: FlagEvalResult<T>['reason'];
+  /** TBP-756 — with `reason: 'plan'`, the plan feature the rule asks for. */
+  readonly feature?: string;
+}
+
 /**
  * Reactive flag accessor. Returns the Bridge-decided `{ value, passed }` and
  * re-renders whenever the flag changes in the cache (live update, hydrate,
@@ -99,7 +113,7 @@ export function useFlag<T>(
   key: string,
   defaultValue: T,
   context?: Partial<EvalContext>,
-): { readonly value: T; readonly passed: boolean } {
+): FlagState<T> {
   // Cache the last resolved result so `getSnapshot` returns a stable reference
   // when the underlying value hasn't changed — required by useSyncExternalStore
   // to avoid an infinite render loop.
@@ -109,7 +123,13 @@ export function useFlag<T>(
   const getSnapshot = useCallback((): FlagEvalResult<T> => {
     const next = evaluateFlag<T>(key, defaultValue, context);
     const prev = lastRef.current;
-    if (prev && prev.passed === next.passed && sameValue(prev.value, next.value)) {
+    if (
+      prev &&
+      prev.passed === next.passed &&
+      prev.reason === next.reason &&
+      prev.feature === next.feature &&
+      sameValue(prev.value, next.value)
+    ) {
       return prev;
     }
     lastRef.current = next;
@@ -120,7 +140,7 @@ export function useFlag<T>(
   }, [key, defaultValue, contextKey]);
 
   const result = useSyncExternalStore(subscribeVersion, getSnapshot, getSnapshot);
-  return { value: result.value, passed: result.passed };
+  return { value: result.value, passed: result.passed, reason: result.reason, feature: result.feature };
 }
 
 function safeStringify(v: unknown): string {

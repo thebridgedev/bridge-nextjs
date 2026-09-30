@@ -83,6 +83,8 @@ export {
   useFlag,
   flagStore,
   type FlagStore,
+  type FlagState,
+  type FeatureFlagOffInfo,
   // Component props type (the component itself is exported below alongside the
   // other client components)
   type FeatureFlagProps,
