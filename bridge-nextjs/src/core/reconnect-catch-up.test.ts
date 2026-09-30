@@ -81,6 +81,7 @@ describe('reconnect catch-up (TBP-660)', () => {
   let refreshTokens: jest.SpyInstance;
   let reauthorize: jest.SpyInstance;
   let openSpy: jest.SpyInstance;
+  let subscribedSpy: jest.SpyInstance;
   const spies: Array<{ mockRestore(): void }> = [];
   let savedFetch: typeof fetch | undefined;
   // When set, `GET /billing/state` waits on it — the read is in flight.
@@ -89,7 +90,13 @@ describe('reconnect catch-up (TBP-660)', () => {
   // push the tests below lose.
   let upgraded = false;
 
-  const open = () => (openSpy.mock.calls[openSpy.mock.calls.length - 1][0] as () => void)();
+  // A connection opens, then every channel answers (TBP-700: the catch-up
+  // runs on "all subscribed", not on the first accepted subscription).
+  const last = (spy: jest.SpyInstance) => spy.mock.calls[spy.mock.calls.length - 1][0] as () => void;
+  const open = () => {
+    last(openSpy)();
+    last(subscribedSpy)();
+  };
   const calls = (path: string) => apiFetch.mock.calls.filter(([url]) => new URL(String(url)).pathname === path).length;
 
   beforeEach(async () => {
@@ -116,11 +123,13 @@ describe('reconnect catch-up (TBP-660)', () => {
     refreshTokens = jest.spyOn(auth, 'refreshTokens').mockResolvedValue(null as never);
     reauthorize = jest.spyOn(RealtimeClient.prototype, 'reauthorize').mockResolvedValue(undefined as never);
     openSpy = jest.spyOn(RealtimeClient.prototype, 'setOnOpen');
+    subscribedSpy = jest.spyOn(RealtimeClient.prototype, 'setOnSubscribed');
     const billingBridge = useBridge();
     spies.push(
       refreshTokens,
       reauthorize,
       openSpy,
+      subscribedSpy,
       jest.spyOn(billingBridge, 'handle').mockImplementation(((h: Record<string, (msg: unknown) => void>) => {
         billing = h;
         return () => {};
@@ -159,8 +168,8 @@ describe('reconnect catch-up (TBP-660)', () => {
   // first connect is exactly where `session.snapshot` goes missing, so it
   // catches up like any other open; when that finds nothing new it must not
   // refresh the token or report an authorization change.
-  it('the initial connect catches up once, and with nothing new starts no refresh', async () => {
-    expect(refreshTokens).not.toHaveBeenCalled();
+  it('the initial connect catches up once, and with nothing new refreshes only to reconcile (TBP-700)', async () => {
+    expect(refreshTokens.mock.calls).toEqual([[{ fresh: true }]]);
     expect(reauthorize).not.toHaveBeenCalled();
     expect(useSnapshotStore.getState().tenantSubscription?.plan.slug).toBe('free');
   });
@@ -191,11 +200,15 @@ describe('reconnect catch-up (TBP-660)', () => {
     open();
     await flush();
     expect(calls('/billing/state')).toBe(2);
-    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    // TBP-700 — that reconnect reconciles once more; the token comes back with
+    // nothing new, so the socket is not replaced again.
+    expect(refreshTokens).toHaveBeenCalledTimes(2);
+    expect(refreshTokens).toHaveBeenLastCalledWith({ fresh: true });
     expect(reauthorize).toHaveBeenCalledTimes(2);
   });
 
   it('a network-blip reconnect still refreshes the token, and catches up once', async () => {
+    refreshTokens.mockClear(); // the initial connect's reconcile
     open(); // external reconnect
     await flush();
 
@@ -281,7 +294,7 @@ describe('reconnect catch-up (TBP-660)', () => {
 
     expect(calls('/billing/state')).toBe(2);
     expect(reasons).toEqual(['token', 'reconnect']);
-    expect(refreshTokens).not.toHaveBeenCalled();
+    expect(refreshTokens.mock.calls).toEqual([[{ fresh: true }]]); // the reconcile only
     off();
   });
 });

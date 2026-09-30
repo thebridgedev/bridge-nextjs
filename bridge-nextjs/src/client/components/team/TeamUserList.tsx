@@ -10,12 +10,21 @@ import { TeamAddUserDialog } from './TeamAddUserDialog';
 import { TeamConfirmDialog } from './TeamConfirmDialog';
 import { TeamEditUserDialog } from './TeamEditUserDialog';
 import { TeamUserActionsMenu } from './TeamUserActionsMenu';
+import { seatsAtLimitMessage, seatsChanged, seatsLeftOf, useSeatsQuota } from './seats';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   onError?: (error: Error) => void;
+  /**
+   * TBP-763 — the plan limit that counts seats (e.g. `'seats'`, set up as a
+   * gauge Bridge counts from membership). With it, Add Member stops at the
+   * plan's limit, an invite of several addresses cannot pass it, and an
+   * invite, removal or enable/disable re-reads the seat count. Without it,
+   * nothing changes and no quota is read.
+   */
+  seatsMetric?: string;
 }
 
-export function TeamUserList({ onError, className, style, ...rest }: Props) {
+export function TeamUserList({ onError, seatsMetric, className, style, ...rest }: Props) {
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +38,11 @@ export function TeamUserList({ onError, className, style, ...rest }: Props) {
   const [deletingUser, setDeletingUser] = useState<TeamUser | null>(null);
   const [resettingUser, setResettingUser] = useState<TeamUser | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // TBP-763 — the seat count, only when the page counts seats.
+  const seatsQuota = useSeatsQuota(seatsMetric);
+  const seatsLeft = seatsLeftOf(seatsQuota);
+  const seatsFull = seatsLeft !== null && seatsLeft <= 0;
 
   useEffect(() => {
     let mounted = true;
@@ -63,6 +77,7 @@ export function TeamUserList({ onError, className, style, ...rest }: Props) {
       const bridge = getBridgeAuth();
       await bridge.team.deleteUser(deletingUser.id);
       setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
+      seatsChanged(seatsMetric);
       setShowDeleteConfirm(false);
       setDeletingUser(null);
     } catch (err) {
@@ -98,10 +113,17 @@ export function TeamUserList({ onError, className, style, ...rest }: Props) {
             type="button"
             className="bridge-btn bridge-btn-primary"
             onClick={() => setShowAddDialog(true)}
+            disabled={seatsFull}
+            data-bridge-seats-left={seatsLeft ?? undefined}
           >
             Add Member
           </button>
         </div>
+        {seatsFull && seatsQuota && (
+          <p className="bridge-team-seats-limit" data-bridge-seats-at-limit role="status">
+            {seatsAtLimitMessage(seatsQuota)}
+          </p>
+        )}
 
         {loading ? (
           <div className="bridge-team-loading">
@@ -117,6 +139,7 @@ export function TeamUserList({ onError, className, style, ...rest }: Props) {
               type="button"
               className="bridge-btn bridge-btn-primary"
               onClick={() => setShowAddDialog(true)}
+              disabled={seatsFull}
             >
               Add your first team member
             </button>
@@ -181,7 +204,11 @@ export function TeamUserList({ onError, className, style, ...rest }: Props) {
       <TeamAddUserDialog
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
-        onAdded={(added) => setUsers((prev) => [...prev, ...added])}
+        seatsLeft={seatsLeft}
+        onAdded={(added) => {
+          setUsers((prev) => [...prev, ...added]);
+          seatsChanged(seatsMetric);
+        }}
       />
 
       <TeamEditUserDialog
@@ -192,9 +219,11 @@ export function TeamUserList({ onError, className, style, ...rest }: Props) {
           setShowEditDialog(false);
           setEditingUser(null);
         }}
-        onUpdated={(updated) =>
-          setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)))
-        }
+        onUpdated={(updated) => {
+          setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+          // Enabling or disabling someone moves the seat count.
+          seatsChanged(seatsMetric);
+        }}
       />
 
       <TeamConfirmDialog

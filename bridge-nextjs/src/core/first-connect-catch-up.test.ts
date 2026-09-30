@@ -101,6 +101,7 @@ describe('every open catches up, the first one included (TBP-686)', () => {
   let refreshTokens: jest.SpyInstance;
   let reauthorize: jest.SpyInstance;
   let openSpy: jest.SpyInstance;
+  let subscribedSpy: jest.SpyInstance;
   const spies: Array<{ mockRestore(): void }> = [];
   let savedFetch: typeof fetch | undefined;
   // When set, the matching GET waits on it — the read is in flight.
@@ -109,8 +110,18 @@ describe('every open catches up, the first one included (TBP-686)', () => {
   let quotaAnswer: unknown = null;
   // What the server says: Free unless a test upgrades it.
   let upgraded = false;
+  // TBP-762 — Bridge has marked the sign-in out of date (a checkout just
+  // changed the plan): billing and quota reads answer 401 TOKEN_VERSION_STALE
+  // to any token but the renewed one.
+  let staleUntil: string | null = null;
 
-  const open = () => (openSpy.mock.calls[openSpy.mock.calls.length - 1][0] as () => void)();
+  // A connection opens, then every channel answers (TBP-700: the catch-up
+  // runs on "all subscribed", not on the first accepted subscription).
+  const last = (spy: jest.SpyInstance) => spy.mock.calls[spy.mock.calls.length - 1][0] as () => void;
+  const open = () => {
+    last(openSpy)();
+    last(subscribedSpy)();
+  };
   const paths = () => apiFetch.mock.calls.map(([url]) => new URL(String(url)).pathname);
   const calls = (path: string) => paths().filter((p) => p === path).length;
   const start = () =>
@@ -127,11 +138,17 @@ describe('every open catches up, the first one included (TBP-686)', () => {
     quotaGate = null;
     quotaAnswer = null;
     upgraded = false;
+    staleUntil = null;
     initBridge({ appId: 'app-1', apiBaseUrl: API } as never);
     savedFetch = globalThis.fetch;
-    apiFetch = jest.fn(async (url: string) => {
+    apiFetch = jest.fn(async (url: string, init?: { headers?: Record<string, string> }) => {
       const path = new URL(String(url)).pathname;
       const snap = upgraded ? PRO_SNAPSHOT : SNAPSHOT;
+      const billingRead = path === '/billing/state' || path.startsWith('/usage/quota/');
+      if (staleUntil && billingRead && init?.headers?.Authorization !== `Bearer ${staleUntil}`) {
+        const body = { code: 'TOKEN_VERSION_STALE' };
+        return { ok: false, status: 401, statusText: 'Unauthorized', json: async () => body, text: async () => JSON.stringify(body) };
+      }
       if (path === '/billing/state') return jsonResponse(upgraded ? PRO_BILLING_STATE : BILLING_STATE);
       if (path === '/entitlements') return jsonResponse({ entitlements: snap.tenant.entitlements });
       if (path === '/session/init') {
@@ -150,12 +167,14 @@ describe('every open catches up, the first one included (TBP-686)', () => {
     refreshTokens = jest.spyOn(auth, 'refreshTokens').mockResolvedValue(null as never);
     reauthorize = jest.spyOn(RealtimeClient.prototype, 'reauthorize').mockResolvedValue(undefined as never);
     openSpy = jest.spyOn(RealtimeClient.prototype, 'setOnOpen');
+    subscribedSpy = jest.spyOn(RealtimeClient.prototype, 'setOnSubscribed');
     const billingBridge = useBridge();
     billingBridge.quotas.__resetForTests();
     spies.push(
       refreshTokens,
       reauthorize,
       openSpy,
+      subscribedSpy,
       jest.spyOn(billingBridge, 'handle').mockImplementation(((h: Record<string, (msg: unknown) => void>) => {
         billing = h;
         return () => {};
@@ -209,7 +228,8 @@ describe('every open catches up, the first one included (TBP-686)', () => {
     expect(s.tenantEntitlements).toEqual(SNAPSHOT.tenant.entitlements);
     expect(useBridge().entitlements.can('app_active')).toBe(true); // auth-core kept in step
     expect(reasons).toEqual([]);
-    expect(refreshTokens).not.toHaveBeenCalled();
+    // TBP-700 — the one reconcile every connect makes; nothing else.
+    expect(refreshTokens.mock.calls).toEqual([[{ fresh: true }]]);
     expect(reauthorize).not.toHaveBeenCalled();
     off();
   });
@@ -226,7 +246,8 @@ describe('every open catches up, the first one included (TBP-686)', () => {
 
     expect(useSnapshotStore.getState().tenantSubscription?.plan.slug).toBe('pro');
     expect(reasons).toEqual(['subscription.plan_changed']);
-    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    // The recovered change joins the reconcile's refresh: still one.
+    expect(refreshTokens.mock.calls).toEqual([[{ fresh: true }]]);
     off();
   });
 
@@ -235,7 +256,8 @@ describe('every open catches up, the first one included (TBP-686)', () => {
     start();
     open(); // first connect: hydrates Free, nothing to report
     await flush();
-    expect(refreshTokens).not.toHaveBeenCalled();
+    expect(refreshTokens.mock.calls).toEqual([[{ fresh: true }]]); // the reconcile only
+    refreshTokens.mockClear();
     upgraded = true; // the plan_changed push is lost during the swap
     const reasons: BridgeAuthorizationChangeReason[] = [];
     const off = onBridgeAuthorizationChange((r) => reasons.push(r));
@@ -250,7 +272,7 @@ describe('every open catches up, the first one included (TBP-686)', () => {
     off();
   });
 
-  it('the first connect does not refresh the token, and with nothing new reports no authorization change', async () => {
+  it('the first connect reconciles the token once (TBP-700), and with nothing new reports no authorization change', async () => {
     applySessionSnapshot(SNAPSHOT as never); // the push did arrive: nothing to repair
     setTokens(token());
     start();
@@ -260,7 +282,7 @@ describe('every open catches up, the first one included (TBP-686)', () => {
     await flush();
 
     expect(calls('/session/init')).toBe(1);
-    expect(refreshTokens).not.toHaveBeenCalled();
+    expect(refreshTokens.mock.calls).toEqual([[{ fresh: true }]]);
     expect(reauthorize).not.toHaveBeenCalled();
     // No 'reconnect' on a first connect, and no recovered change either.
     expect(reasons).toEqual([]);
@@ -335,6 +357,60 @@ describe('every open catches up, the first one included (TBP-686)', () => {
     // One for the stopped runtime's in-flight read, one for the new runtime's
     // own connect — the stopped runtime's queued follow-up adds nothing.
     expect(calls('/session/init')).toBe(2);
+  });
+
+  // TBP-700 — `open` fires on the FIRST accepted subscription; a read taken
+  // then can predate a publish that lands before the user channel is live.
+  it('the catch-up waits until every channel is subscribed, not the first open', async () => {
+    setTokens(token());
+    start();
+    last(openSpy)();
+    await flush();
+    expect(calls('/session/init')).toBe(0);
+    expect(refreshTokens).not.toHaveBeenCalled();
+
+    last(subscribedSpy)();
+    await flush();
+    expect(calls('/session/init')).toBe(1);
+    expect(refreshTokens.mock.calls).toEqual([[{ fresh: true }]]);
+  });
+
+  // TBP-762 — right after a checkout Bridge marks the sign-in out of date. A
+  // billing read in that window answered 401 and left the plan unread.
+  it('a billing read the server calls out of date renews the sign-in and retries', async () => {
+    applySessionSnapshot(SNAPSHOT as never);
+    upgraded = true;
+    staleUntil = 'renewed-token';
+    refreshTokens.mockResolvedValue({ accessToken: 'renewed-token' } as never);
+    setTokens(token());
+    start();
+    open();
+    await flush();
+    await flush();
+
+    const billingCalls = apiFetch.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/billing/state');
+    expect(billingCalls).toHaveLength(2);
+    expect(billingCalls[1][1].headers.Authorization).toBe('Bearer renewed-token');
+    expect(useBridge().subscription.snapshot().state?.plan.slug).toBe('pro');
+  });
+
+  it('quota reads carry the current token and renew an out-of-date sign-in (TBP-762)', async () => {
+    setTokens(token());
+    start();
+    const current = token();
+    setTokens(current); // a refresh after start: quota reads must not use the first token
+    staleUntil = 'renewed-token';
+    refreshTokens.mockResolvedValue({ accessToken: 'renewed-token' } as never);
+    quotaAnswer = hydrated('projects', 3);
+
+    useBridge().quotas.ensureHydrated('projects');
+    await flush();
+    await flush();
+
+    const quotaCalls = apiFetch.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/usage/quota/projects');
+    expect(quotaCalls[0][1].headers.Authorization).toBe(`Bearer ${current}`);
+    expect(quotaCalls[1][1].headers.Authorization).toBe('Bearer renewed-token');
+    expect(useBridge().quotas.get('projects')?.used).toBe(3);
   });
 
   // ── Quota catch-up ───────────────────────────────────────────────────────

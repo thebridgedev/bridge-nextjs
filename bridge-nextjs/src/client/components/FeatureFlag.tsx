@@ -21,6 +21,20 @@ import { useFlag } from '../../flags/use-flag';
 
 type FlagChild<T> = ReactNode | ((value: T) => ReactNode);
 
+/** TBP-756 — what a `fallback` render-prop learns about why the feature is off. */
+export interface FeatureFlagOffInfo {
+  /**
+   * `'plan'` (an upgrade alone would turn it on), `'permission'` (this
+   * person's role or privileges), `'off'`, `'rule'`, `'rollout'`, or undefined
+   * when Bridge has not said (the flag is not loaded yet).
+   */
+  reason: 'plan' | 'permission' | 'off' | 'rule' | 'rollout' | undefined;
+  /** With `reason: 'plan'`, the plan feature the rule asks for. */
+  feature: string | undefined;
+}
+
+type FallbackChild<T> = ReactNode | ((value: T, off: FeatureFlagOffInfo) => ReactNode);
+
 export interface FeatureFlagProps<T = boolean> {
   /**
    * The flag key to evaluate. Named `flagKey` rather than `key` because React
@@ -37,8 +51,12 @@ export interface FeatureFlagProps<T = boolean> {
   context?: Partial<EvalContext>;
   /** Rendered when the rule passed. Node, or a render-prop `(value) => node`. */
   children?: FlagChild<T>;
-  /** Rendered when the flag is off / no rule matched. Node or render-prop. */
-  fallback?: FlagChild<T>;
+  /**
+   * Rendered when the flag is off / no rule matched. Node, or a render-prop
+   * `(value, { reason, feature }) => node` — TBP-756: `reason === 'plan'`
+   * means an upgrade would turn it on.
+   */
+  fallback?: FallbackChild<T>;
 }
 
 function render<T>(child: FlagChild<T> | undefined, value: T): ReactNode {
@@ -60,6 +78,15 @@ function render<T>(child: FlagChild<T> | undefined, value: T): ReactNode {
  * </FeatureFlag>
  *
  * @example
+ * <FeatureFlag
+ *   flagKey="reports"
+ *   defaultValue={false}
+ *   fallback={(_v, { reason }) => (reason === 'plan' ? <UpgradePrompt /> : null)}
+ * >
+ *   <Reports />
+ * </FeatureFlag>
+ *
+ * @example
  * <FeatureFlag flagKey="plan-flag" defaultValue={false} context={{ attributes: { plan } }}>
  *   {() => <Enterprise />}
  * </FeatureFlag>
@@ -71,8 +98,12 @@ export function FeatureFlag<T = boolean>({
   children,
   fallback,
 }: FeatureFlagProps<T>) {
-  const { value, passed } = useFlag<T>(flagKey, defaultValue, context);
-  return <>{passed ? render(children, value) : render(fallback, value)}</>;
+  const { value, passed, reason, feature } = useFlag<T>(flagKey, defaultValue, context);
+  if (passed) return <>{render(children, value)}</>;
+  if (typeof fallback === 'function') {
+    return <>{(fallback as (v: T, off: FeatureFlagOffInfo) => ReactNode)(value, { reason, feature })}</>;
+  }
+  return <>{fallback ?? null}</>;
 }
 
 export default FeatureFlag;

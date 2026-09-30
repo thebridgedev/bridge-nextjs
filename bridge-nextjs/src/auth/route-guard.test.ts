@@ -20,6 +20,9 @@ const mockCheckRouteRestrictions = jest.fn<Promise<string | null>, [string]>();
 const mockShouldRedirectToLogin = jest.fn<boolean, [string]>().mockReturnValue(false);
 
 const mockIsAuthenticated = jest.fn<boolean, []>(() => false);
+// TBP-756 — auth-core 0.8's checkRouteRestriction, offered only when a test sets it.
+type Restriction = { to: string; reason?: string; flag?: string; feature?: string };
+let mockCheckRouteRestriction: jest.Mock<Promise<Restriction | null>, [string]> | undefined;
 const mockIsPublicRoute = jest.fn<boolean, [string]>(() => false);
 
 jest.mock('../core/bridge-instance', () => ({
@@ -31,6 +34,7 @@ jest.mock('../core/bridge-instance', () => ({
       isProtectedRoute: () => true,
       shouldRedirectToLogin: mockShouldRedirectToLogin,
       checkRouteRestrictions: mockCheckRouteRestrictions,
+      ...(mockCheckRouteRestriction ? { checkRouteRestriction: mockCheckRouteRestriction } : {}),
       getLoginRedirect: () => 'https://login.example/login',
       getNavigationDecision: jest.fn(),
       resolveReturnTo: (p: string) => p,
@@ -57,6 +61,50 @@ beforeEach(() => {
   mockInvalidateFeatureFlagCache.mockReset();
   mockCheckRouteRestrictions.mockReset();
   mockShouldRedirectToLogin.mockReset().mockReturnValue(false);
+  mockCheckRouteRestriction = undefined;
+});
+
+describe('createRouteGuard — why a route is refused (TBP-756)', () => {
+  const PLAN = { to: '/upgrade', reason: 'plan', flag: 'pro-page', feature: 'reports' };
+
+  beforeEach(() => {
+    mockCheckRouteRestriction = jest.fn<Promise<Restriction | null>, [string]>();
+    mockCheckRouteRestrictions.mockResolvedValue('/upgrade');
+  });
+
+  it('the redirect decision carries the reason, flag and plan feature', async () => {
+    mockCheckRouteRestriction!.mockResolvedValue(PLAN);
+    await expect(createRouteGuard(config).getNavigationDecision('/pro')).resolves.toEqual({ type: 'redirect', ...PLAN });
+  });
+
+  it('checkRouteRestrictions still answers with the bare target', async () => {
+    mockCheckRouteRestriction!.mockResolvedValue(PLAN);
+    await expect(createRouteGuard(config).checkRouteRestrictions('/pro')).resolves.toBe('/upgrade');
+  });
+
+  it("the guard's checkRouteRestriction discards a verdict that was in flight across an invalidation", async () => {
+    const stale = deferred<Restriction | null>();
+    mockCheckRouteRestriction!.mockReturnValueOnce(stale.promise).mockResolvedValueOnce(null);
+
+    const restriction = createRouteGuard(config).checkRouteRestriction('/pro');
+    for (let i = 0; i < 50 && mockCheckRouteRestriction!.mock.calls.length === 0; i++) await Promise.resolve();
+    invalidateRouteGuardCache(); // the upgrade lands mid-check
+    stale.resolve(PLAN); // the Free-plan answer arrives afterwards
+
+    await expect(restriction).resolves.toBeNull();
+    expect(mockCheckRouteRestriction).toHaveBeenCalledTimes(2);
+  });
+
+  it("the guard's checkRouteRestriction waits for the flags to be ready", async () => {
+    mockCheckRouteRestriction!.mockResolvedValue(null);
+    const ready = deferred<void>();
+    const pending = createRouteGuard(config, ready.promise).checkRouteRestriction('/pro');
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(mockCheckRouteRestriction).not.toHaveBeenCalled();
+    ready.resolve();
+    await expect(pending).resolves.toBeNull();
+    expect(mockCheckRouteRestriction).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('createRouteGuard — stale in-flight verdicts (TBP-654)', () => {

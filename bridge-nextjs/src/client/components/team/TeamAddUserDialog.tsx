@@ -5,11 +5,18 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { Alert } from '../sdk-auth/shared/Alert';
+import { inviteSeatError } from './seats';
 
 interface Props extends HTMLAttributes<HTMLDialogElement> {
   open?: boolean;
   onClose?: () => void;
   onAdded?: (users: TeamUser[]) => void;
+  /**
+   * TBP-763 — seats left on the plan (from `<TeamUserList seatsMetric>`). An
+   * invite of more addresses than this is refused before it is sent. Null or
+   * absent: no cap to check.
+   */
+  seatsLeft?: number | null;
   titleSlot?: ReactNode;
   actionsSlot?: (ctx: { loading: boolean; onConfirm?: () => void; onCancel?: () => void }) => ReactNode;
 }
@@ -18,6 +25,7 @@ export function TeamAddUserDialog({
   open = false,
   onClose,
   onAdded,
+  seatsLeft,
   titleSlot,
   actionsSlot,
   className,
@@ -48,6 +56,11 @@ export function TeamAddUserDialog({
       .filter(Boolean);
     if (emails.length === 0) {
       setError('Please enter at least one email address.');
+      return;
+    }
+    const seatError = inviteSeatError(emails.length, seatsLeft);
+    if (seatError) {
+      setError(seatError);
       return;
     }
     setLoading(true);

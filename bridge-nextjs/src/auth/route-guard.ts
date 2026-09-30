@@ -21,7 +21,14 @@ export type {
   RouteRule,
 } from '@nebulr-group/bridge-auth-core';
 
-import type { NavigationDecision, RouteGuardConfig, RouteRule } from '@nebulr-group/bridge-auth-core';
+import type {
+  NavigationDecision,
+  RouteGuardConfig,
+  RouteRestriction,
+  RouteRule,
+} from '@nebulr-group/bridge-auth-core';
+
+export type { RouteRestriction } from '@nebulr-group/bridge-auth-core';
 
 // How many times a restriction check is re-run when the cache was invalidated
 // underneath it (TBP-654). Bounded so a burst of invalidations cannot spin.
@@ -42,15 +49,24 @@ export function createRouteGuard(
   // plan / entitlements / user-state change started: the page shows the new
   // plan a few hundred ms before the token carrying it lands, and a verdict
   // taken in between would be evaluated with the old one.
-  async function checkRestrictionsFresh(pathname: string, deadline: number): Promise<string | null> {
+  async function checkRestrictionsFresh(pathname: string, deadline: number): Promise<RouteRestriction | null> {
     for (let attempt = 1; ; attempt++) {
       await settleAuthorizationChange(deadline);
       const generation = guardCacheGeneration();
-      const redirectTo = await guard.checkRouteRestrictions(pathname);
-      if (generation === guardCacheGeneration()) return redirectTo;
+      const restriction = await readRestriction(pathname);
+      if (generation === guardCacheGeneration()) return restriction;
       dropFlagCache();
-      if (attempt >= MAX_FRESH_READS) return redirectTo;
+      if (attempt >= MAX_FRESH_READS) return restriction;
     }
+  }
+
+  // TBP-756 — the restriction with, for a feature flag, why it is off
+  // (`reason: 'plan'` means an upgrade alone opens the route). A stand-in guard
+  // without auth-core 0.8's `checkRouteRestriction` gives the bare target.
+  async function readRestriction(pathname: string): Promise<RouteRestriction | null> {
+    if (typeof guard.checkRouteRestriction === 'function') return guard.checkRouteRestriction(pathname);
+    const to = await guard.checkRouteRestrictions(pathname);
+    return to ? { to } : null;
   }
 
   function loginDecision(pathname: string, attempted?: string): NavigationDecision {
@@ -114,6 +130,15 @@ export function createRouteGuard(
     async checkRouteRestrictions(pathname: string): Promise<string | null> {
       const deadline = Date.now() + AUTHORIZATION_CHANGE_WAIT_MS;
       await flagsReady;
+      return (await checkRestrictionsFresh(pathname, deadline))?.to ?? null;
+    },
+    // TBP-756 — auth-core 0.8 added this beside checkRouteRestrictions; the
+    // spread above would hand out the raw one, which neither waits for the
+    // flags nor for a pending token refresh, and trusts a verdict that was in
+    // flight across a cache invalidation (TBP-654). Same protection here.
+    async checkRouteRestriction(pathname: string): Promise<RouteRestriction | null> {
+      const deadline = Date.now() + AUTHORIZATION_CHANGE_WAIT_MS;
+      await flagsReady;
       return checkRestrictionsFresh(pathname, deadline);
     },
     async getNavigationDecision(pathname: string, attempted?: string): Promise<NavigationDecision> {
@@ -131,9 +156,11 @@ export function createRouteGuard(
           return loginDecision(pathname, attempted);
         }
         await flagsReady;
-        const redirectTo = await checkRestrictionsFresh(pathname, deadline);
-        if (redirectTo) {
-          return { type: 'redirect', to: redirectTo };
+        const restriction = await checkRestrictionsFresh(pathname, deadline);
+        if (restriction) {
+          // TBP-756 — reason / flag / feature ride along, so the app can offer
+          // an upgrade for `reason: 'plan'`; otherwise the same redirect as before.
+          return { type: 'redirect', ...restriction };
         }
         return { type: 'allow' };
       } catch (err) {
