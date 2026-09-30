@@ -8,17 +8,25 @@ import { createBridgeFlags, type BridgeFlagsBundle } from '../../flags/bootstrap
 import { RealtimeDevBadge } from '../components/developer/RealtimeDevBadge';
 import { logger, setLoggerDebug } from '../../shared/logger';
 import { BridgeConfig } from '../../shared/types/config';
+import { createBridgeConfig, type CreateBridgeConfigOptions } from '../../shared/resolve-config';
+import { installQuotaRefusalObserver } from '../../core/bridge-fetch';
+import { appUsesBilling, isPaywallExempt, resolveBillingRoutes } from '../billing-routes';
+import { UpgradeDialogHost } from '../components/subscription/UpgradeDialogHost';
 
-interface BridgeProviderProps {
-  /** Your bridge application ID — can be provided directly or via config. */
+export interface BridgeProviderProps {
+  /** Your Bridge application ID. Wins over `config.appId` and `NEXT_PUBLIC_BRIDGE_APP_ID`. */
   appId?: string;
-  /** Full bridge configuration object. */
-  config?: BridgeConfig;
+  /**
+   * Bridge configuration. Each field resolves as *this option >
+   * `NEXT_PUBLIC_BRIDGE_*` environment > default* (`createBridgeConfig()`), so
+   * with the environment set nothing is required. Plain data, so a Server
+   * Component (`app/layout.tsx`) can pass it directly.
+   */
+  config?: Partial<BridgeConfig>;
   children: ReactNode;
 }
 
 const DEFAULT_CONFIG: Partial<BridgeConfig> = {
-  apiBaseUrl: 'https://api.thebridge.dev',
   defaultRedirectRoute: '/',
   signupRoute: '/auth/signup',
   debug: false,
@@ -26,23 +34,27 @@ const DEFAULT_CONFIG: Partial<BridgeConfig> = {
 
 const DEFAULT_CALLBACK_PATH = '/auth/oauth-callback';
 
-function getConfigFromEnv(): Partial<BridgeConfig> {
-  const envConfig: Partial<BridgeConfig> = {};
-  const appId = process.env.NEXT_PUBLIC_BRIDGE_APP_ID;
-  const apiBaseUrl = process.env.NEXT_PUBLIC_BRIDGE_API_BASE_URL;
-  const callbackUrl = process.env.NEXT_PUBLIC_BRIDGE_CALLBACK_URL;
-  const defaultRedirectRoute = process.env.NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE;
-  const loginRoute = process.env.NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE;
-  const signupRoute = process.env.NEXT_PUBLIC_BRIDGE_SIGNUP_ROUTE;
-  const debug = process.env.NEXT_PUBLIC_BRIDGE_DEBUG;
-  if (appId) envConfig.appId = appId;
-  if (apiBaseUrl) envConfig.apiBaseUrl = apiBaseUrl;
-  if (callbackUrl) envConfig.callbackUrl = callbackUrl;
-  if (defaultRedirectRoute) envConfig.defaultRedirectRoute = defaultRedirectRoute;
-  if (loginRoute) envConfig.loginRoute = loginRoute;
-  if (signupRoute) envConfig.signupRoute = signupRoute;
-  if (debug !== undefined) envConfig.debug = debug === 'true';
-  return envConfig;
+/**
+ * The provider's effective config: explicit props win over the environment,
+ * the environment over the defaults (TBP-742 — the environment used to win).
+ * Never throws: a missing app id is reported, and Bridge does not start.
+ */
+export function resolveProviderConfig(
+  appId: string | undefined,
+  config: Partial<BridgeConfig> | undefined,
+  resolveOptions?: CreateBridgeConfigOptions,
+): BridgeConfig {
+  const explicit: Partial<BridgeConfig> = { ...(config ?? {}) };
+  if (appId && appId.trim()) explicit.appId = appId;
+  const resolved = createBridgeConfig(explicit, { ...resolveOptions, requireAppId: false });
+  const defaultCallback =
+    typeof window !== 'undefined' ? `${window.location.origin}${DEFAULT_CALLBACK_PATH}` : undefined;
+  const merged: BridgeConfig = { ...DEFAULT_CONFIG, ...resolved } as BridgeConfig;
+  for (const key of Object.keys(DEFAULT_CONFIG) as Array<keyof BridgeConfig>) {
+    if (merged[key] === undefined) (merged as unknown as Record<string, unknown>)[key] = DEFAULT_CONFIG[key];
+  }
+  if (!merged.callbackUrl && defaultCallback) merged.callbackUrl = defaultCallback;
+  return merged;
 }
 
 /**
@@ -59,20 +71,7 @@ function getConfigFromEnv(): Partial<BridgeConfig> {
  * which similarly runs before any reactive consumer mounts.
  */
 export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, children }) => {
-  const mergedConfig = useMemo<BridgeConfig>(() => {
-    const envConfig = getConfigFromEnv();
-    const fromProps = appId ? { ...config, appId } : config;
-    const defaultCallback =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}${DEFAULT_CALLBACK_PATH}`
-        : undefined;
-    return {
-      ...DEFAULT_CONFIG,
-      ...(defaultCallback ? { callbackUrl: defaultCallback } : {}),
-      ...fromProps,
-      ...envConfig,
-    } as BridgeConfig;
-  }, [appId, config]);
+  const mergedConfig = useMemo<BridgeConfig>(() => resolveProviderConfig(appId, config), [appId, config]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -157,8 +156,10 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
   // Background tasks deferred to useEffect (won't block initial paint).
   useEffect(() => {
     if (!mergedConfig.appId) {
-      logger.warn(
-        '[BridgeProvider] No appId provided. Set NEXT_PUBLIC_BRIDGE_APP_ID or pass appId prop.'
+      logger.error(
+        '[bridge] No Bridge app id was found, so Bridge did not start. Set NEXT_PUBLIC_BRIDGE_APP_ID ' +
+          'in your .env (plus NEXT_PUBLIC_BRIDGE_API_BASE_URL for a stage or local app), or pass ' +
+          'appId to <BridgeProvider>.'
       );
       return;
     }
@@ -211,13 +212,21 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
   // every render); depending on the object would re-fire this effect — and its
   // getSubscriptionStatus() network call — on every render. The primitives are
   // stable across renders, so the check runs once per route.
-  const paywallRoute = mergedConfig.billing?.paywallRoute;
-  const paymentErrorRoute = mergedConfig.billing?.paymentErrorRoute;
+  //
+  // TBP-742 — both routes now default to the pages `<BridgeBillingRoutes>`
+  // serves (`/subscription/plan`, `/subscription/error`). The DEFAULT paywall
+  // applies only to an app that has plans (an app without billing has only
+  // plan-less workspaces), so the plan list is read — only when the redirect
+  // would otherwise fire. `paywallRoute: false` turns it off.
+  const routes = resolveBillingRoutes(mergedConfig.billing);
+  const paywallRoute = routes.paywallRoute;
+  const paywallIsDefault = routes.paywallIsDefault;
+  const paymentErrorRoute = routes.paymentErrorRoute;
   const paywallAppId = mergedConfig.appId;
   useEffect(() => {
-    if (!paywallRoute && !paymentErrorRoute) return;
     if (typeof window === 'undefined' || !paywallAppId) return;
-    if (pathname === paywallRoute || pathname === (paymentErrorRoute ?? '/payment-error')) return;
+    // No loop on the paywall, and a failed checkout's page must stay readable.
+    if (isPaywallExempt(pathname ?? '', { ...routes, paywallRoute, paymentErrorRoute })) return;
 
     let cancelled = false;
     void (async () => {
@@ -247,7 +256,7 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
             } catch {
               /* non-fatal */
             }
-            const target = paymentErrorRoute ?? '/payment-error';
+            const target = paymentErrorRoute;
             logger.debug('[BridgeProvider] checkout-return payment failure, redirecting', target);
             router.push(target);
             return;
@@ -256,7 +265,8 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
           if (
             paywallRoute &&
             status?.shouldSelectPlan === true &&
-            status?.paymentsAutoRedirect !== false
+            status?.paymentsAutoRedirect !== false &&
+            (!paywallIsDefault || appUsesBilling(await bridge.getPlans().catch(() => null)))
           ) {
             logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
             router.push(paywallRoute);
@@ -267,11 +277,11 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
         // Path 2 — ordinary mount.
         if (!paywallRoute) return;
         const should = await bridge.shouldRedirectToPaywall();
+        if (cancelled || !should) return;
+        if (paywallIsDefault && !appUsesBilling(await bridge.getPlans().catch(() => null))) return;
         if (cancelled) return;
-        if (should) {
-          logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
-          router.push(paywallRoute);
-        }
+        logger.debug('[BridgeProvider] paywall redirect', paywallRoute);
+        router.push(paywallRoute);
       } catch (err) {
         // Non-fatal — fail open if the subscription fetch errors.
         logger.debug('[BridgeProvider] paywall/payment-error check skipped:', err);
@@ -281,7 +291,17 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     return () => {
       cancelled = true;
     };
-  }, [pathname, paywallRoute, paymentErrorRoute, paywallAppId, router]);
+    // `routes` is derived from the same primitives listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, paywallRoute, paywallIsDefault, paymentErrorRoute, paywallAppId, router]);
+
+  // TBP-742 — level 0 of plan limits: a plain `fetch` to the page's origin,
+  // Bridge's API or a `billing.apiOrigins` origin that answers
+  // `402 QUOTA_EXCEEDED` opens the upgrade dialog. Observes only.
+  useEffect(() => {
+    if (!initedRef.current) return;
+    return installQuotaRefusalObserver();
+  }, []);
 
   // TBP-644 — the "Live updates off — why?" badge, mounted here so every app
   // gets it without code changes. Development builds only (the component
@@ -289,6 +309,7 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
   return (
     <>
       {children}
+      <UpgradeDialogHost billing={mergedConfig.billing} />
       <RealtimeDevBadge enabled={mergedConfig.devBadge !== false} />
     </>
   );

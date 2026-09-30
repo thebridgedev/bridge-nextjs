@@ -18,6 +18,11 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   /** Heading text. Pass `null`/`''` to render no heading and use your own page title. */
   heading?: string | null;
   /**
+   * The heading as a node, replacing `heading` on this form's main step only
+   * (never above a sub-step's own heading). What `<BridgeAuthRoutes heading>` passes.
+   */
+  headingSlot?: ReactNode;
+  /**
    * Success-state description. Pass `null`/`''` to render nothing (TBP-631).
    *
    * NOT lifted into AuthFormWrapper, unlike most of the other components: it
@@ -37,6 +42,7 @@ export function SignupForm({
   showLoginLink = true,
   loginHref = '/auth/login',
   heading,
+  headingSlot,
   description,
   footer,
   messages,
@@ -89,6 +95,7 @@ export function SignupForm({
     // suppress the form heading to avoid two stacked headings.
     <AuthFormWrapper
       heading={success ? null : wrapperHeading}
+      headingSlot={success ? undefined : headingSlot}
       className={className}
       style={style}
       {...rest}

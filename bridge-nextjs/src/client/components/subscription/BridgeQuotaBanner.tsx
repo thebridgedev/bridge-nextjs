@@ -25,7 +25,8 @@
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useBridge, type QuotaSnapshot } from '@nebulr-group/bridge-auth-core';
-import { getBridgeAuth, getBridgeConfig } from '../../../core/bridge-instance';
+import { getBridgeAuth } from '../../../core/bridge-instance';
+import { billingRoutes } from '../../billing-routes';
 
 type Chassis = 'rail';
 type Severity = 'warn' | 'critical';
@@ -127,15 +128,10 @@ export function BridgeQuotaBanner({
       return;
     }
     // Destination priority: `actionHref` prop → `billing.manageRoute` config
-    // → '/billing'.
+    // → '/subscription'.
     if (typeof window !== 'undefined') {
-      let manageRoute: string | undefined;
-      try {
-        manageRoute = getBridgeConfig().billing?.manageRoute;
-      } catch {
-        // Config not initialized — fall through to the default.
-      }
-      window.location.href = actionHref ?? manageRoute ?? '/billing';
+      // Unset: the subscription page `<BridgeBillingRoutes>` serves (TBP-742).
+      window.location.href = actionHref ?? billingRoutes().manageRoute;
     }
   }
 

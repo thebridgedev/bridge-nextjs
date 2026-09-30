@@ -8,7 +8,7 @@
  * and so each Playwright worker can drive its own Bridge app (TBP-721).
  *
  * Precedence: `NEXT_PUBLIC_BRIDGE_APP_ID` still wins when it is set, because
- * `BridgeProvider` merges env config over props. The test env files therefore
+ * `TestBridgeProvider` only reads the stored id when it is empty. The test env files therefore
  * leave it EMPTY; a developer's `npm run dev` (config/.env.local) keeps using
  * the env var exactly as before.
  *

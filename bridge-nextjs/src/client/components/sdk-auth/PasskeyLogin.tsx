@@ -7,6 +7,7 @@ import { getBridgeAuth } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
 import { authErrorMessage, isOriginNotAllowed } from './shared/auth-error';
 import { Spinner } from './shared/Spinner';
+import { passkeysSupported, startPasskeyAuthentication } from './shared/webauthn';
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'> {
   onLogin?: () => void;
@@ -37,19 +38,26 @@ export function PasskeyLogin({
     if (loading) return;
     setLoading(true);
     try {
-      const result = await (getBridgeAuth() as any).authenticateWithPasskey();
-      if (result?.type === 'auth_success' || result === undefined) {
-        onLogin?.();
-      } else if (result?.type === 'no_passkey') {
-        if (onSetupPasskey) onSetupPasskey();
-        else if (setupHref && typeof window !== 'undefined') {
-          window.location.href = setupHref;
-        }
-      } else if (result?.type === 'auth_error') {
-        throw new Error(result.error || t('passkey.error.auth'));
-      }
+      if (!passkeysSupported()) throw new Error(t('passkey.error.unsupported'));
+      const auth = getBridgeAuth();
+      const options = await auth.getPasskeyAuthOptions();
+      const response = await startPasskeyAuthentication(options);
+      await auth.authenticateWithPasskey(response);
+      // MFA or a workspace choice may still be pending; LoginForm moves on from
+      // the auth state. Only a finished sign-in is a login.
+      if (auth.isAuthenticated()) onLogin?.();
     } catch (err: any) {
-      const message = authErrorMessage(err, t, 'passkey.error.auth');
+      // The browser has no passkey for this site (or the person dismissed the
+      // prompt): offer setup when the app wired it.
+      if (err?.name === 'NotAllowedError' && (onSetupPasskey || setupHref)) {
+        if (onSetupPasskey) onSetupPasskey();
+        else if (setupHref && typeof window !== 'undefined') window.location.href = setupHref;
+        return;
+      }
+      const message =
+        err?.name === 'NotAllowedError'
+          ? t('passkey.error.authCancelled')
+          : authErrorMessage(err, t, 'passkey.error.auth');
       // TBP-669: an origin refusal is handed on as-is (status 403 and body
       // intact) so LoginForm can recognise it and show the fix.
       onError?.(isOriginNotAllowed(err) ? err : new Error(message));

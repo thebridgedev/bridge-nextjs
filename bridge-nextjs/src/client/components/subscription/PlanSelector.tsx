@@ -8,6 +8,7 @@ import {
   loadSubscription,
   useBridgeStore,
 } from '../../../core/bridge-instance';
+import { billingRoutes } from '../../billing-routes';
 import { Alert } from '../sdk-auth/shared/Alert';
 import { Spinner } from '../sdk-auth/shared/Spinner';
 
@@ -20,17 +21,44 @@ type UiState =
   | 'trial';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onSelect'> {
-  successUrl: string;
-  cancelUrl: string;
+  /**
+   * Where a completed Stripe checkout lands. A path (`/subscription/success`)
+   * is made absolute against the page's origin.
+   * @default `<billing.manageRoute>/success` — `/subscription/success`
+   */
+  successUrl?: string;
+  /**
+   * Where a cancelled Stripe checkout lands. A path is made absolute.
+   * @default the current page
+   */
+  cancelUrl?: string;
   onSelect?: (detail: { plan: Plan; price: PriceOfferSdk }) => void;
+  /** Replaces the whole default card (S2 customization hook). */
   planCard?: (ctx: {
     plan: Plan;
     prices: PriceOfferSdk[];
     isCurrent: boolean;
     onPick: (price: PriceOfferSdk) => void;
   }) => ReactNode;
+  /**
+   * Replaces the built-in description paragraph of the default card — custom
+   * copy or markup per plan without reimplementing the whole card.
+   */
+  planDescription?: (ctx: { plan: Plan; isCurrent: boolean }) => ReactNode;
+  /** Rendered at the bottom of the default card, after the price buttons. */
+  planFooter?: (ctx: { plan: Plan; isCurrent: boolean }) => ReactNode;
   emptyState?: ReactNode;
   loadingState?: ReactNode;
+}
+
+/** A path made absolute against the page's origin; an absolute URL as it is. */
+export function absoluteCheckoutUrl(url: string): string {
+  if (typeof window === 'undefined') return url;
+  try {
+    return new URL(url, window.location.origin).href;
+  } catch {
+    return url;
+  }
 }
 
 export function PlanSelector({
@@ -38,6 +66,8 @@ export function PlanSelector({
   cancelUrl,
   onSelect,
   planCard,
+  planDescription,
+  planFooter,
   emptyState,
   loadingState,
   className,
@@ -93,8 +123,8 @@ export function PlanSelector({
         onSelect?.({ plan, price });
       } else {
         const session = await getBridgeAuth().startCheckout(plan.key, price, {
-          successUrl,
-          cancelUrl,
+          successUrl: absoluteCheckoutUrl(successUrl ?? billingRoutes().successRoute),
+          cancelUrl: absoluteCheckoutUrl(cancelUrl ?? window.location.href),
         });
         if (!session.sessionId) {
           // Stripe not configured — plan was set directly on the backend
@@ -117,7 +147,7 @@ export function PlanSelector({
       if (err instanceof HttpError && err.status === 402) {
         const body = err.body as { error?: string; reason?: string } | undefined;
         if (billing?.paywallRoute && typeof window !== 'undefined') {
-          window.location.href = billing.paywallRoute;
+          window.location.href = billing.paywallRoute as string;
           return;
         }
         setPickError(body?.error ?? 'This plan requires an upgrade.');
@@ -211,9 +241,11 @@ export function PlanSelector({
                       )}
                     </div>
 
-                    {plan.description && (
-                      <p className="bridge-plan-description">{plan.description}</p>
-                    )}
+                    {planDescription
+                      ? planDescription({ plan, isCurrent })
+                      : plan.description && (
+                          <p className="bridge-plan-description">{plan.description}</p>
+                        )}
 
                     <div className="bridge-plan-prices">
                       {plan.prices.map((price) => (
@@ -243,6 +275,7 @@ export function PlanSelector({
                         </button>
                       )}
                     </div>
+                    {planFooter ? planFooter({ plan, isCurrent }) : null}
                   </div>
                 );
               })}

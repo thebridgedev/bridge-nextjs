@@ -160,6 +160,14 @@ describe('LoginForm — a failed token exchange is shown, not "Signing in…" (T
   });
 
   it('passkey: a refused exchange reaches LoginForm and shows the fix', async () => {
+    // The real ceremony (TBP-515): options → browser assertion → exchange.
+    const w = window as unknown as Record<string, unknown>;
+    w.PublicKeyCredential = function PublicKeyCredential() {};
+    w.__simpleWebAuthn = {
+      startAuthentication: () => Promise.resolve({ id: 'assertion' }),
+      startRegistration: () => Promise.resolve({}),
+    };
+    jest.spyOn(getBridgeAuth(), 'getPasskeyAuthOptions').mockResolvedValue({} as never);
     jest.spyOn(getBridgeAuth(), 'authenticateWithPasskey').mockImplementation(async () => {
       moveTo('credentials-validated');
       throw originRefusal();
@@ -176,6 +184,8 @@ describe('LoginForm — a failed token exchange is shown, not "Signing in…" (T
     expect(text()).toContain(FIX);
     // The app's onError still hears about it, with the status intact.
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ status: 403 }));
+    delete w.PublicKeyCredential;
+    delete w.__simpleWebAuthn;
   });
 
   it('MFA: a refusal that ends the sign-in flows up from MfaChallenge to the credentials form', async () => {

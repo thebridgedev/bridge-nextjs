@@ -229,7 +229,18 @@ export function GET(request: NextRequest) {
 }
 ```
 
-**Middleware** — guard whole path trees. A trailing `/*` matches by prefix, so list the bare path too:
+**Middleware** — guard whole path trees. Next.js runs ONE `middleware.ts`: if the app already exports `withBridgeAuth`, do NOT add `withFeatureFlags` beside it or chain the two — put the flag on a `withBridgeAuth` rule, which checks sign-in first and then the flag (off → `403`):
+
+```ts
+// middleware.ts — app with sign-in middleware
+import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
+
+export default withBridgeAuth({
+  rules: [{ match: '/beta', featureFlag: 'beta-dashboard' }], // also { any: [...] } / { all: [...] }
+});
+```
+
+In an app with no sign-in middleware, `withFeatureFlags` alone. A trailing `/*` matches by prefix, so list the bare path too:
 
 ```ts
 // middleware.ts

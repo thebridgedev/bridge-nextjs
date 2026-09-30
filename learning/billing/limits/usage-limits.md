@@ -19,13 +19,54 @@ export function AiQuotaBanner() {
 | `label` | `string` | metric key | Humanized display label |
 | `className` | `string` | `''` | Class applied to the root element |
 | `onActionClick` | `(snap) => void` | (none) | Override the default Upgrade CTA handler |
-| `actionHref` | `string` | `billing.manageRoute` config → `/billing` | Upgrade CTA destination for this instance; `onActionClick` takes precedence |
+| `actionHref` | `string` | `billing.manageRoute` config → `/subscription` | Upgrade CTA destination for this instance; `onActionClick` takes precedence |
 
-By default the Upgrade CTA navigates to `billing.manageRoute` from the `<BridgeProvider>` config (falling back to `/billing`) — point it at your plan page, e.g. `billing: { manageRoute: '/subscription' }`.
+By default the Upgrade CTA navigates to `billing.manageRoute` from the `<BridgeProvider>` config, which defaults to `/subscription` — the page `app/subscription/[[...bridge]]/page.tsx` serves.
+
+## Three ways to handle a limit
+
+Pick the lowest level that does the job. Level 0 is on without code.
+
+| Level | What the page writes | What the user sees |
+|---|---|---|
+| **0 — nothing** | a button calling your API with `bridgeFetch()` | Your backend refuses at the cap (`402 QUOTA_EXCEEDED`, bridge-nestjs `@RequireQuota`), and `<BridgeProvider>` opens an **upgrade dialog** naming the metric, linking to the subscription page. A member who cannot manage billing is told to ask the workspace owner |
+| **1 — one component** | `<QuotaGate metric="tickets">…</QuotaGate>` around the button; `<FeatureFlag flagKey="analytics" defaultValue={false} upgrade>` around a paid feature | The button is disabled at a known hard cap with an upgrade line beside it; a feature off because of the plan shows "Upgrade to use this", which opens the dialog when clicked |
+| **2 — your own UI** | `useQuota('tickets')` | Whatever you build from the live numbers |
+
+```tsx
+'use client';
+import { bridgeFetch, FeatureFlag, QuotaGate, useQuota } from '@nebulr-group/bridge-nextjs/client';
+
+export function Tickets() {
+  const tickets = useQuota('tickets');
+  const create = () => bridgeFetch('/api/tickets', { method: 'POST' }); // level 0
+
+  return (
+    <>
+      {/* level 1 */}
+      <QuotaGate metric="tickets">
+        <button onClick={create}>New ticket</button>
+      </QuotaGate>
+
+      {/* the flag's rule: bridge:billing.entitlement.analytics eq true */}
+      <FeatureFlag flagKey="analytics" defaultValue={false} upgrade>
+        <a href="/analytics">Analytics</a>
+      </FeatureFlag>
+
+      {/* level 2 */}
+      {tickets.loading ? 'Loading…' : tickets.unlimited ? 'Unlimited tickets' : `${tickets.used} of ${tickets.limit} tickets`}
+    </>
+  );
+}
+```
+
+- "Not loaded yet" is never "zero" and never "not allowed": `useQuota` numbers stay `null` while `loading`, and `<QuotaGate>` stays enabled while loading, for a metered quota, and when the plan has no quota on the metric.
+- No upgrade dialog opens by itself: it opens on a `402` your backend sends, or when someone clicks an upgrade prompt.
+- A plain `fetch` to your own origin that answers `402 QUOTA_EXCEEDED` opens the dialog too; a backend on another origin called with plain `fetch` is listed in `billing: { apiOrigins: [...] }`. `billing: { upgradeDialog: false }` turns the dialog off (render your own from `useUpgradeRequest()`); `billing: { upgradeDialog: MyDialog }` replaces it (pass that from a Client Component).
 
 ## Reading quota state yourself
 
-For a fully custom quota UI, read the underlying snapshot directly:
+`useQuota(metric)` (level 2 above) is the supported read. The lower-level snapshot is still available:
 
 ```ts
 import { useBridgeBilling } from '@nebulr-group/bridge-nextjs/client';
@@ -35,4 +76,4 @@ const q = useBridgeBilling().quota('ai_completions');
 // q?.used, q?.limit, q?.remaining, q?.warningLevel ('approaching' | 'critical' | null)
 ```
 
-> **Note:** `useBridgeBilling` is the underlying `@nebulr-group/bridge-auth-core` factory, re-exported under an alias. It's a temporary escape hatch: the Next.js SDK doesn't yet expose quota state on the `bridge` object (and the `useBridge()` exported by `bridge-nextjs` is a different function that returns the `bridge` object, without a `quota()` method). Until the SDK surfaces quotas, use the aliased factory for this one read.
+> **Note:** `useBridgeBilling` is the underlying `@nebulr-group/bridge-auth-core` factory, re-exported under an alias. Prefer `useQuota`, which re-renders on every push and keeps "loading" apart from "no quota on this plan".

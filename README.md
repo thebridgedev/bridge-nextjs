@@ -3,8 +3,55 @@
 This repository contains both the Bridge Next.js library and a demo application showcasing its features.
 
 ## Quick Links
-- [Quickstart Guide](learning/quickstart/quickstart.md) - Get started quickly with Bridge in your Next.js application
-- [Examples](learning/examples/examples.md) - Detailed examples of Bridge features
+- [How Bridge works](learning/mechanisms.md) - the whole integration, plan limits, and customising Bridge's pages
+- [SDK auth quickstart](learning/sdk-auth/sdk-quickstart.md) / [Hosted auth quickstart](learning/quickstart/hosted-quickstart.md)
+- [Parity with bridge-svelte](docs/parity-with-svelte.md)
+
+## The whole integration
+
+One line of `.env` and three files. Every other page Bridge needs, it serves.
+
+```env
+# .env.local
+NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id
+# only for a stage/local app — the hosted sign-in pages follow it:
+# NEXT_PUBLIC_BRIDGE_API_BASE_URL=https://api-stage.thebridge.dev
+```
+
+```tsx
+// app/layout.tsx — stays a Server Component; the config is plain data
+import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
+import '@nebulr-group/bridge-nextjs/styles';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <BridgeProvider config={{ loginRoute: '/auth/login' }}>{children}</BridgeProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+```tsx
+// app/auth/[...bridge]/page.tsx — login, signup, oauth-callback, set-password/[token],
+// forgot-password, magic-link, setup-passkey/[token], workspaces
+import { BridgeAuthRoutes } from '@nebulr-group/bridge-nextjs/client';
+export default function AuthPage() {
+  return <BridgeAuthRoutes />;
+}
+```
+
+```tsx
+// app/subscription/[[...bridge]]/page.tsx — /subscription, /plan (the paywall), /success, /error
+import { BridgeBillingRoutes } from '@nebulr-group/bridge-nextjs/client';
+export default function SubscriptionPage() {
+  return <BridgeBillingRoutes />;
+}
+```
+
+Settings resolve as *explicit option > `NEXT_PUBLIC_BRIDGE_*` environment > default*. Plan limits need no page code: a backend `402 QUOTA_EXCEEDED` opens the upgrade dialog; `<QuotaGate>` and `useQuota()` are there when you want more. See [How Bridge works](learning/mechanisms.md).
 
 ## Table of Contents
 
@@ -25,14 +72,14 @@ npm install @nebulr-group/bridge-nextjs
 
 ## Configuration
 
-For detailed configuration instructions, see the [Quickstart Guide](learning/quickstart/quickstart.md).
+See the [configuration reference](learning/auth/config/config.md).
 
 
 ## Authentication
 
 For authentication examples and implementation details, see:
-- [Quickstart Guide - Authentication](learning/quickstart/quickstart.md#authentication)
-- [Examples - Authentication](learning/examples/examples.md#authentication)
+- [SDK auth quickstart](learning/sdk-auth/sdk-quickstart.md)
+- [Hosted auth quickstart](learning/quickstart/hosted-quickstart.md)
 
 ### Route protection: which layer guards what
 
@@ -45,15 +92,15 @@ See [Route guards](learning/auth/securing/route-guards.md#which-layer-guards-wha
 ## Feature Flags
 
 For feature flag examples and implementation details, see:
-- [Examples - Feature Flags](learning/examples/examples.md#feature-flags)
+- [Feature flags](learning/feature-flags/feature-flags.md). To gate a route by sign-in and a flag together, put `featureFlag` on a `withBridgeAuth` rule (Next.js runs one middleware): see [Route guards](learning/auth/securing/route-guards.md#sign-in-and-a-feature-flag-on-the-same-route).
 
 ## Payments & Subscriptions
 
-The library supports redirecting users to Bridge's plan selection and subscription portal (e.g. via a plan service). See the [Examples](learning/examples/examples.md) for subscription and payment patterns.
+`app/subscription/[[...bridge]]/page.tsx` serves the subscription page, the paywall and the checkout return pages. See [Add billing to your app](learning/billing/setup/add-billing-to-your-app.md) and [Usage limits](learning/billing/limits/usage-limits.md).
 
 ## Demo Application
 
-The demo application in this repository contains runnable examples of the usage patterns found in the [examples](learning/examples/examples.md) documentation.
+The demo application (`demo/`) is the ten-line shape above plus example pages. Its one demo-only file, `demo/src/test-fixtures/TestBridgeProvider.tsx`, passes the E2E harness's per-worker app id to `<BridgeProvider>`; a real app renders `<BridgeProvider>` directly.
 
 ## E2E Tests
 
@@ -61,7 +108,7 @@ E2E tests use Playwright. Run them from the repo root.
 
 1. **Configure env:** Copy `config/.env.test.local.example` to `config/.env.test.local` and fill in the values (test data API key, etc.).
 2. **Pre-setup:** The first step of `test:e2e` runs a pre-setup script that creates/gets the test app and, for local runs only, writes `config/.env.demo.test.local` (the local API root depends on your slot). `config/.env.demo.test.stage` and `config/.env.demo.test.prod` are tracked in git with every key explicit.
-3. **Global setup:** resolves the app id from the test-data API and seeds it into the browser as `localStorage['bridge:appId']`, which the demo passes to `BridgeProvider` — the demo env files deliberately leave `NEXT_PUBLIC_BRIDGE_APP_ID` empty. It then asserts that the demo is serving the environment the Playwright project targets (env pill, API root, and the requests the SDK makes on boot), so a stage run can never quietly drive a local or production backend.
+3. **Global setup:** resolves the app id from the test-data API and seeds it into the browser as `localStorage['bridge:appId']`, which the demo passes to `BridgeProvider` (via `demo/src/test-fixtures/TestBridgeProvider.tsx`) — the demo env files deliberately leave `NEXT_PUBLIC_BRIDGE_APP_ID` empty. It then asserts that the demo is serving the environment the Playwright project targets (env pill, API root, and the requests the SDK makes on boot), so a stage run can never quietly drive a local or production backend.
 4. **Install browsers (once):** `npx playwright install`
 5. **Run tests** (always through these scripts — they pass the environment to the webServer that starts the demo on port 3010):
    - `npm run test:e2e` — local

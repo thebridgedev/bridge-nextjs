@@ -65,7 +65,9 @@ import { createBridgeCallbackRoute } from '@nebulr-group/bridge-nextjs/server';
 export const GET = createBridgeCallbackRoute({ redirectPath: '/' });
 ```
 
-The handler exchanges the OAuth code for tokens automatically and redirects to `redirectPath`.
+The handler exchanges the OAuth code for tokens automatically, stores the session in a cookie the `withBridgeAuth` middleware can check, and redirects to `redirectPath` (or the deep link the middleware remembered).
+
+> If you also add the in-app sign-in catch-all (`app/auth/[...bridge]/page.tsx` rendering `<BridgeAuthRoutes />`), keep this file: Next.js prefers the specific `oauth-callback/route.ts` over the catch-all, so hosted sign-in keeps its cookie session. Without this file the catch-all finishes the callback in the browser instead, which the middleware cannot see.
 
 ## 5. That's it: no login page needed
 
@@ -84,7 +86,7 @@ The config `<BridgeProvider>` uses is a `BridgeConfig`. The most common fields:
 | `defaultRedirectRoute` | `'/'` | Route to land on after login |
 | `loginRoute` | (unset) | In-app login route; leave unset for hosted auth (that's what triggers the hosted page) |
 | `apiBaseUrl` | `https://api.thebridge.dev` | Root URL for the Bridge API (dev override) |
-| `hostedUrl` | `https://auth.thebridge.dev` | Bridge hosted UI URL (dev override) |
+| `hostedUrl` | follows `apiBaseUrl` on Bridge's domains | Bridge hosted UI URL. A stage app (`NEXT_PUBLIC_BRIDGE_API_BASE_URL=https://api-stage.thebridge.dev`) signs in on `auth-stage.thebridge.dev` with no extra setting; set it only for a local or self-hosted Bridge |
 | `debug` | `false` | Enable debug logging |
 
 See the [Configuration reference](/auth/config/) for the full list (token storage, signup route, billing routes).
@@ -96,7 +98,7 @@ NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id-here
 NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/dashboard
 ```
 
-You can also pass the same fields as a `config` prop on `<BridgeProvider>`; env values win when both are set:
+You can also pass the same fields as a `config` prop on `<BridgeProvider>`; a value passed there wins over the env var:
 
 ```tsx
 <BridgeProvider config={{ defaultRedirectRoute: '/dashboard' }}>

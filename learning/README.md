@@ -10,6 +10,7 @@ End-user documentation for `@nebulr-group/bridge-nextjs`. These docs assume the 
 
 ## Top-level guides
 
+- [How Bridge works](./mechanisms.md): the whole integration (one `.env` line and three files), where a plan limit is counted, the three levels of limit UI, and the customisation ladder.
 - [Quickstart (hosted auth)](./quickstart/hosted-quickstart.md): the fastest way to add authentication.
 - [SDK Auth quickstart](./sdk-auth/sdk-quickstart.md): in-app auth UI, no redirect to Bridge hosted auth.
 - [Live updates and the `bridge` object](./live-updates/live-updates.md): the unified `bridge` object, live channel events, and app-wide flag attributes.

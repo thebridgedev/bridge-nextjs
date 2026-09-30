@@ -89,35 +89,36 @@ export default function DashboardPage() {
 
 `<ProtectedRoute>` shows a loading placeholder while auth state resolves, redirects to `redirectTo` (default `'/'`) if the user isn't authenticated, and renders `children` otherwise.
 
-> **Framework note:** a rule with `featureFlag` is evaluated by `withBridgeAuth` for the signed-in user and answers `403` when the flag is off. To redirect instead, or to gate whole path trees, compose `withFeatureFlags` with `withBridgeAuth`:
->
-> ```ts
-> // middleware.ts
-> import { NextRequest } from 'next/server';
-> import { withBridgeAuth, withFeatureFlags } from '@nebulr-group/bridge-nextjs/server';
->
-> const authMiddleware = withBridgeAuth({
->   rules: [
->     { match: '/', public: true },
->     { match: new RegExp('^/auth($|/)'), public: true },
->   ],
->   defaultAccess: 'protected',
-> });
->
-> const flagMiddleware = withFeatureFlags([
->   { flag: 'beta_feature', paths: ['/beta', '/beta/*'], redirectTo: '/' },
-> ]);
->
-> export default async function middleware(request: NextRequest) {
->   const authResult = await authMiddleware(request);
->   if (authResult.status === 307 || authResult.status === 308) return authResult;
->   return flagMiddleware(request);
-> }
->
-> export const config = {
->   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-> };
-> ```
+### Sign-in and a feature flag on the same route
+
+Next.js runs one `middleware.ts`, so `withBridgeAuth` and `withFeatureFlags` cannot both be its default export, and chaining them by hand drops what the first one decided. Put the flag on the route rule instead: `withBridgeAuth` checks the session first, then the flag, in one middleware.
+
+```ts
+// middleware.ts
+import { withBridgeAuth } from '@nebulr-group/bridge-nextjs/server';
+
+export default withBridgeAuth({
+  rules: [
+    { match: '/', public: true },
+    { match: new RegExp('^/auth($|/)'), public: true },
+    { match: '/beta', featureFlag: 'beta_feature' },                       // one flag
+    { match: '/reports', featureFlag: { any: ['reports', 'analytics'] } }, // at least one
+    { match: '/admin', featureFlag: { all: ['admin_ui', 'staff'] } },      // every one
+  ],
+});
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
+```
+
+A `featureFlag` rule:
+
+- requires a signed-in user first: signed out, a page goes to login (the deep link remembered), an API request gets `401`;
+- evaluates the flag server-side for that user: off answers `403`, never a redirect; an evaluation error also answers `403` (fail closed);
+- matches like any other rule (exact path or prefix, or a RegExp), and a rule's `redirectTo` is not used here.
+
+For a friendlier page than a `403`, keep the route public in the middleware and gate the content with `<FeatureFlag flagKey="beta_feature" upgrade>` in the page (a plan-gated flag then offers the upgrade dialog). Use `withFeatureFlags` on its own only in an app with no sign-in middleware.
 
 ## Returning to the page they asked for
 

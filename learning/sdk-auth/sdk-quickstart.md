@@ -23,11 +23,11 @@ Key points:
 - **`loginRoute`**: tells Bridge where to redirect unauthenticated users (your in-app login page).
 - Protect pages client-side by wrapping them in `<ProtectedRoute redirectTo="/auth/login">`.
 
-> **Framework note:** The `withBridgeAuth` middleware always redirects unauthenticated users to the hosted login page; for in-app login pages, gate protected pages with `<ProtectedRoute>` instead. See [Route guards](/auth/securing/route-guards/) for both layers.
+> **Framework note:** in-app sign-in keeps its tokens in the browser, where the `withBridgeAuth` middleware cannot see them; gate protected pages with `<ProtectedRoute>`. See [Route guards](/auth/securing/route-guards/) for both layers.
 
 ## 3. Provider component (`app/layout.tsx`)
 
-Add the `BridgeProvider` component to your root layout. It reads the `NEXT_PUBLIC_BRIDGE_*` env vars automatically.
+Add the `BridgeProvider` component to your root layout. It reads the `NEXT_PUBLIC_BRIDGE_*` env vars automatically, and the layout stays a Server Component: the config is plain data.
 
 ```tsx
 // app/layout.tsx
@@ -45,61 +45,69 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-## 4. Create a login page
-
-Drop the `LoginForm` component onto a page that matches your `loginRoute`.
+## 4. One file serves every sign-in page
 
 ```tsx
-// app/auth/login/page.tsx
+// app/auth/[...bridge]/page.tsx
+import { BridgeAuthRoutes } from '@nebulr-group/bridge-nextjs/client';
+
+export default function AuthPage() {
+  return <BridgeAuthRoutes />;
+}
+```
+
+That file serves `/auth/login`, `/auth/signup`, `/auth/oauth-callback`, `/auth/set-password/[token]`, `/auth/forgot-password`, `/auth/magic-link`, `/auth/setup-passkey/[token]` and `/auth/workspaces`. Any other address under `/auth` gets your app's own not-found page.
+
+> **Do not skip set-password.** `/auth/set-password/[token]` is where Bridge's signup-verification and password-reset emails land. An app that hand-writes its sign-in pages and leaves this one out sends every new signup to a 404. The catch-all serves it; if you take pages over one by one, keep it.
+
+Auth method visibility (magic link, passkeys, SSO) is derived from your app's configuration in the Control Center (your admin dashboard at app.thebridge.dev), so turning magic links on needs no code. `LoginForm` handles multi-step flows inline: forgot password, magic link requests, passkey login, MFA challenge, MFA setup, and workspace selection (a workspace is called a *tenant* in the API). After sign-in the user goes back to the page they were heading for (the `?redirectUri=` deep link), else to `/`.
+
+## 5. Customising the pages
+
+Climb only as far as you need:
+
+| Rung | What you do | What you own |
+|---|---|---|
+| **0 — nothing** | The pages render inside your own `app/layout.tsx` | Your navigation, header and shell already surround them |
+| **1 — tokens** | Set `--bridge-*` CSS variables in your CSS | Colours, radius, spacing |
+| **2 — frame and heading** | Pass `frame(page, children)` and `heading(page)` render-props | Everything around the form on every page, and each page's heading |
+| **3 — take over one page** | Create that page's own file, e.g. `app/auth/login/page.tsx` | That one page; Next.js prefers it over `[...bridge]`, every other page keeps working |
+| **4 — headless** | Build your own UI on `getBridgeAuth()` | Everything |
+
+Rung 2 passes functions, so that page file is a Client Component:
+
+```tsx
+// app/auth/[...bridge]/page.tsx
 'use client';
-import { LoginForm } from '@nebulr-group/bridge-nextjs/client';
+import { BridgeAuthRoutes } from '@nebulr-group/bridge-nextjs/client';
+
+export default function AuthPage() {
+  return (
+    <BridgeAuthRoutes
+      frame={(page, children) => <main className="auth-card">{children}</main>}
+      heading={(page) => <h1>{page === 'signup' ? 'Create your account' : 'Welcome back'}</h1>}
+    />
+  );
+}
+```
+
+`heading` replaces only each page's main step (the login credentials step, the signup form, the set-password form); sub-steps such as "Reset your password" keep their own, so two headings never stack.
+
+Rung 3: a page you own navigates itself after sign-in. Next.js 15 passes route params as a Promise:
+
+```tsx
+// app/auth/set-password/[token]/page.tsx — takes over one page
+'use client';
+import { ForgotPassword } from '@nebulr-group/bridge-nextjs/client';
 import { useRouter } from 'next/navigation';
+import { use } from 'react';
 
-export default function LoginPage() {
+export default function SetPasswordPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
   const router = useRouter();
-  return (
-    <div className="login-page">
-      <LoginForm showSignupLink onLogin={() => router.push('/')} />
-    </div>
-  );
-}
-
-/* globals.css (optional): center the forms on the page.
-   Not required for the components to work.
-.login-page,
-.signup-page {
-  display: flex;
-  justify-content: center;
-  padding: 3rem 1rem;
-}
-*/
-```
-
-Use the `onLogin` callback to send the user on after a successful sign-in. Auth method visibility (magic link, passkeys, SSO) is derived from your app's configuration in the Control Center (your admin dashboard at app.thebridge.dev).
-
-`LoginForm` handles multi-step flows inline: forgot password, magic link requests, passkey login, MFA challenge, MFA setup, and workspace selection (a workspace is called a *tenant* in the API) all render within the same component automatically when needed.
-
-**Optional props:** `onLogin` (fires after successful auth, useful for analytics), `onError` (fires on auth failure).
-
-## 5. Create a signup page
-
-```tsx
-// app/auth/signup/page.tsx
-'use client';
-import { SignupForm } from '@nebulr-group/bridge-nextjs/client';
-
-export default function SignupPage() {
-  return (
-    <div className="signup-page">
-      <SignupForm showLoginLink loginHref="/auth/login" />
-    </div>
-  );
+  return <ForgotPassword token={token} loginHref="/auth/login" onComplete={() => router.push('/auth/login')} />;
 }
 ```
-
-After a successful signup the user receives a verification email. Once verified, they can sign in.
-
-**Optional props:** `onSignup` (fires after successful signup), `onError` (fires on failure).
 
 ## 6. Styles
 
@@ -116,7 +124,7 @@ The config `<BridgeProvider>` uses is a `BridgeConfig`. The most common fields:
 | `signupRoute` | (unset) | In-app route of your signup page |
 | `defaultRedirectRoute` | `'/'` | Route to land on after login |
 | `apiBaseUrl` | `https://api.thebridge.dev` | Root URL for the Bridge API (dev override) |
-| `hostedUrl` | `https://auth.thebridge.dev` | Bridge hosted UI URL (dev override) |
+| `hostedUrl` | follows `apiBaseUrl` on Bridge's domains | Bridge hosted UI URL; set only for a local or self-hosted Bridge |
 | `debug` | `false` | Enable debug logging |
 
 See the [Configuration reference](/auth/config/) for the full list (token storage, billing routes).
@@ -129,7 +137,7 @@ NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login
 NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/dashboard
 ```
 
-You can also pass the same fields as a `config` prop on `<BridgeProvider>`; env values win when both are set:
+You can also pass the same fields as a `config` prop on `<BridgeProvider>`; a value passed there wins over the env var:
 
 ```tsx
 <BridgeProvider config={{ loginRoute: '/auth/login', defaultRedirectRoute: '/dashboard' }}>

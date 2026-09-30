@@ -15,8 +15,16 @@ export {
   type SubscriptionState,
 } from './core/bridge-instance';
 
-// ── Provider ──────────────────────────────────────────────────────────────────
-export { BridgeProvider } from './client/providers/bridge-provider';
+// ── Provider + config (TBP-742) ───────────────────────────────────────────────
+export { BridgeProvider, type BridgeProviderProps } from './client/providers/bridge-provider';
+export {
+  createBridgeConfig,
+  hostedUrlFor,
+  readBridgeEnv,
+  PRODUCTION_API_BASE_URL,
+  type BridgeEnv,
+  type CreateBridgeConfigOptions,
+} from './shared/resolve-config';
 
 // ── Unified bridge surface (Live Channel Unification) ─────────────────────────
 // Single scoped read surface: `bridge.app` / `bridge.tenant` / `bridge.user` /
@@ -29,6 +37,8 @@ export type {
   BridgeAppSurface,
   BridgeTenantSurface,
   BridgeReadable,
+  BridgeUsageSurface,
+  UsageQueueStatus,
 } from './core/bridge';
 export type { LazySlice } from './core/lazy-slice';
 export type {
@@ -134,7 +144,7 @@ export {
 export { logger, setLoggerDebug } from './shared/logger';
 
 // ── Config types ──────────────────────────────────────────────────────────────
-export type { BridgeConfig } from './shared/types/config';
+export type { BridgeConfig, BridgeUpgradeDialogProps, PlanWithFeatures } from './shared/types/config';
 
 // ── Components ────────────────────────────────────────────────────────────────
 export { default as FeatureFlag } from './client/components/FeatureFlag';
@@ -152,6 +162,15 @@ export { TeamUserList } from './client/components/team/TeamUserList';
 export { TeamWorkspaceForm } from './client/components/team/TeamWorkspaceForm';
 
 // ── SDK Auth ──────────────────────────────────────────────────────────────────
+// TBP-742 — every sign-in page from `app/auth/[...bridge]/page.tsx`.
+export { BridgeAuthRoutes, type BridgeAuthRoutesProps } from './client/components/sdk-auth/BridgeAuthRoutes';
+export {
+  BRIDGE_AUTH_PAGES,
+  parseBridgeAuthRoute,
+  bridgeAuthBase,
+  type BridgeAuthPage,
+  type BridgeAuthRoute,
+} from './client/auth-routes';
 export { ForgotPassword } from './client/components/sdk-auth/ForgotPassword';
 export { LoginForm } from './client/components/sdk-auth/LoginForm';
 export { MagicLink } from './client/components/sdk-auth/MagicLink';
@@ -173,6 +192,53 @@ export { Spinner } from './client/components/sdk-auth/shared/Spinner';
 
 // ── Subscription ──────────────────────────────────────────────────────────────
 export { PlanSelector } from './client/components/subscription/PlanSelector';
+
+// ── Subscription pages + plan limits (TBP-742, ported from bridge-svelte) ─────
+// One file serves /subscription, /subscription/plan, /subscription/success and
+// /subscription/error: `app/subscription/[[...bridge]]/page.tsx`.
+export {
+  BridgeBillingRoutes,
+  type BridgeBillingRoutesProps,
+} from './client/components/subscription/BridgeBillingRoutes';
+export {
+  BridgePaywallPage,
+  type BridgePaywallPageProps,
+} from './client/components/subscription/BridgePaywallPage';
+export {
+  BillingPortalButton,
+  type BillingPortalButtonProps,
+} from './client/components/subscription/BillingPortalButton';
+export {
+  BRIDGE_BILLING_PAGES,
+  BRIDGE_BILLING_DEFAULTS,
+  parseBridgeBillingRoute,
+  resolveBillingRoutes,
+  type BridgeBillingPage,
+  type BridgeBillingRoutes as BridgeBillingRoutesConfig,
+} from './client/billing-routes';
+// Level 0 — the upgrade dialog on a 402 (mounted by <BridgeProvider>).
+export { bridgeFetch } from './core/bridge-fetch';
+export {
+  onBridgeQuotaExceeded,
+  dismissQuotaRefusal,
+  parseQuotaRefusal,
+  type BridgeQuotaRefusal,
+} from './core/quota-refusal';
+export {
+  openFeatureUpgrade,
+  dismissFeatureUpgrade,
+  type BridgeFeatureUpgrade,
+  type BridgeFeatureOffReason,
+} from './core/feature-upgrade';
+export { BridgeUpgradeDialog } from './client/components/subscription/BridgeUpgradeDialog';
+export { useUpgradeRequest, type UpgradeRequest } from './client/hooks/use-upgrade-request';
+// Level 1 — one component.
+export { QuotaGate, type QuotaGateProps, type QuotaGateState } from './client/components/subscription/QuotaGate';
+// Level 2 — your own UI.
+export { useQuota, type QuotaState } from './client/hooks/use-quota';
+// The exception: a direct plan check without a flag.
+export { Entitled, type EntitledProps } from './client/components/subscription/Entitled';
+export { useEntitlements, type EntitlementsState } from './client/hooks/use-entitlements';
 
 // ── Billing 2.0 — canonical-model drop-ins (TBP-248/263) ──────────────────────
 // Parallel to PlanSelector (Stripe-direct path); these coexist until REF-1
