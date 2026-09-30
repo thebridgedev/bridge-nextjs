@@ -4,6 +4,8 @@ import {
   BridgePullCache,
   MemoryIdentityStorage,
   attachIdentity,
+  claimsToAttributes,
+  flattenBillingSnapshot,
   serverInstanceId,
   serializeContext,
   BRIDGE_CONTEXT_HEADER,
@@ -34,11 +36,15 @@ import { verifySessionToken } from './verify-session';
  *     bucket rolled-out rules and return the safe default.
  *   - A stable `serverInstanceId()` is set so system-level flags can target the
  *     instance.
- *   - Per-request context is built from the request's token claims
- *     (sub/role/tid/plan/privileges) — the same claim shape the
- *     AuthAttributeProvider flattens on the client. The claims come from the
- *     VERIFIED session token. An inbound `x-bridge-context` header is never
- *     read — it is internal, and a client can send anything in it (TBP-671).
+ *   - Per-request context is built from the VERIFIED session token's claims
+ *     with auth-core's `claimsToAttributes` — the one mapping the browser's
+ *     AuthAttributeProvider uses (`user.id`, `user.role`, `user.email`,
+ *     `tenant.id`, `tenant.plan`, `privileges`) — so a rule means the same
+ *     thing on both sides (TBP-757). Flag evaluations add the workspace's
+ *     `bridge:billing.*` attributes (plan, subscription status, trial,
+ *     entitlements) read from Bridge's `/session/init`, cached per workspace,
+ *     like bridge-nestjs. An inbound `x-bridge-context` header is never read —
+ *     it is internal, and a client can send anything in it (TBP-671).
  *
  * Public method names/signatures are kept stable where reasonable
  * (`isFeatureEnabledServer`, `loadAllFlagsServer`, `init`, `getInstance`) so
@@ -50,6 +56,9 @@ export class FeatureFlagServer {
 
   private readonly bridge: BridgeFlags;
   private readonly pullCache: BridgePullCache;
+  /** TBP-757 — the newest verified `plan` claim seen per workspace. */
+  private readonly billingPlanClaim = new Map<string, { plan: string | undefined; iat: number | undefined }>();
+  private billingWarned = false;
 
   private constructor() {
     // Backend mode — server-side semantics (no auto-anonymous identity).
@@ -132,12 +141,95 @@ export class FeatureFlagServer {
    * `plan: 'pro'` used to unlock plan-gated flags).
    */
   async buildVerifiedContextFromRequest(request: NextRequest): Promise<Partial<EvalContext> | undefined> {
+    return (await this.verifiedSession(request))?.context;
+  }
+
+  private async verifiedSession(
+    request: NextRequest,
+  ): Promise<{ context: Partial<EvalContext>; accessToken: string; claims: AuthJwtClaims } | undefined> {
     const tokenService = TokenServiceServer.getInstance();
     const cookieString = request.headers.get('cookie') || '';
     const accessToken = tokenService.getAccessTokenServer(cookieString);
     if (!accessToken) return undefined;
-    const claims = await verifySessionToken(accessToken, this.ensureConfig());
-    return contextFromClaims(claims as AuthJwtClaims | null);
+    const claims = (await verifySessionToken(accessToken, this.ensureConfig())) as AuthJwtClaims | null;
+    const context = contextFromClaims(claims);
+    if (!context || !claims) return undefined;
+    return { context, accessToken, claims };
+  }
+
+  /**
+   * TBP-757 — the context flag evaluations use: the verified claims plus the
+   * workspace's `bridge:billing.*` attributes, so a rule on the plan, the
+   * subscription status or an entitlement answers on the server as it does in
+   * the browser. The billing half is read from Bridge (`/session/init`, with
+   * the verified token), never from the request, and degrades to the claims
+   * alone when Bridge cannot be reached.
+   */
+  private async evalContextFromRequest(request: NextRequest): Promise<Partial<EvalContext> | undefined> {
+    const session = await this.verifiedSession(request);
+    if (!session) return undefined;
+    try {
+      const billing = await this.billingAttributesFor(session.accessToken, session.claims);
+      return { ...session.context, attributes: { ...session.context.attributes, ...billing } };
+    } catch (err) {
+      if (!this.billingWarned) {
+        this.billingWarned = true;
+        logger.warn(
+          "FeatureFlagServer - could not read the workspace's plan and entitlements from Bridge; flag rules on bridge:billing.* see no value until it answers.",
+          err,
+        );
+      }
+      return session.context;
+    }
+  }
+
+  /**
+   * `bridge:billing.*` for the verified token's workspace, cached per
+   * workspace by the pull cache (30 s TTL) and dropped as soon as a newer
+   * verified token carries a different `plan` claim, so a plan change reaches
+   * the server without waiting for the TTL. `bridge:billing.quota.*` is not
+   * included: `/session/init` does not carry quotas.
+   */
+  private billingAttributesFor(accessToken: string, claims: AuthJwtClaims): Promise<Record<string, unknown>> {
+    const tid = typeof claims.tid === 'string' && claims.tid.length > 0 ? claims.tid : undefined;
+    const appId = this.ensureConfig()?.appId;
+    if (!tid || !appId) return Promise.resolve({});
+    this.notePlanClaim(tid, claims);
+    return this.pullCache.get(`billing:${tid}`, async () => {
+      const res = await fetch(`${this.apiBaseUrl()}/session/init`, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'x-app-id': appId },
+      });
+      if (!res.ok) throw new Error(`GET /session/init failed: ${res.status}`);
+      const snap = (await res.json()) as {
+        tenant?: { subscription?: unknown; entitlements?: Record<string, unknown> | null };
+      } | null;
+      return flattenBillingSnapshot({
+        subscription: snap?.tenant?.subscription as { plan?: { slug?: unknown } | null; status?: unknown } | null,
+        entitlements: snap?.tenant?.entitlements,
+      });
+    });
+  }
+
+  /*
+   * A newer verified token whose `plan` claim differs from the one the cached
+   * billing attributes were read under means the plan changed: drop them. An
+   * older token never invalidates (two users on tokens of different vintages
+   * would otherwise evict each other on every request).
+   */
+  private notePlanClaim(tid: string, claims: AuthJwtClaims): void {
+    const raw = (claims as { plan?: unknown }).plan;
+    const plan = typeof raw === 'string' ? raw : undefined;
+    const iatRaw = (claims as { iat?: unknown }).iat;
+    const iat = typeof iatRaw === 'number' ? iatRaw : undefined;
+    const seen = this.billingPlanClaim.get(tid);
+    if (!seen) {
+      this.billingPlanClaim.set(tid, { plan, iat });
+      return;
+    }
+    const newer = seen.iat === undefined || iat === undefined || iat >= seen.iat;
+    if (!newer) return;
+    if (seen.plan !== plan) this.pullCache.invalidate(`billing:${tid}`);
+    this.billingPlanClaim.set(tid, { plan, iat });
   }
 
   /** @deprecated Serializes UNVERIFIED claims; use `serializeVerifiedContextForRequest`. */
@@ -177,7 +269,7 @@ export class FeatureFlagServer {
     }
 
     await this.ensureFlagsHydrated(cfg.appId);
-    const context = await this.buildVerifiedContextFromRequest(request);
+    const context = await this.evalContextFromRequest(request);
 
     try {
       return this.bridge.flag<boolean>(flagName, false, context).value;
@@ -203,7 +295,7 @@ export class FeatureFlagServer {
       return defaultValue;
     }
     await this.ensureFlagsHydrated(cfg.appId);
-    const context = await this.buildVerifiedContextFromRequest(request);
+    const context = await this.evalContextFromRequest(request);
     try {
       return this.bridge.flag<T>(flagName, defaultValue, context).value;
     } catch (error) {
@@ -224,7 +316,7 @@ export class FeatureFlagServer {
     }
 
     await this.ensureFlagsHydrated(cfg.appId);
-    const context = await this.buildVerifiedContextFromRequest(request);
+    const context = await this.evalContextFromRequest(request);
 
     const result: { [key: string]: boolean } = {};
     try {
@@ -244,18 +336,17 @@ export { BRIDGE_CONTEXT_HEADER };
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
-/** Map Bridge token claims to the flag eval context (same shape as the client's AuthAttributeProvider). */
+/**
+ * Map Bridge token claims to the flag eval context with auth-core's
+ * `claimsToAttributes` — the mapping the browser's AuthAttributeProvider uses,
+ * so `user.id`, `user.role`, `privileges` and the rest mean the same on both
+ * sides (TBP-757).
+ */
 function contextFromClaims(claims: AuthJwtClaims | null | undefined): Partial<EvalContext> | undefined {
   if (!claims) return undefined;
-  const attributes: Record<string, unknown> = {};
-  if (typeof claims.role === 'string') attributes['user.role'] = claims.role;
-  if (typeof claims.email === 'string') attributes['user.email'] = claims.email;
-  if (typeof claims.tid === 'string') attributes['tenant.id'] = claims.tid;
-  if (typeof claims.plan === 'string') attributes['tenant.plan'] = claims.plan;
-  if (claims.privileges !== undefined) attributes['privileges'] = claims.privileges;
   return {
     identity: typeof claims.sub === 'string' ? claims.sub : undefined,
-    attributes,
+    attributes: claimsToAttributes(claims),
   };
 }
 
