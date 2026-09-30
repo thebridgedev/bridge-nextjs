@@ -36,7 +36,7 @@ import {
 import { setBridgeFlagsInstance, notifyFlagChanged, notifyAllFlagsChanged } from './registry';
 import { getBridgeAuth, useBridgeStore } from '../core/bridge-instance';
 import { _getDevAttributeProvider } from '../core/bridge';
-import { getBridgeRealtime, onBridgeRealtimeOpen } from '../core/bridge-runtime';
+import { getBridgeRealtime, onBridgeRealtimeOpen, tokenStaleHandlerOf } from '../core/bridge-runtime';
 
 /** A storage implementation that uses `localStorage` (persistent) or `sessionStorage` (per-tab). */
 export class BrowserIdentityStorage implements IdentityStorage {
@@ -207,6 +207,8 @@ export function createBridgeFlags(config: CreateBridgeFlagsConfig = {}): BridgeF
       apiBaseUrl: resolvedApiBaseUrl,
       appId: auth.getApiContext().appId,
       accessToken: auth.getApiContext().accessToken,
+      // TBP-762 — renew an out-of-date sign-in and retry instead of failing.
+      onTokenStale: tokenStaleHandlerOf(),
     });
   } catch {
     // No BridgeAuth — quota hydration falls back to live pushes only.

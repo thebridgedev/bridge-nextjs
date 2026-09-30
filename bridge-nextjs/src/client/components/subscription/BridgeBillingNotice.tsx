@@ -28,6 +28,7 @@ import {
   type BillingSubscriptionState,
 } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth, getBridgeConfig } from '../../../core/bridge-instance';
+import { tokenStaleHandlerOf } from '../../../core/bridge-runtime';
 import { useBridgeSnapshot } from '../../hooks/use-bridge-readable';
 
 type Chassis = 'bar' | 'rail' | 'card';
@@ -83,6 +84,8 @@ export function BridgeBillingNotice({
         apiBaseUrl: ctx.apiBaseUrl,
         accessToken: ctx.accessToken,
         appId: ctx.appId,
+        // TBP-762 — a read right after a checkout renews the sign-in and retries.
+        onTokenStale: tokenStaleHandlerOf(),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
