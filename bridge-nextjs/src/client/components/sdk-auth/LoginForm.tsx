@@ -19,6 +19,7 @@ import { TenantSelector } from './TenantSelector';
 import { SsoButton } from './SsoButton';
 import { SsoProviderIcon } from './SsoProviderIcon';
 import { PasskeyLogin } from './PasskeyLogin';
+import { PasskeyRequestSetupLink } from './PasskeyRequestSetupLink';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   showSignupLink?: boolean;
@@ -28,6 +29,12 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   showMagicLink?: boolean;
   magicLinkHref?: string;
   showPasskeys?: boolean;
+  /**
+   * Where "no passkey on this device" sends the person. Unset (the default),
+   * the form asks for their email in place and mails a setup link, like
+   * bridge-svelte — `<BridgeAuthRoutes>` serves `setup-passkey/<token>` only,
+   * so there is no bare setup page to send them to.
+   */
   passkeySetupHref?: string;
   onLogin?: () => void;
   onError?: (error: Error) => void;
@@ -64,7 +71,7 @@ export function LoginForm({
   showMagicLink,
   magicLinkHref = '/auth/magic-link',
   showPasskeys,
-  passkeySetupHref = '/auth/setup-passkey',
+  passkeySetupHref,
   onLogin,
   onError,
   onSsoClick,
@@ -100,7 +107,7 @@ export function LoginForm({
   // place of the credentials form (not a separate route) so the spec's
   // "click forgot → no email/password inputs → click back-to-login → email
   // input visible again" round-trip works without a navigation.
-  const [step, setStep] = useState<'credentials' | 'forgot-password'>('credentials');
+  const [step, setStep] = useState<'credentials' | 'forgot-password' | 'passkey-request'>('credentials');
   const [fpEmailSent, setFpEmailSent] = useState(false);
   const [fpLoading, setFpLoading] = useState(false);
 
@@ -238,6 +245,12 @@ export function LoginForm({
         </div>
       </AuthFormWrapper>
     );
+  }
+
+  // No passkey on this device: ask for the email and mail a setup link, in
+  // place (mirrors bridge-svelte's `passkey-request` step).
+  if (step === 'passkey-request') {
+    return <PasskeyRequestSetupLink initialEmail={email} onBack={goBackToCredentials} messages={messages} />;
   }
 
   if (step === 'forgot-password') {
@@ -381,6 +394,14 @@ export function LoginForm({
             onLogin={onLogin}
             onError={handleChildError}
             setupHref={passkeySetupHref}
+            onSetupPasskey={
+              passkeySetupHref
+                ? undefined
+                : () => {
+                    setStep('passkey-request');
+                    setError(null);
+                  }
+            }
             messages={messages}
             className="bridge-btn bridge-btn-secondary bridge-sso-btn"
           />

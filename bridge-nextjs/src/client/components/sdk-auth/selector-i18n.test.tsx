@@ -348,6 +348,8 @@ const FAN_OUT_DRIVERS: Record<
     expect: string;
     /** The built-in copy the override must have displaced. */
     displaces: string;
+    /** Steps that bring the child on screen when mounting alone does not. */
+    drive?: () => Promise<void>;
   }
 > = {
   MfaChallenge: {
@@ -377,6 +379,29 @@ const FAN_OUT_DRIVERS: Record<
     override: 'ÖVERRIDE logga in med nyckel',
     expect: 'ÖVERRIDE logga in med nyckel',
     displaces: sv['passkey.loginButton'],
+  },
+  PasskeyRequestSetupLink: {
+    // TBP-742 — LoginForm's in-place "no passkey on this device" step: shown
+    // after the passkey button finds no passkey in the browser.
+    props: { showPasskeys: true },
+    key: 'passkey.createHeading',
+    override: 'ÖVERRIDE skapa nyckel',
+    expect: 'ÖVERRIDE skapa nyckel',
+    displaces: sv['passkey.createHeading'],
+    drive: async () => {
+      (getBridgeAuth() as never as Record<string, unknown>).getPasskeyAuthOptions = () => Promise.resolve({});
+      const w = window as unknown as Record<string, unknown>;
+      w.PublicKeyCredential = function PublicKeyCredential() {};
+      w.__simpleWebAuthn = {
+        startAuthentication: () => Promise.reject(Object.assign(new Error('none'), { name: 'NotAllowedError' })),
+      };
+      try {
+        await click('[data-bridge-passkey-login]');
+      } finally {
+        delete w.PublicKeyCredential;
+        delete w.__simpleWebAuthn;
+      }
+    },
   },
   SsoButton: {
     // The one that was missed. Rendered only when LoginForm has connections
@@ -423,6 +448,7 @@ describe('LoginForm messages fan-out (TBP-634)', () => {
           messages={{ [driver.key]: driver.override } as never}
         />,
       );
+      await driver.drive?.();
 
       expect(text()).toContain(driver.expect);
       // Displaced, not merely accompanied — a child that ignored `messages`

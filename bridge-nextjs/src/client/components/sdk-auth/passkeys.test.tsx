@@ -11,6 +11,7 @@ import * as React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { PasskeyLogin } from './PasskeyLogin';
 import { PasskeySetup } from './PasskeySetup';
+import { LoginForm } from './LoginForm';
 import { _resetBridgeInstance, getBridgeAuth, initBridge } from '../../../core/bridge-instance';
 
 const act = (React as unknown as { act: (cb: () => Promise<void> | void) => Promise<void> }).act;
@@ -104,4 +105,33 @@ it('PasskeySetup: a failed verification is an error, not a success', async () =>
   await act(async () => (container.querySelector('button') as HTMLButtonElement).click());
   expect(onComplete).not.toHaveBeenCalled();
   expect(container.querySelector('[data-variant="error"]')).not.toBeNull();
+});
+
+// TBP-742 — found on stage with the published 0.8.0-beta.1: "no passkey on this
+// device" sent LoginForm to `/auth/setup-passkey`, an address <BridgeAuthRoutes>
+// does not serve (it serves `setup-passkey/<token>` only), so the person landed
+// on a 404. Revert-proof: before the fix LoginForm passed only `setupHref`, the
+// click navigated away and no request-link form ever rendered here.
+it('LoginForm: no passkey in the browser asks for the email in place, not a 404 page', async () => {
+  const auth = getBridgeAuth();
+  jest.spyOn(auth, 'getPasskeyAuthOptions').mockResolvedValue({} as never);
+  ceremony.startAuthentication.mockRejectedValueOnce(Object.assign(new Error('nope'), { name: 'NotAllowedError' }));
+  const before = window.location.href;
+  await mount(<LoginForm showPasskeys />);
+  const passkeyBtn = container.querySelector('[data-bridge-passkey-login]') as HTMLButtonElement;
+  expect(passkeyBtn).not.toBeNull();
+  await act(async () => passkeyBtn.click());
+  expect(container.querySelector('#passkey-request-email')).not.toBeNull();
+  expect(container.querySelector('#login-email')).toBeNull();
+  expect(window.location.href).toBe(before);
+});
+
+it('LoginForm: an explicit passkeySetupHref still wins', async () => {
+  const auth = getBridgeAuth();
+  jest.spyOn(auth, 'getPasskeyAuthOptions').mockResolvedValue({} as never);
+  ceremony.startAuthentication.mockRejectedValueOnce(Object.assign(new Error('nope'), { name: 'NotAllowedError' }));
+  await mount(<LoginForm showPasskeys passkeySetupHref="#my-setup" />);
+  await act(async () => (container.querySelector('[data-bridge-passkey-login]') as HTMLButtonElement).click());
+  expect(container.querySelector('#passkey-request-email')).toBeNull();
+  expect(window.location.hash).toBe('#my-setup');
 });

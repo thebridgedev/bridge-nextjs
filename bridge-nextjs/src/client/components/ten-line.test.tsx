@@ -196,6 +196,20 @@ describe('<BridgeBillingRoutes> — one file serves the subscription pages', () 
     sdkMode();
     jest.spyOn(getBridgeAuth(), 'getSubscriptionStatus').mockResolvedValue({ shouldSelectPlan: true } as never);
     jest.spyOn(getBridgeAuth(), 'getPlans').mockResolvedValue([] as never);
+    useBridgeStore.setState({ tokens: { accessToken: 'at' } as never });
+  });
+
+  it('a signed-out visitor is sent to sign in and back, not shown "Not authenticated" (TBP-742)', async () => {
+    // Found on stage with 0.8.0-beta.1. Revert-proof: on the parent commit the
+    // page renders its heading and an error, and nothing navigates.
+    useBridgeStore.setState({ tokens: null });
+    window.history.replaceState({}, '', '/subscription');
+    mockNav.params = {};
+    mockNav.pathname = '/subscription';
+    await mount(<BridgeBillingRoutes />);
+    expect(mockNav.replace).toHaveBeenCalledWith(expect.stringMatching(/^\/auth\/login\?.*subscription/));
+    expect(container.querySelector('h1')).toBeNull();
+    window.history.replaceState({}, '', '/');
   });
 
   it.each([
@@ -374,5 +388,59 @@ describe('<BridgeProvider> — props win over the environment', () => {
     expect(getBridgeConfig().appId).toBe('prop-app');
     // …and it mounts the upgrade dialog with no code on the page.
     expect(container.querySelector('dialog[data-bridge-upgrade-dialog]')).not.toBeNull();
+  });
+});
+
+describe('<BridgeProvider> — the Stripe Checkout return (TBP-742)', () => {
+  // Found on stage with the published 0.8.0-beta.1: a paying customer back from
+  // Stripe was sent straight back to the plan picker. The billing page's own
+  // subscription read (a child effect, which React runs first) consumed the
+  // session id, so the provider no longer saw a checkout return and trusted the
+  // pre-payment token claim. Revert-proof: on the parent commit this test sees
+  // `push('/subscription/plan')`.
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+    sessionStorage.clear();
+  });
+
+  it('a paid return to /subscription/success stays there, and the page shows the paid plan', async () => {
+    window.history.replaceState({}, '', '/subscription/success?session_id=cs_test_1');
+    initBridge({ appId: 'app-1', apiBaseUrl: 'http://127.0.0.1:1', loginRoute: '/auth/login' });
+    const auth = getBridgeAuth();
+    jest.spyOn(auth, 'isAuthenticated').mockReturnValue(true);
+    useBridgeStore.setState({ tokens: { accessToken: 'at' } as never });
+    // The token still predates the payment: its claim says "pick a plan".
+    jest.spyOn(auth, 'shouldRedirectToPaywall').mockResolvedValue(true as never);
+    jest
+      .spyOn(auth, 'getPlans')
+      .mockResolvedValue([{ key: 'pro', name: 'Pro', prices: [{ amount: 900, currency: 'usd', recurrenceInterval: 'month' }] }] as never);
+    // Like auth-core: the first read after the return confirms the checkout and
+    // consumes the session id (URL and sessionStorage) before it awaits.
+    let confirmed = false;
+    jest.spyOn(auth, 'getSubscriptionStatus').mockImplementation(async () => {
+      if (new URL(window.location.href).searchParams.get('session_id') || sessionStorage.getItem('bridge_checkout_session_id')) {
+        window.history.replaceState({}, '', '/subscription/success');
+        sessionStorage.removeItem('bridge_checkout_session_id');
+        await new Promise((r) => setTimeout(r, 5));
+        confirmed = true;
+      }
+      return (confirmed
+        ? { shouldSelectPlan: false, paymentsAutoRedirect: true, plan: { key: 'pro' } }
+        : { shouldSelectPlan: true, paymentsAutoRedirect: true }) as never;
+    });
+
+    mockNav.params = { bridge: ['success'] };
+    mockNav.pathname = '/subscription/success';
+    await mount(
+      <BridgeProvider appId="app-1" config={{ apiBaseUrl: 'http://127.0.0.1:1', loginRoute: '/auth/login', devBadge: false }}>
+        <BridgeBillingRoutes />
+      </BridgeProvider>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(mockNav.push).not.toHaveBeenCalledWith('/subscription/plan');
+    expect(useBridgeStore.getState().subscription.status?.shouldSelectPlan).toBe(false);
   });
 });
