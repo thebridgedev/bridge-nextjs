@@ -1,6 +1,6 @@
 'use client';
 
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { useState } from 'react';
 import type { MessageOverrides } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
@@ -9,6 +9,7 @@ import { authErrorMessage } from './shared/auth-error';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
+import { passkeysSupported, startPasskeyRegistration } from './shared/webauthn';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   token: string;
@@ -17,6 +18,11 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   loginHref?: string;
   /** Heading text. Pass `null`/`''` to render no heading and use your own page title. */
   heading?: string | null;
+  /**
+   * The heading as a node, replacing `heading` on this form's main step only
+   * (never above a sub-step's own heading). What `<BridgeAuthRoutes heading>` passes.
+   */
+  headingSlot?: ReactNode;
   /**
    * Step description. Pass `null`/`''` to render nothing and use your own
    * subtitle (TBP-631).
@@ -37,6 +43,7 @@ export function PasskeySetup({
   onError,
   loginHref = '/auth/login',
   heading,
+  headingSlot,
   description,
   messages,
   className,
@@ -63,11 +70,20 @@ export function PasskeySetup({
     setError(null);
     setLoading(true);
     try {
-      await (getBridgeAuth() as any).registerPasskeyWithToken(token);
+      if (!passkeysSupported()) throw new Error(t('passkey.error.unsupported'));
+      const auth = getBridgeAuth();
+      const options = await auth.getPasskeyRegistrationOptions(token);
+      const credential = await startPasskeyRegistration(options);
+      const result = await auth.verifyPasskeyRegistration(credential, token);
+      if (!result?.verified) throw new Error(t('passkey.error.verify'));
       setDone(true);
       onComplete?.();
     } catch (err: any) {
-      setError(authErrorMessage(err, t, 'passkey.error.setupFailed'));
+      setError(
+        err?.name === 'NotAllowedError'
+          ? t('passkey.error.cancelled')
+          : authErrorMessage(err, t, 'passkey.error.setupFailed'),
+      );
       onError?.(err);
     } finally {
       setLoading(false);
@@ -77,6 +93,7 @@ export function PasskeySetup({
   return (
     <AuthFormWrapper
       heading={wrapperHeading}
+      headingSlot={headingSlot}
       description={wrapperDescription}
       className={className}
       style={style}

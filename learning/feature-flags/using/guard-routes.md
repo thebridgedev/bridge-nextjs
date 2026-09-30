@@ -33,9 +33,12 @@ the in-component `useFlag` / `<FeatureFlag>` surface. The middleware manages
 that flag cache internally, so no extra setup is needed: declare the
 protection and the middleware redirects when the flag is off.
 
-> **Framework note:** Authentication rules (`public` routes,
-> `defaultAccess: 'protected'`) live in `withBridgeAuth`, a separate
-> middleware you compose with `withFeatureFlags` in the same `middleware.ts`.
+> **Framework note:** Next.js runs one `middleware.ts`. If your app also
+> uses `withBridgeAuth` for sign-in, do not add `withFeatureFlags` beside it:
+> put the flag on a `withBridgeAuth` rule instead,
+> `{ match: '/beta', featureFlag: 'beta_feature' }` (signed-in user, flag off →
+> `403`). See [Sign-in and a feature flag on the same route](/auth/securing/route-guards/#sign-in-and-a-feature-flag-on-the-same-route).
+> `withFeatureFlags` on its own is for an app with no sign-in middleware.
 
 Route rules can also guard on authentication state; see
 [Route guards](/auth/securing/route-guards/) in the Auth section for the full

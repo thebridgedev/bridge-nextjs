@@ -12,48 +12,37 @@ The config object you pass to `<BridgeProvider>` controls how Bridge wires up au
 
 ## Passing configs to Bridge
 
-Wrap your app in `<BridgeProvider>` from your root `app/layout.tsx`, passing it a `BridgeConfig` object. The app ID comes from Control Center (your admin dashboard at app.thebridge.dev): open your app's settings and copy its ID into your `.env`.
+Wrap your app in `<BridgeProvider>` from your root `app/layout.tsx`. With the environment set, nothing else is required. The app ID comes from Control Center (your admin dashboard at app.thebridge.dev): open your app's settings and copy its ID into your `.env`.
+
+```env
+# .env.local
+NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id
+```
 
 ```tsx
-// components/Providers.tsx
-'use client';
-
-import { BridgeProvider, type BridgeConfig } from '@nebulr-group/bridge-nextjs/client';
-import { useMemo, type ReactNode } from 'react';
-
-export function Providers({ children }: { children: ReactNode }) {
-  // Memoize so the config object identity is stable across renders.
-  const config = useMemo<Partial<BridgeConfig>>(
-    () => ({
-      appId: process.env.NEXT_PUBLIC_BRIDGE_APP_ID,
-      loginRoute: '/auth/login',
-    }),
-    [],
-  );
-
-  return <BridgeProvider config={config}>{children}</BridgeProvider>;
-}
-
-// app/layout.tsx
-import { Providers } from '../components/Providers';
+// app/layout.tsx — a Server Component
+import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
+import '@nebulr-group/bridge-nextjs/styles';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <BridgeProvider config={{ loginRoute: '/auth/login' }}>{children}</BridgeProvider>
       </body>
     </html>
   );
 }
 ```
 
+The config is plain data (strings, booleans, nested objects), so the Server Component layout passes it straight to the provider; no client wrapper component is needed. The one exception is a field that holds a function or a component, such as `billing.upgradeDialog: MyDialog`: pass that from a Client Component.
+
 Signature:
 
 ```tsx
 <BridgeProvider
-  appId?: string          // just the appId as a prop, or:
-  config?: BridgeConfig   // the full config object
+  appId?: string                 // wins over config.appId and NEXT_PUBLIC_BRIDGE_APP_ID
+  config?: Partial<BridgeConfig>
 >
   {children}
 </BridgeProvider>
@@ -61,7 +50,20 @@ Signature:
 
 Bootstrap is idempotent: rendering the provider again after it has completed is a no-op.
 
-> **Framework note:** the root `app/layout.tsx` is a Server Component, so define the config object inside a client component (like the `Providers` wrapper above) rather than as an inline object prop in the layout. Runtime-only nested fields (like `billing`) don't serialize reliably across the Server to Client boundary.
+### Where each setting comes from
+
+Each field resolves as **explicit option > environment > default**; an empty value counts as unset. The same rule holds in `<BridgeProvider>`, in `withBridgeAuth` and in every server helper, so the browser and the middleware always talk to the same app. `createBridgeConfig(options)` (from `/client` or `/server`) returns the resolved config if you need it yourself.
+
+| Variable | When to set it |
+|---|---|
+| `NEXT_PUBLIC_BRIDGE_APP_ID` | Always. Missing, Bridge does not start and names the variable |
+| `NEXT_PUBLIC_BRIDGE_API_BASE_URL` | Only for a non-production app (stage, local, self-hosted). Unset means production |
+| `NEXT_PUBLIC_BRIDGE_HOSTED_URL` | Only for a local or self-hosted Bridge. On Bridge's own domains the hosted pages follow the API address (`api-stage.thebridge.dev` → `auth-stage.thebridge.dev`) |
+| `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` | For in-app sign-in (same as the `loginRoute` option) |
+| `NEXT_PUBLIC_BRIDGE_CALLBACK_URL`, `NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE`, `NEXT_PUBLIC_BRIDGE_SIGNUP_ROUTE` | Rarely; the defaults fit the catch-all pages |
+| `NEXT_PUBLIC_BRIDGE_DEBUG` | `true` for console logging |
+
+Every variable carries the `NEXT_PUBLIC_` prefix, because Next.js only inlines prefixed variables into the browser bundle.
 
 ## Callback URL
 
@@ -83,7 +85,7 @@ const config: Partial<BridgeConfig> = {
 Two options point the SDK at Bridge itself. You only change them if you're on a dedicated or self-hosted Bridge environment; on the standard cloud, leave them alone.
 
 - **`apiBaseUrl`** (default `https://api.thebridge.dev`): the base URL for the Bridge API. Every API endpoint the SDK calls is derived from it.
-- **`hostedUrl`** (default `https://auth.thebridge.dev`): the base URL for Bridge's hosted UI, such as the hosted login page and plan selection.
+- **`hostedUrl`** (default `https://auth.thebridge.dev`): the base URL for Bridge's hosted UI, such as the hosted login page and plan selection. On Bridge's own domains it follows `apiBaseUrl` (`api-stage` → `auth-stage`), so a stage app sets only its API address. Set it (or `NEXT_PUBLIC_BRIDGE_HOSTED_URL`) only for a local or self-hosted Bridge.
 
 ## Login route
 
@@ -99,13 +101,16 @@ If you leave `loginRoute` unset, Bridge uses hosted auth instead: unauthenticate
 |--------|------|---------|--------------|
 | `appId` | `string` | (required) | Your Bridge app ID, found in your app's settings in Control Center |
 | `apiBaseUrl` | `string` | `'https://api.thebridge.dev'` | Base URL for the Bridge API; all endpoints are derived from it. See [Base URLs](#base-urls) |
-| `hostedUrl` | `string` | `'https://auth.thebridge.dev'` | Base URL for Bridge's hosted UI (login page, plan selection). See [Base URLs](#base-urls) |
+| `hostedUrl` | `string` | follows `apiBaseUrl` on Bridge's domains, else `'https://auth.thebridge.dev'` | Base URL for Bridge's hosted UI (login page, plan selection). See [Base URLs](#base-urls) |
 | `callbackUrl` | `string` | `${origin}/auth/oauth-callback` | Where the login flow redirects back to after a successful login. See [Callback URL](#callback-url) |
 | `defaultRedirectRoute` | `string` | `'/'` | Route to redirect to after login |
 | `loginRoute` | `string` | (unset) | In-app route of your login page. Leave unset for hosted auth: without it, unauthenticated users go to Bridge's hosted login page. See [Login route](#login-route) |
 | `signupRoute` | `string` | `'/auth/signup'` | Route where your signup page lives; `LoginForm`'s signup link points here unless its `signupHref` prop overrides it |
-| `billing.paywallRoute` | `string` | (none) | Route to redirect to when the workspace (called a *tenant* in the API) has no plan selected |
-| `billing.paymentErrorRoute` | `string` | `'/payment-error'` | Route to redirect to when a Stripe checkout confirmation fails |
+| `billing.paywallRoute` | `string \| false` | `'/subscription/plan'` | Where a signed-in workspace (a *tenant* in the API) with no plan is redirected. The default applies only to an app that has plans; `false` turns the redirect off |
+| `billing.paymentErrorRoute` | `string` | `'/subscription/error'` | Where a failed Stripe checkout confirmation lands |
+| `billing.manageRoute` | `string` | `'/subscription'` | The subscription page: where Upgrade/Manage buttons and the upgrade dialog link. A completed checkout lands on `<manageRoute>/success` |
+| `billing.upgradeDialog` | `boolean \| Component` | `true` | The dialog opened when your backend answers `402 QUOTA_EXCEEDED` or `402 FEATURE_NOT_IN_PLAN`. `false` turns it off (render your own from `useUpgradeRequest()`); a component replaces it |
+| `billing.apiOrigins` | `string[]` | (none) | Your backend's origins when it is not on the page's origin, so a plain `fetch` refusal is recognised too (`bridgeFetch` needs no listing) |
 | `storage` | `TokenStorage` | `localStorage` (browser) / memory (SSR) | Token storage adapter; implement `get`/`set`/`remove` to bring your own |
 | `locale` | `string` | `'en'` | UI language for the SDK auth components, e.g. `'sv'`. Region variants (`'sv-SE'`) resolve to their base language; an unknown locale falls back to English |
 | `messages` | `MessageOverrides` | (none) | Per-key copy overrides applied on top of the locale. See [Translating the auth UI](#translating-the-auth-ui) |
@@ -164,6 +169,8 @@ interface RouteRule {
   match: string | RegExp;
   /** Route is accessible without authentication. */
   public?: boolean;
+  /** Also require a feature flag (signed-in user; off → 403). */
+  featureFlag?: string | { any: string[] } | { all: string[] };
 }
 ```
 
@@ -171,7 +178,7 @@ See [Route guards](/auth/securing/route-guards/) for a walkthrough.
 
 ## Passing values via .env
 
-> **Tip:** this is just a best practice, not a requirement. Keep environment-specific values in a `.env` file instead of hardcoding them, and read them with `process.env` when you build the config. The `NEXT_PUBLIC_` prefix is required for values to reach the browser; the SDK reads the `NEXT_PUBLIC_BRIDGE_*` variables below automatically, and they take precedence over values passed via the `config` prop.
+> **Tip:** this is just a best practice, not a requirement. Keep environment-specific values in a `.env` file instead of hardcoding them. The `NEXT_PUBLIC_` prefix is required for values to reach the browser; the SDK reads the `NEXT_PUBLIC_BRIDGE_*` variables below automatically. A value passed in the `config` prop wins over the variable, so the prop is how you deliberately override one page's or one deployment's setting.
 
 <Tabs>
 <TabItem label=".env">
@@ -183,21 +190,18 @@ NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/dashboard
 ```
 
 </TabItem>
-<TabItem label="Providers.tsx">
+<TabItem label="app/layout.tsx">
 
 ```tsx
 // Only needed for values without a NEXT_PUBLIC_BRIDGE_* variable
 // (e.g. billing routes); the ones above are picked up automatically.
-const config: Partial<BridgeConfig> = {
-  billing: { paywallRoute: '/welcome' },
-  debug: process.env.NODE_ENV === 'development',
-};
+<BridgeProvider config={{ billing: { paywallRoute: '/welcome' } }}>{children}</BridgeProvider>
 ```
 
 </TabItem>
 </Tabs>
 
-The SDK reads `NEXT_PUBLIC_BRIDGE_APP_ID`, `NEXT_PUBLIC_BRIDGE_API_BASE_URL`, `NEXT_PUBLIC_BRIDGE_CALLBACK_URL`, `NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE`, `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE`, `NEXT_PUBLIC_BRIDGE_SIGNUP_ROUTE`, and `NEXT_PUBLIC_BRIDGE_DEBUG`. The server-side helpers (`withBridgeAuth`, `getConfig()`) read the same variables independently, so keep the values identical between the client bundle and the server process (the same `.env` file, deployed consistently).
+The SDK reads `NEXT_PUBLIC_BRIDGE_APP_ID`, `NEXT_PUBLIC_BRIDGE_API_BASE_URL`, `NEXT_PUBLIC_BRIDGE_HOSTED_URL`, `NEXT_PUBLIC_BRIDGE_CALLBACK_URL`, `NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE`, `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE`, `NEXT_PUBLIC_BRIDGE_SIGNUP_ROUTE`, and `NEXT_PUBLIC_BRIDGE_DEBUG`. The server-side helpers (`withBridgeAuth`, `getConfig()`) read the same variables with the same precedence, so keep the values identical between the client bundle and the server process (the same `.env` file, deployed consistently).
 
 ## Configs managed in Control Center
 

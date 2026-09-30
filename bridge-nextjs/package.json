@@ -56,7 +56,8 @@
   "dependencies": {
     "jwt-decode": "^4.0.0",
     "zustand": "^4.5.0",
-    "jose": "^6.0.10"
+    "jose": "^6.0.10",
+    "@simplewebauthn/browser": "^13.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.0.0",

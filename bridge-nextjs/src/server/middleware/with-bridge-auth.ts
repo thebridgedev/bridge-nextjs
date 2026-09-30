@@ -13,9 +13,25 @@ export interface RouteRule {
   match: string | RegExp;
   /** Whether this route is public (no auth required) */
   public?: boolean;
-  /** Feature flag requirement for this route */
+  /**
+   * Feature flag requirement for this route — the way to combine sign-in and
+   * flag gating in ONE middleware. Next.js runs a single `middleware.ts`, so
+   * `withBridgeAuth` and `withFeatureFlags` cannot both be the default export;
+   * put the flag on the rule instead:
+   *
+   *   withBridgeAuth({ rules: [{ match: '/beta', featureFlag: 'beta-access' }] })
+   *
+   * A flag rule requires a signed-in user (signed out → login, or `401` for an
+   * API request), then evaluates the flag server-side for that user: off → `403`,
+   * never a redirect; an evaluation error → `403` (fail closed).
+   * `'key'` needs that flag on, `{ any: [...] }` at least one, `{ all: [...] }` every one.
+   */
   featureFlag?: string | { any: string[] } | { all: string[] };
-  /** Redirect path when feature flag requirement fails */
+  /**
+   * Not used by `withBridgeAuth`: a flag denial answers `403` (TBP-473). Kept on
+   * the type for rules shared with the client route guard (`createRouteGuard`),
+   * which does redirect.
+   */
   redirectTo?: string;
 }
 
@@ -94,10 +110,12 @@ const SESSION_COOKIE = 'bridge_access_token';
  *   decide what the browser is shown; every API route must still verify the
  *   user's token itself.
  *
- * Configuration priority (highest to lowest):
- * 1. Environment variables (recommended)
- * 2. Props passed to this function
- * 3. Default values
+ * Configuration priority (highest to lowest) — TBP-742, the same rule as the
+ * client: an option passed here > `NEXT_PUBLIC_BRIDGE_*` environment > default.
+ *
+ * Gating a route by a feature flag too? Use a rule's `featureFlag` (see
+ * `RouteRule`) — `withFeatureFlags` is a separate middleware, and Next.js runs
+ * only one.
  * 
  * @example
  * // Basic usage: Protect all routes except specified public routes

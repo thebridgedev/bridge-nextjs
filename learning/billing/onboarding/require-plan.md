@@ -9,29 +9,28 @@ A plan counts as active once the workspace has either:
 
 Under the hood the gate keys off a single flag on the subscription status: **`shouldSelectPlan`**. While it's `true` the workspace has no active plan and the app should stay blocked; once a plan is selected or checked out it flips to `false` and the app opens up. You never compute this yourself; Bridge derives it from the workspace's billing state. (This is the onboarding gate. A workspace that *had* a plan and lost it, say after exhausted payment retries, is **billing-locked** instead, which is a separate signal. See [How billing works](/billing/how-it-works/#when-billing-locks-the-app) for how the two relate.)
 
-There are two ways to enforce the gate. Lead with `<BridgePaywall>`, the default, blessed approach, and reach for the config paywall route when you'd rather the plan picker be a real routed page than a modal overlay.
+There are two ways to enforce the gate. With `app/subscription/[[...bridge]]/page.tsx` rendering `<BridgeBillingRoutes />` (see [Add billing to your app](/billing/setup/add-billing-to-your-app/)), the paywall redirect (Method 2) is already on: a plan-less workspace is sent to `/subscription/plan`. Use the `<BridgePaywall>` overlay (Method 1) instead when you would rather block the app in place.
 
 ## Method 1: `<BridgePaywall>` (recommended)
 
-`<BridgePaywall>` is a hard gate you wrap around your app: it blocks everything until a plan is active, with no `shouldSelectPlan` checks or redirects to wire yourself. Put it in your root `app/layout.tsx` and pass your app as children.
+`<BridgePaywall>` is a hard gate you wrap around your app: it blocks everything until a plan is active, with no `shouldSelectPlan` checks or redirects to wire yourself. Put it in your root `app/layout.tsx`, pass your app as children, and turn the paywall redirect off (`billing: { paywallRoute: false }`) so the overlay is the only gate.
 
 While `shouldSelectPlan` is true it renders a full-screen modal with a `<PlanSelector>` inside; otherwise it renders its children (your app).
 
 ```tsx
 // app/layout.tsx
-import { BridgePaywall } from '@nebulr-group/bridge-nextjs/client';
-import { Providers } from './providers';
+import { BridgePaywall, BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <Providers>
+        <BridgeProvider config={{ billing: { paywallRoute: false } }}>
           <BridgePaywall successRedirect="/welcome" cancelRedirect="/plans">
             {/* your app: only rendered once a plan is active */}
             {children}
           </BridgePaywall>
-        </Providers>
+        </BridgeProvider>
       </body>
     </html>
   );
@@ -52,49 +51,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 What the user sees: a workspace with no plan lands on a full-screen modal with the plan picker and cannot get past it. The instant they pick a plan (or return from checkout), the modal disappears and your app renders in its place.
 
-## Method 2: config paywall route
+## Method 2: the paywall redirect
 
-Prefer this when you want the plan picker to be a **real routed page** rather than a modal overlay, for example a dedicated `/plans` onboarding step with its own layout, copy, and URL you can link to.
-
-Set `billing.paywallRoute` in the `BridgeConfig` you pass to `<BridgeProvider>` in your providers component:
-
-```tsx
-// app/providers.tsx
-'use client';
-import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
-import { useMemo, type ReactNode } from 'react';
-
-export function Providers({ children }: { children: ReactNode }) {
-  // appId comes from NEXT_PUBLIC_BRIDGE_APP_ID via the provider's env reader
-  const config = useMemo(
-    () => ({
-      billing: {
-        paywallRoute: '/plans',
-      },
-    }),
-    [],
-  );
-
-  return <BridgeProvider config={config}>{children}</BridgeProvider>;
-}
-```
-
-Then render a `<PlanSelector>` at that route:
+Prefer this when you want the plan picker to be a **real routed page** rather than a modal overlay. With `<BridgeBillingRoutes>` in place it is already on, pointing at `/subscription/plan`. For a dedicated onboarding page at another address, render `<BridgePaywallPage>` there and point `billing.paywallRoute` at it:
 
 ```tsx
 // app/plans/page.tsx
-'use client';
-import { PlanSelector } from '@nebulr-group/bridge-nextjs/client';
+import { BridgePaywallPage } from '@nebulr-group/bridge-nextjs/client';
 
 export default function PlansPage() {
-  return <PlanSelector successUrl="/welcome" cancelUrl="/plans" />;
+  return <BridgePaywallPage heading="Pick a plan to get started" />;
 }
+
+// app/layout.tsx — a Server Component; the config is plain data
+<BridgeProvider config={{ billing: { paywallRoute: '/plans' } }}>{children}</BridgeProvider>
 ```
+
+A completed checkout lands on `/subscription/success`; a cancelled one comes back to `/plans`.
 
 `<BridgeProvider>` handles the gate for you: it checks the subscription status, and if the authenticated workspace still needs to pick a plan it issues a redirect to `paywallRoute`. It only redirects when all of the following hold, so there's no redirect loop and no gate on exempt workspaces:
 
-- `billing.paywallRoute` is configured
-- the current path isn't already the paywall route
+- `billing.paywallRoute` is not `false` (it defaults to `/subscription/plan`; the default applies only to an app that has plans)
+- the current path isn't already the paywall route or the payment-error page
 - the workspace is authenticated but has `shouldSelectPlan: true`
 - the workspace hasn't opted out via `paymentsAutoRedirect: false`
 

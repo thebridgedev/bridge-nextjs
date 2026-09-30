@@ -55,8 +55,12 @@ Create `.env.local` at the project root:
 
 ```env
 NEXT_PUBLIC_BRIDGE_APP_ID=your-app-id
-# Optional overrides (all start with NEXT_PUBLIC_BRIDGE_):
-# NEXT_PUBLIC_BRIDGE_API_BASE_URL=https://api.thebridge.dev
+# Only for a stage/local app (unset = production). The hosted sign-in pages
+# follow it on Bridge's domains (api-stage → auth-stage):
+# NEXT_PUBLIC_BRIDGE_API_BASE_URL=https://api-stage.thebridge.dev
+# Only for a local or self-hosted Bridge:
+# NEXT_PUBLIC_BRIDGE_HOSTED_URL=http://localhost:3191
+# Rarely needed:
 # NEXT_PUBLIC_BRIDGE_CALLBACK_URL=http://localhost:3000/auth/oauth-callback
 # NEXT_PUBLIC_BRIDGE_DEFAULT_REDIRECT_ROUTE=/
 # NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login
@@ -85,11 +89,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-`BridgeProvider` automatically reads `NEXT_PUBLIC_BRIDGE_APP_ID` from env. You can also pass `appId` or `config={{...}}` as props.
+`BridgeProvider` automatically reads the `NEXT_PUBLIC_BRIDGE_*` variables. You can also pass `appId` or `config={{...}}` as props; a prop wins over the variable. The config is plain data, so the Server Component layout passes it directly — do not create a client "Providers" wrapper for it.
 
 ## Create the OAuth callback route
 
-For hosted-auth (redirect to bridge login), create `app/auth/oauth-callback/route.ts`:
+For hosted-auth with the `withBridgeAuth` middleware guarding pages (the session lives in a cookie the middleware reads), create `app/auth/oauth-callback/route.ts`. (An app using in-app sign-in gets the callback from `app/auth/[...bridge]/page.tsx` — see the SDK auth prompt — and skips this file.)
 
 ```ts
 import { createBridgeCallbackRoute } from '@nebulr-group/bridge-nextjs/server';
@@ -207,7 +211,7 @@ export async function fetchUserData() {
 - [ ] `NEXT_PUBLIC_BRIDGE_APP_ID` set in `.env.local`.
 - [ ] `app/layout.tsx` wraps children in `<BridgeProvider>`.
 - [ ] `@nebulr-group/bridge-nextjs/styles` imported in `app/layout.tsx`.
-- [ ] `app/auth/oauth-callback/route.ts` created with `createBridgeCallbackRoute`.
+- [ ] Hosted auth with middleware: `app/auth/oauth-callback/route.ts` created with `createBridgeCallbackRoute`. In-app auth: `app/auth/[...bridge]/page.tsx` instead.
 - [ ] Bridge app's callback URL set to `{origin}/auth/oauth-callback`.
 - [ ] `middleware.ts` (or `<ProtectedRoute>`) guards protected pages.
 - [ ] `useAuth().login()` and `useAuth().logout()` wired in the UI.

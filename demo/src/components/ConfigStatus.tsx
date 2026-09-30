@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useBridgeReady, useIsOnboarded } from '@nebulr-group/bridge-nextjs/client';
-import { APP_ID_STORAGE_KEY, readStoredAppId } from './demo-app-id';
+import { APP_ID_STORAGE_KEY, readStoredAppId } from '../test-fixtures/demo-app-id';
 
 /**
  * Mirrors bridge-svelte's `ConfigStatus.svelte` — shows whether the bridge
@@ -10,7 +10,7 @@ import { APP_ID_STORAGE_KEY, readStoredAppId } from './demo-app-id';
  *
  * The app id is `NEXT_PUBLIC_BRIDGE_APP_ID` when set, otherwise the one seeded
  * into `localStorage['bridge:appId']` (the E2E harness path — see
- * `demo-app-id.ts`). The same precedence BridgeProvider applies.
+ * `test-fixtures/demo-app-id.ts`). The same precedence TestBridgeProvider applies.
  *
  * The env pill states which backend this demo build talks to. The Playwright
  * global-setup asserts it against the project it is running, so a demo started

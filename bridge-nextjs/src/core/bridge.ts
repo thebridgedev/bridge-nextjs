@@ -26,7 +26,7 @@ import {
   type UserSnapshot,
 } from './snapshot-stores';
 import { LazySlice } from './lazy-slice';
-import type { Plan } from '@nebulr-group/bridge-auth-core';
+import type { BridgeAuth, Plan } from '@nebulr-group/bridge-auth-core';
 import { DevAttributeProvider } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from './bridge-instance';
 import { bridgeEvents, type BridgeEventsDispatcher } from './events';
@@ -84,8 +84,25 @@ export interface BridgeTenantSurface {
   };
 }
 
+/**
+ * TBP-742 (bridge-svelte TBP-697) — usage reporting from the browser, for an
+ * action that never reaches a server of yours. `report(metric)` for a counter
+ * (it happened), `set(metric, value)` for a gauge (how many exist now). When the
+ * action calls your backend, the backend counts it instead — never both.
+ */
+export interface BridgeUsageSurface {
+  report(metric: string, value?: number, idempotencyKey?: string): void;
+  set(metric: string, value: number): Promise<void>;
+  getQueueStatus(): Promise<UsageQueueStatus>;
+}
+
+/** What `bridge.usage.getQueueStatus()` resolves to. */
+export type UsageQueueStatus = Awaited<ReturnType<BridgeAuth['usage']['getQueueStatus']>>;
+
 export interface BridgeSurface {
   app: BridgeAppSurface;
+  /** Browser-side usage reporting. See {@link BridgeUsageSurface}. */
+  usage: BridgeUsageSurface;
   tenant: BridgeTenantSurface;
   /** Authenticated user (id/email/role/tenantId). Populated by session.snapshot. */
   user: BridgeReadable<UserSnapshot | null>;
@@ -119,7 +136,22 @@ const _plansSlice = new LazySlice<Plan[]>({
 // keys win on collision).
 const _devAttributes = new DevAttributeProvider();
 
+// Resolved on each call, not at import, so importing `bridge` during a server
+// render does not require an initialised BridgeAuth.
+const _usage: BridgeUsageSurface = {
+  report(metric, value, idempotencyKey) {
+    getBridgeAuth().usage.report(metric, value, idempotencyKey);
+  },
+  async set(metric, value) {
+    await getBridgeAuth().usage.set(metric, value);
+  },
+  getQueueStatus() {
+    return getBridgeAuth().usage.getQueueStatus();
+  },
+};
+
 export const bridge: BridgeSurface = {
+  usage: _usage,
   app: {
     branding: makeReadable((s) => s.appBranding),
     plans: _plansSlice,

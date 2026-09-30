@@ -1,4 +1,8 @@
 // Server-side exports only — Feature Flags 2.0 (backend-mode eval) + auth.
+
+// TBP-742 — one config resolver for server and client: option > env > default.
+export { createBridgeConfig, hostedUrlFor, type CreateBridgeConfigOptions } from './shared/resolve-config';
+export type { RouteRule, WithBridgeAuthOptions } from './server/middleware/with-bridge-auth';
 export { createBridgeCallbackRoute } from './server/callback-route';
 export { ServerFeatureFlag } from './server/components/ServerFeatureFlag';
 export { withAuth } from './server/middleware/auth-middleware';

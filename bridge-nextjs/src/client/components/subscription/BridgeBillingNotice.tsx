@@ -27,7 +27,8 @@ import {
   type BillingNoticeState,
   type BillingSubscriptionState,
 } from '@nebulr-group/bridge-auth-core';
-import { getBridgeAuth, getBridgeConfig } from '../../../core/bridge-instance';
+import { getBridgeAuth } from '../../../core/bridge-instance';
+import { billingRoutes } from '../../billing-routes';
 import { tokenStaleHandlerOf } from '../../../core/bridge-runtime';
 import { useBridgeSnapshot } from '../../hooks/use-bridge-readable';
 
@@ -110,15 +111,10 @@ export function BridgeBillingNotice({
       return;
     }
     // Default: open the app's billing surface. Destination priority:
-    // `actionHref` prop → `billing.manageRoute` config → '/billing'.
+    // `actionHref` prop → `billing.manageRoute` config → '/subscription'.
     if (typeof window !== 'undefined') {
-      let manageRoute: string | undefined;
-      try {
-        manageRoute = getBridgeConfig().billing?.manageRoute;
-      } catch {
-        // Config not initialized — fall through to the default.
-      }
-      window.location.href = actionHref ?? manageRoute ?? '/billing';
+      // Unset: the subscription page `<BridgeBillingRoutes>` serves (TBP-742).
+      window.location.href = actionHref ?? billingRoutes().manageRoute;
     }
   }
 

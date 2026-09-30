@@ -48,6 +48,8 @@ Registers a new passkey using a setup token (emailed to the user).
 | `onError` | `(error: Error) => void` | (none) | Called on error |
 | `loginHref` | `string` | `'/auth/login'` | Link shown after registration completes |
 
+> `<BridgeAuthRoutes>` already serves this page at `/auth/setup-passkey/[token]`. The example below is for taking it over; a file at that address wins over the catch-all. Next.js 15 passes route params as a Promise, unwrapped with `use()`.
+
 ```tsx
 // app/auth/setup-passkey/[token]/page.tsx
 'use client';

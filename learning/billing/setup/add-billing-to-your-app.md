@@ -39,119 +39,64 @@ export function PlanLine() {
 }
 ```
 
-## Configure your billing routes
+## One file serves the subscription pages
 
-Add a `billing` block to the `BridgeConfig` you already pass to `<BridgeProvider>`
-in `app/providers.tsx`:
+Create one page and Bridge serves the subscription page, the paywall and both checkout return pages from it:
 
 ```tsx
-// app/providers.tsx
-'use client';
-import { BridgeProvider } from '@nebulr-group/bridge-nextjs/client';
-import { useMemo, type ReactNode } from 'react';
+// app/subscription/[[...bridge]]/page.tsx
+import { BridgeBillingRoutes } from '@nebulr-group/bridge-nextjs/client';
 
-export function Providers({ children }: { children: ReactNode }) {
-  // appId comes from NEXT_PUBLIC_BRIDGE_APP_ID via the provider's env reader
-  const config = useMemo(
-    () => ({
-      loginRoute: '/auth/login',
-      billing: {
-        paywallRoute: '/subscription', // send plan-less workspaces here
-      },
-    }),
-    [],
-  );
-
-  return <BridgeProvider config={config}>{children}</BridgeProvider>;
-}
-
-// app/layout.tsx
-import { Providers } from './providers';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
-      </body>
-    </html>
-  );
+export default function SubscriptionPage() {
+  return <BridgeBillingRoutes />;
 }
 ```
 
-> **Framework note:** define the config object in a client component, not as an
-> inline object prop in the Server Component root layout. Nested runtime config
-> like `billing` is brittle across the Server to Client boundary, and memoizing
-> the object keeps its identity stable across renders.
+The double brackets make the catch-all optional, so the bare `/subscription` matches too. It serves:
 
-- **`paywallRoute`**: when set, the provider redirects an authenticated workspace
-  that hasn't selected a plan here. Point it at
-  wherever your `<PlanSelector>` lives. (Workspaces that opt out via
-  `paymentsAutoRedirect: false` are exempt.)
+| Address | Page |
+|---|---|
+| `/subscription` | the current plan, the plan picker and "Manage billing" |
+| `/subscription/plan` | the paywall: where a signed-in workspace with no plan is sent |
+| `/subscription/success` | where a completed checkout lands |
+| `/subscription/error` | where a failed checkout confirmation lands |
 
-It's optional. Leave `paywallRoute` unset if you'd rather gate the app with
-`<BridgePaywall>` (below) than redirect.
+Those are the defaults of `billing.manageRoute`, `billing.paywallRoute` and `billing.paymentErrorRoute`, so every Upgrade button, redirect and checkout return points at a page that exists. Nothing to configure.
+
+- **The paywall redirect** sends a signed-in workspace with no plan (called a *tenant* in the API) to `/subscription/plan`, only when the app has plans and its `paymentsAutoRedirect` setting is on (the default). `billing: { paywallRoute: false }` turns it off, for an app that gates with the `<BridgePaywall>` overlay instead.
+- **Your own onboarding page**, e.g. `/welcome`: render `<BridgePaywallPage />` there and point `billing.paywallRoute` at it:
+
+```tsx
+// app/welcome/page.tsx
+import { BridgePaywallPage } from '@nebulr-group/bridge-nextjs/client';
+
+export default function Welcome() {
+  return <BridgePaywallPage heading="Pick a plan to get started" />;
+}
+
+// app/layout.tsx
+<BridgeProvider config={{ billing: { paywallRoute: '/welcome' } }}>{children}</BridgeProvider>
+```
+
+- **Customising:** `--bridge-*` CSS tokens restyle the pages; `frame(page, children)` and `heading(page)` render-props on `<BridgeBillingRoutes>` replace the frame and each heading (pass them from a `'use client'` page file, since they are functions); to own one page outright, create it (`app/subscription/plan/page.tsx`) and Next.js prefers it over the catch-all.
 
 ## Adding billing to your UI
 
-Here are three use cases for billing in your UI:
-
-**1. Letting users select a plan after first signup**: wrap your root layout in
-`<BridgePaywall>`; it blocks the app and shows a plan picker until the workspace
-has an active plan, so a brand-new user picks a plan before they get in:
+**Surface billing health**: `<BridgeBillingNotice />` renders nothing while the subscription is healthy and the right banner (trial ending, payment failed, canceled) when it needs attention. Put it once in your root layout, inside `<BridgeProvider>`:
 
 ```tsx
 // app/layout.tsx
-import { BridgePaywall } from '@nebulr-group/bridge-nextjs/client';
-import { Providers } from './providers';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <Providers>
-          <BridgePaywall successRedirect="/welcome" cancelRedirect="/subscription">
-            {/* your app: only rendered once a plan is active */}
-            {children}
-          </BridgePaywall>
-        </Providers>
-      </body>
-    </html>
-  );
-}
-```
-
-→ [Require a plan to use the app](/billing/onboarding/require-plan/)
-
-**2. A self-service subscription page**: drop `<PlanSelector />` onto a route. It
-loads all the plans so your users can upgrade or downgrade directly from your app:
-
-```tsx
-// app/subscription/page.tsx
-'use client';
-import { PlanSelector } from '@nebulr-group/bridge-nextjs/client';
-
-export default function SubscriptionPage() {
-  return <PlanSelector successUrl="/subscription/success" cancelUrl="/subscription" />;
-}
-```
-
-→ [Choose & switch plans](/billing/onboarding/choose-switch-plans/)
-
-**3. Surface billing health**: `<BridgeBillingNotice />` renders nothing while
-the subscription is healthy and the right banner (trial ending, payment failed,
-canceled) when it needs attention. Put it once in your root layout:
-
-```tsx
-'use client';
-import { BridgeBillingNotice } from '@nebulr-group/bridge-nextjs/client';
-
-export function BillingBanner() {
-  return <BridgeBillingNotice />;
-}
+<BridgeProvider>
+  <BridgeBillingNotice />
+  {children}
+</BridgeProvider>
 ```
 
 → [Warn about billing problems](/billing/status/billing-notices/)
+
+**Plan limits**: a backend that refuses at the cap (`402 QUOTA_EXCEEDED`, bridge-nestjs `@RequireQuota`) opens an upgrade dialog with no code on the page, as long as the call goes through `bridgeFetch()` or a plain `fetch` to your own origin. See [How Bridge works](/mechanisms/) for the three levels.
+
+→ [Usage limits](/billing/limits/usage-limits/)
 
 > That's the whole quickstart. From here, the rest of the billing section covers
 > depth: [subscription status](/billing/status/subscription-status/),

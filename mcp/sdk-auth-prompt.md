@@ -48,88 +48,45 @@ Already installed via the integration prompt.
 
 If the project uses the legacy `@nblocks/nblocks-nextjs`, replace its `<Login />` / signup pages with the new SDK components below.
 
-## Wire the auth pages
+## Wire the auth pages — one file
 
-### Login page — `app/auth/login/page.tsx`
+Set `loginRoute: '/auth/login'` (or `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login`), then create ONE page:
 
 ```tsx
-'use client';
-import { LoginForm } from '@nebulr-group/bridge-nextjs/client';
-import { useRouter } from 'next/navigation';
+// app/auth/[...bridge]/page.tsx
+import { BridgeAuthRoutes } from '@nebulr-group/bridge-nextjs/client';
 
-export default function LoginPage() {
-  const router = useRouter();
-  return (
-    <LoginForm
-      heading="Sign in"
-      onLogin={() => router.push('/')}
-      onError={(err) => console.error(err)}
-    />
-  );
+export default function AuthPage() {
+  return <BridgeAuthRoutes />;
 }
 ```
 
-`LoginForm` automatically:
+It serves `/auth/login`, `/auth/signup`, `/auth/oauth-callback`, `/auth/set-password/[token]`, `/auth/forgot-password`, `/auth/magic-link`, `/auth/setup-passkey/[token]` and `/auth/workspaces`. Do not create those pages one by one. `/auth/set-password/[token]` in particular is where every signup-verification and password-reset email lands; an app without it sends every new signup to a 404.
+
+`LoginForm` (rendered on `/auth/login`) automatically:
 - Detects MFA-required and renders `<MfaChallenge />`.
 - Detects MFA-setup-required and renders `<MfaSetup />`.
 - Detects tenant-selection and renders `<TenantSelector />`.
 - Reads anonymous app config to show/hide SSO buttons, magic-link, passkey options.
 - Picks up `?bridge_magic_link_token=…` from the URL and authenticates with it.
 
-### Signup page — `app/auth/signup/page.tsx`
+After sign-in the user returns to the `?redirectUri=` deep link, else `/`.
+
+### Only if the developer asks to customise
+
+- Restyle: `--bridge-*` CSS variables.
+- Frame and heading: `frame={(page, children) => …}` and `heading={(page) => …}` on `<BridgeAuthRoutes>` — functions, so the page file gets `'use client'`.
+- Take over ONE page: create its own file; Next.js prefers it over the catch-all. Next.js 15 passes `params` as a Promise:
 
 ```tsx
-'use client';
-import { SignupForm } from '@nebulr-group/bridge-nextjs/client';
-import { useRouter } from 'next/navigation';
-
-export default function SignupPage() {
-  const router = useRouter();
-  return <SignupForm onSignup={() => router.push('/auth/login')} />;
-}
-```
-
-### Magic link page — `app/auth/magic-link/page.tsx`
-
-```tsx
-'use client';
-import { MagicLink } from '@nebulr-group/bridge-nextjs/client';
-
-export default function MagicLinkPage() {
-  return <MagicLink />;
-}
-```
-
-### Forgot password — `app/auth/forgot-password/page.tsx`
-
-```tsx
+// app/auth/set-password/[token]/page.tsx
 'use client';
 import { ForgotPassword } from '@nebulr-group/bridge-nextjs/client';
+import { use } from 'react';
 
-export default function ForgotPasswordPage() {
-  return <ForgotPassword />;
-}
-```
-
-### Set new password — `app/auth/set-password/[token]/page.tsx`
-
-```tsx
-'use client';
-import { ForgotPassword } from '@nebulr-group/bridge-nextjs/client';
-
-export default function SetPasswordPage({ params }: { params: { token: string } }) {
-  return <ForgotPassword token={params.token} />;
-}
-```
-
-### Passkey setup landing — `app/auth/setup-passkey/[token]/page.tsx`
-
-```tsx
-'use client';
-import { PasskeySetup } from '@nebulr-group/bridge-nextjs/client';
-
-export default function SetupPasskeyPage({ params }: { params: { token: string } }) {
-  return <PasskeySetup token={params.token} />;
+export default function SetPasswordPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
+  return <ForgotPassword token={token} loginHref="/auth/login" />;
 }
 ```
 
@@ -177,12 +134,9 @@ export default function WorkspacesPage() {
 
 ## Integration checklist
 
-- [ ] `app/auth/login/page.tsx` mounts `<LoginForm />`.
-- [ ] `app/auth/signup/page.tsx` mounts `<SignupForm />`.
-- [ ] `app/auth/magic-link/page.tsx` mounts `<MagicLink />`.
-- [ ] `app/auth/forgot-password/page.tsx` mounts `<ForgotPassword />`.
-- [ ] `app/auth/set-password/[token]/page.tsx` mounts `<ForgotPassword token={params.token} />`.
-- [ ] `app/auth/setup-passkey/[token]/page.tsx` mounts `<PasskeySetup token={params.token} />`.
+- [ ] `loginRoute: '/auth/login'` set (config prop or `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE`).
+- [ ] `app/auth/[...bridge]/page.tsx` renders `<BridgeAuthRoutes />`, and no per-page auth files exist unless the developer asked to take one over.
+- [ ] `/auth/set-password/<any>` renders the set-password form (not a 404).
 - [ ] Bridge app has `tenantSelfSignup: true` and the right auth methods enabled.
 
 ## Verify

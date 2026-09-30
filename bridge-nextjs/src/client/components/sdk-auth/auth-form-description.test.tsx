@@ -625,9 +625,21 @@ describe('PasskeySetup description (TBP-631)', () => {
   });
 
   it('carries no description on the success view', async () => {
-    stubApi({ registerPasskeyWithToken: () => Promise.resolve(undefined) });
+    // The real ceremony (TBP-515): options → browser credential → verify.
+    stubApi({
+      getPasskeyRegistrationOptions: () => Promise.resolve({}),
+      verifyPasskeyRegistration: () => Promise.resolve({ verified: true }),
+    });
+    const w = window as unknown as Record<string, unknown>;
+    w.PublicKeyCredential = function PublicKeyCredential() {};
+    w.__simpleWebAuthn = {
+      startAuthentication: () => Promise.resolve({}),
+      startRegistration: () => Promise.resolve({ id: 'credential' }),
+    };
     await mount(<PasskeySetup token={TOKEN} />);
     await click('button.bridge-btn-primary');
+    delete w.PublicKeyCredential;
+    delete w.__simpleWebAuthn;
 
     expectNoDescriptionElement();
     expect(headingText()).toEqual([en['passkey.setupSuccessHeading']]);

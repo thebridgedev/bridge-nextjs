@@ -1,6 +1,6 @@
 'use client';
 
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import type { MessageOverrides, Translator } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
@@ -16,6 +16,11 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   loginHref?: string;
   /** Heading text. Pass `null`/`''` to render no heading and use your own page title. */
   heading?: string | null;
+  /**
+   * The heading as a node, replacing `heading` on this form's main step only
+   * (never above a sub-step's own heading). What `<BridgeAuthRoutes heading>` passes.
+   */
+  headingSlot?: ReactNode;
   /** Step description. Pass `null`/`''` to render nothing and use your own subtitle (TBP-631). */
   description?: string | null;
   /** Per-key copy overrides for this component only (TBP-630). */
@@ -35,6 +40,7 @@ export function MagicLink({
   onError,
   loginHref = '/auth/login',
   heading,
+  headingSlot,
   description,
   messages,
   className,
@@ -112,6 +118,7 @@ export function MagicLink({
   return (
     <AuthFormWrapper
       heading={sent ? null : wrapperHeading}
+      headingSlot={sent ? undefined : headingSlot}
       description={sent ? null : wrapperDescription}
       className={className}
       style={style}
