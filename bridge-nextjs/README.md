@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://thebridge.dev/?utm_source=npm&utm_medium=readme&utm_campaign=bridge-nextjs"><img src="https://raw.githubusercontent.com/thebridgedev/bridge-nextjs/main/.github/assets/banner.png" alt="The Bridge for Next.js" width="100%"></a>
+  <a href="https://thebridge.dev/?utm_source=npm&utm_medium=readme&utm_campaign=bridge-nextjs"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/thebridgedev/bridge-nextjs/main/.github/assets/banner.png"><img src="https://raw.githubusercontent.com/thebridgedev/bridge-nextjs/main/.github/assets/banner-light.png" alt="The Bridge for Next.js" width="100%"></picture></a>
 </p>
 
 <p align="center">
