@@ -1,36 +1,34 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-The ten-line integration (TBP-742), ported from bridge-svelte 0.9.0.
-
-### Breaking
-
-- **Explicit options now win over the environment.** `<BridgeProvider appId config>`, `withBridgeAuth({ … })` and `getConfig(overrides)` used to let `NEXT_PUBLIC_BRIDGE_*` override what you passed. Every field now resolves as *explicit option > environment > default*, and an empty variable counts as unset. If you relied on an env var beating a hard-coded prop, remove the prop.
-- **Billing destinations default to pages that exist.** `billing.manageRoute` defaults to `/subscription` (was `/billing`), `billing.paymentErrorRoute` to `/subscription/error` (was `/payment-error`), and `billing.paywallRoute` to `/subscription/plan` (was: no redirect). The default paywall applies only to an app that has plans. An app gating with the `<BridgePaywall>` overlay sets `billing: { paywallRoute: false }`; an app with its own pages sets the routes explicitly.
+## [0.8.0] - 2026-09-30
 
 ### Added
 
-- `createBridgeConfig(options)` (from `/client` and `/server`): the one config resolver, reading `NEXT_PUBLIC_BRIDGE_APP_ID`, `_API_BASE_URL`, `_HOSTED_URL`, `_CALLBACK_URL`, `_DEFAULT_REDIRECT_ROUTE`, `_LOGIN_ROUTE`, `_SIGNUP_ROUTE`, `_DEBUG`. It throws naming `NEXT_PUBLIC_BRIDGE_APP_ID` when there is no app id.
-- **A stage app's hosted pages follow its API address**: `api-stage.thebridge.dev` → `auth-stage.thebridge.dev`. `NEXT_PUBLIC_BRIDGE_HOSTED_URL` / `hostedUrl` is only for a local or self-hosted Bridge. Before, a stage app's hosted sign-in opened on production, where its app id does not exist.
-- `<BridgeProvider config>` is plain data, so the Server Component `app/layout.tsx` passes it directly — no client "Providers" wrapper.
-- `<BridgeAuthRoutes>`: `app/auth/[...bridge]/page.tsx` serves login, signup, oauth-callback (exchanged in the browser), set-password/[token], forgot-password, magic-link, setup-passkey/[token] and workspaces; an unknown segment is `notFound()`. `frame` / `heading` render-props; take over a page by creating it.
-- `<BridgeBillingRoutes>`: `app/subscription/[[...bridge]]/page.tsx` serves `/subscription`, `/subscription/plan`, `/subscription/success`, `/subscription/error`. Plus `<BridgePaywallPage>` and `<BillingPortalButton>`.
-- Plan limits, levels 0/1/2: `bridgeFetch()`; the upgrade dialog `<BridgeProvider>` mounts on a `402 QUOTA_EXCEEDED` or `402 FEATURE_NOT_IN_PLAN` (from `bridgeFetch` or a plain `fetch` to the page's origin, Bridge's API or `billing.apiOrigins`); `billing.upgradeDialog` (`false` or your component); `onBridgeQuotaExceeded()`, `useUpgradeRequest()`; `<QuotaGate metric>`; `useQuota(metric)`; `<FeatureFlag upgrade>` and `openUpgrade` in the fallback's info; `<Entitled to>` / `useEntitlements()` for the no-flag exception.
-- `<PlanSelector>`: `planDescription` and `planFooter` render-props (S2 customization, TBP-515); `successUrl` / `cancelUrl` are optional and accept a path.
-- `headingSlot` on `SignupForm`, `ForgotPassword`, `MagicLink` and `PasskeySetup` (main step only).
-- Styles: the bridge-svelte `--bridge-*` token contract, with defaults on `:where(:root)` so your `:root` always wins.
-- Docs: `learning/mechanisms.md`; `docs/parity-with-svelte.md`; `RouteRule.featureFlag` documented as the way to combine sign-in and a flag in one middleware (Next.js runs one `middleware.ts`, so `withBridgeAuth` and `withFeatureFlags` cannot both be it).
+- **The ten-line integration.** `createBridgeConfig()` reads your `NEXT_PUBLIC_BRIDGE_*` settings, one `app/auth/[...bridge]/page.tsx` serves every sign-in page and one `app/subscription/[...bridge]/page.tsx` serves the subscription pages and the paywall. To replace one of those pages with your own, create it. The separate provider wrapper and hand-written callback route are no longer needed.
+- **Plan limit components and hooks.** Quota and entitlement components and hooks now match the other Bridge frameworks, and a request refused for a plan limit opens the upgrade dialog.
+- **A feature that is off says why.** When a flag keeps something off, your app learns whether it is not on the plan (the upgrade dialog opens), not allowed for this person (they are told to ask an admin), or switched off (it is simply hidden).
+- **Flag rules on the server.** A flag rule about a plan, role or privilege now gives the same answer on the server as in the browser, with no extra wiring.
+- **Seat limits on the team page.** The built-in team page stops invitations once the workspace reaches its plan's seat limit.
+
+### Changed
+
+- **Breaking: new integration shape.** Options you pass explicitly now take precedence over environment settings, and the package requires `@nebulr-group/bridge-auth-core` 0.8.0. Move your sign-in and subscription pages to the two catch-all routes above and set up with `createBridgeConfig()`.
 
 ### Fixed
 
-- **Passkeys work.** `<PasskeyLogin>` called `authenticateWithPasskey()` with no browser response, and `<PasskeySetup>` called a `registerPasskeyWithToken()` auth-core does not have, so neither passkey sign-in nor passkey setup could succeed. Both now run the WebAuthn ceremony (auth-core options → `@simplewebauthn/browser` → auth-core verification). `@simplewebauthn/browser` is a regular dependency, the decision bridge-svelte made (TBP-515).
-- Docs: the set-password and setup-passkey page snippets use Next.js 15's `params: Promise<…>`; the guides say again that `/auth/set-password/[token]` is where signup-verification and password-reset emails land, so leaving it out 404s every new signup.
+- **Hosted sign-in pages on staging.** An app pointed at a staging API now sends sign-in to that environment's hosted pages instead of production's.
+- **Billing screens after checkout.** Returning from Stripe checkout shows the new plan straight away instead of "Subscription unavailable" until a reload, a paid checkout stays paid, and the billing pages ask for sign-in.
+- **Live updates during a reconnect.** A change to a person's plan, role or access made while the live connection was reconnecting is no longer missed.
+
+## [0.7.4] - 2026-09-26
+
+### Fixed
+
+- **Session snapshot on first connection.** After sign-in, the workspace name and id, the branding and the entitlements now appear immediately. Previously they stayed empty, so every entitlement check answered no and a paywall built on one would lock everyone out.
+- **Live updates and browser usage reporting.** Live updates now connect, so plans, entitlements and usage counters refresh without a page reload, and usage reported from the browser is recorded. Previously the browser rejected these calls, so live updates never connected and browser-side usage reports were lost.
+- **Documentation links.** Three pages in the guides linked to addresses with no page behind them; they now resolve.
 
 ## [0.2.1] - 2025-02-17
 
