@@ -1,8 +1,26 @@
-# Bridge Next.js Demo & Library Documentation
+<p align="center">
+  <a href="https://thebridge.dev/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs"><img src="https://raw.githubusercontent.com/thebridgedev/bridge-nextjs/main/.github/assets/banner.png" alt="The Bridge for Next.js" width="100%"></a>
+</p>
 
-This repository contains both the Bridge Next.js library and a demo application showcasing its features.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@nebulr-group/bridge-nextjs"><img src="https://img.shields.io/npm/v/@nebulr-group/bridge-nextjs?color=20006b&label=npm" alt="npm version"></a>
+  <a href="https://github.com/thebridgedev/bridge-nextjs/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@nebulr-group/bridge-nextjs?color=20006b" alt="MIT license"></a>
+</p>
 
-## Quick Links
+<p align="center">
+  <a href="https://thebridge.dev/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs"><b>Website</b></a> ·
+  <a href="https://thebridge.dev/docs/quickstart/nextjs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs"><b>Quickstart</b></a> ·
+  <a href="https://thebridge.dev/docs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs"><b>Docs</b></a> ·
+  <a href="https://thebridge.dev/docs/ai-assistants/mcp/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs"><b>Set up with your AI assistant</b></a>
+</p>
+
+# The Bridge for Next.js
+
+`@nebulr-group/bridge-nextjs` adds sign-in, workspaces and roles, feature flags, Stripe subscriptions and plan limits to a Next.js App Router app, with one `.env` line and three files.
+
+**[The Bridge](https://thebridge.dev/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)** is a hosted backend for SaaS apps. It gives you sign-in (passwords, magic links, passkeys, social login and SSO), multi-tenant workspaces with roles, Stripe subscriptions with plan limits, and feature flags, all managed from one dashboard. Your AI coding assistant can set it up for you through the [Bridge MCP server](https://thebridge.dev/docs/ai-assistants/mcp/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs).
+
+## Quick links
 - [How Bridge works](learning/mechanisms.md) - the whole integration, plan limits, and customising Bridge's pages
 - [SDK auth quickstart](learning/sdk-auth/sdk-quickstart.md) / [Hosted auth quickstart](learning/quickstart/hosted-quickstart.md)
 - [Parity with bridge-svelte](docs/parity-with-svelte.md)
@@ -74,7 +92,6 @@ npm install @nebulr-group/bridge-nextjs
 
 See the [configuration reference](learning/auth/config/config.md).
 
-
 ## Authentication
 
 For authentication examples and implementation details, see:
@@ -128,3 +145,29 @@ Bridge Next.js is published to npm via GitHub Actions. To release a new version,
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## Learn more
+
+- [Quickstart](https://thebridge.dev/docs/quickstart/nextjs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)
+- [Authentication](https://thebridge.dev/docs/auth/nextjs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)
+- [Sign-in inside your app](https://thebridge.dev/docs/sdk-auth/nextjs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)
+- [Feature flags](https://thebridge.dev/docs/feature-flags/nextjs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)
+- [Branding](https://thebridge.dev/docs/branding/nextjs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)
+- [Live updates](https://thebridge.dev/docs/live-updates/nextjs/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)
+- [Subscriptions and plan limits](https://thebridge.dev/docs/billing/how-it-works/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs)
+
+## Other Bridge packages
+
+| Package | For |
+|---|---|
+| [`@nebulr-group/bridge-svelte`](https://www.npmjs.com/package/@nebulr-group/bridge-svelte) | SvelteKit |
+| [`@nebulr-group/bridge-react`](https://www.npmjs.com/package/@nebulr-group/bridge-react) | React |
+| [`@nebulr-group/bridge-angular`](https://www.npmjs.com/package/@nebulr-group/bridge-angular) | Angular |
+| [`@nebulr-group/bridge-nestjs`](https://www.npmjs.com/package/@nebulr-group/bridge-nestjs) | NestJS |
+| [`@nebulr-group/bridge-express`](https://www.npmjs.com/package/@nebulr-group/bridge-express) | Express |
+| [`@nebulr-group/bridge-cli`](https://www.npmjs.com/package/@nebulr-group/bridge-cli) | CLI for people and AI agents |
+| [`@nebulr-group/bridge-auth-core`](https://www.npmjs.com/package/@nebulr-group/bridge-auth-core) | Any JavaScript app (core) |
+
+## License
+
+[MIT](https://github.com/thebridgedev/bridge-nextjs/blob/main/LICENSE) © Nebulr. Built by [The Bridge](https://thebridge.dev/?utm_source=github&utm_medium=readme&utm_campaign=bridge-nextjs).

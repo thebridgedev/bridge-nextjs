@@ -1,7 +1,7 @@
 {
   "name": "@nebulr-group/bridge-nextjs",
   "version": "0.8.0",
-  "description": "bridge integration for Next.js applications",
+  "description": "The Bridge for Next.js: sign-in, workspaces and roles, feature flags, Stripe subscriptions and plan limits for the App Router.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",
@@ -24,7 +24,7 @@
   "bugs": {
     "url": "https://github.com/thebridgedev/bridge-nextjs/issues"
   },
-  "homepage": "https://thebridge.dev",
+  "homepage": "https://thebridge.dev/docs/quickstart/nextjs/",
   "files": [
     "dist",
     "LICENSE",
@@ -41,11 +41,25 @@
     "publish-package": "npm run build && npm run copy-files && npm publish --access public"
   },
   "keywords": [
-    "bridge",
     "nextjs",
+    "next",
+    "react",
+    "app-router",
+    "middleware",
+    "the-bridge",
+    "bridge",
     "authentication",
+    "auth",
+    "login",
+    "sso",
     "feature-flags",
-    "team-management"
+    "stripe",
+    "subscriptions",
+    "billing",
+    "plan-limits",
+    "multi-tenant",
+    "rbac",
+    "saas"
   ],
   "peerDependencies": {
     "next": "^15.0.0 || ^16.0.0",
