@@ -32,7 +32,7 @@ export default function ForgotPasswordPage() {
 
 **Set-password page (with the token from the email link):**
 
-> `<BridgeAuthRoutes>` already serves this page at `/auth/set-password/[token]` (see the [in-app quickstart](/sdk-auth/sdk-quickstart/)). The example below is for taking the page over; a file at that address wins over the catch-all.
+> `<BridgeAuthRoutes>` already serves this page at `/auth/set-password/[token]` (see the [in-app quickstart](../../sdk-auth/sdk-quickstart.md)). The example below is for taking the page over; a file at that address wins over the catch-all.
 
 **Do not leave this page out.** Signup-verification and password-reset emails both link to `/auth/set-password/[token]`. An app without it sends every new signup to a 404.
 

@@ -94,7 +94,7 @@ export default function Welcome() {
 
 → [Warn about billing problems](/billing/status/billing-notices/)
 
-**Plan limits**: a backend that refuses at the cap (`402 QUOTA_EXCEEDED`, bridge-nestjs `@RequireQuota`) opens an upgrade dialog with no code on the page, as long as the call goes through `bridgeFetch()` or a plain `fetch` to your own origin. See [How Bridge works](/mechanisms/) for the three levels.
+**Plan limits**: a backend that refuses at the cap (`402 QUOTA_EXCEEDED`, bridge-nestjs `@RequireQuota`) opens an upgrade dialog with no code on the page, as long as the call goes through `bridgeFetch()` or a plain `fetch` to your own origin. See [How Bridge works](../../mechanisms.md) for the three levels.
 
 → [Usage limits](/billing/limits/usage-limits/)
 
