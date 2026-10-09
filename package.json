@@ -6,6 +6,7 @@
   "author": "Iman Pouya",
   "workspaces": ["bridge-nextjs", "demo"],
   "scripts": {
+    "check:docs-links": "node scripts/check-docs-links.mjs",
     "dev": "concurrently \"turbo run build:dev --filter=bridge-nextjs\" \"turbo run dev --filter=demo\"",
     "build": "turbo run build",
     "lint": "turbo run lint",
