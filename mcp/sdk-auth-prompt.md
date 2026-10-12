@@ -1,23 +1,18 @@
 # Bridge Next.js — SDK Auth Prompt
 
-You are integrating in-app authentication UI (no redirect to bridge hosted auth) into a Next.js 15+ App Router project using **`@nebulr-group/bridge-nextjs`**. The plugin ships SDK auth components — login, signup, MFA, magic link, passkey, password reset, tenant/workspace selection — that render directly inside your app.
+You are integrating in-app authentication UI into a Next.js 15+ App Router project using **`@nebulr-group/bridge-nextjs`**. The plugin ships SDK auth components — login, signup, MFA, magic link, passkey, password reset, tenant/workspace selection — that render directly inside your app.
 
-## Decide first — hosted or in-app?
+## How it works
 
-| You want | Mode | What you build | Config |
-|---|---|---|---|
-| Login inside your app, matching its design | **SDK auth** (default) — this guide | One catch-all `app/auth/[...bridge]/page.tsx` rendering `<BridgeAuthRoutes />` | `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login` |
-| Bridge owns the login UI | **Hosted** — only when the developer explicitly asks for it | Nothing — no login page | No `loginRoute` |
+The sign-in pages are one catch-all `app/auth/[...bridge]/page.tsx` rendering `<BridgeAuthRoutes />`, and `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login` (or the `loginRoute` option) sends signed-out visitors there. If you are being redirected to a route you never built, that setting is why.
 
-**One config value is the whole switch.** Setting `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` (or the `loginRoute` option on `withBridgeAuth`) turns hosted mode off. If you are being redirected to a route you never built, that is why.
+(If the developer explicitly asks for Bridge's hosted sign-in page, or the app already uses it, respect that: this guide does not apply. Follow `learning/quickstart/hosted-quickstart.md` in the package repo instead.)
 
-> **Choosing SDK auth moves the route guard, and this is the easiest thing to get wrong in this package.** SDK-auth tokens live in the browser, where `withBridgeAuth` cannot see them, so the middleware steps aside for those requests (one dev-only warning) and **`<ProtectedRoute>` plus your own API become the guard**. A page protected only in `middleware.ts` is not protected in this mode.
+> **The route guard is `<ProtectedRoute>`, not the middleware, and this is the easiest thing to get wrong in this package.** The tokens live in the browser, where `withBridgeAuth` cannot see them, so the middleware steps aside for those requests (one dev-only warning) and **`<ProtectedRoute>` plus your own API are the guard**. A page protected only in `middleware.ts` is not protected.
 
-Do not ask the developer to choose: this guide is the approach unless they asked for hosted. Tell them in one line that sign-in will be in-app, styled to match their app.
+Tell the developer in one line that sign-in will be in-app, styled to match their app.
 
-The rest of this guide covers **SDK auth**.
-
-## Then — which component? Reach for these, do not hand-roll
+## Which component? Reach for these, do not hand-roll
 
 | Need | Component |
 |---|---|
@@ -36,7 +31,7 @@ All of these import from `@nebulr-group/bridge-nextjs/client` and must live in a
 
 ## Prerequisites
 
-- The integration prompt (`mcp/integration-prompt.md`) is complete: `BridgeProvider` wired, styles imported, OAuth callback route created.
+- The integration prompt (`mcp/integration-prompt.md`) is complete: `BridgeProvider` wired, styles imported, `loginRoute` set.
 - The Bridge app has **`tenantSelfSignup: true`** enabled.
 - The Bridge app has the auth methods you intend to surface enabled (passwords, magic link, passkeys, SSO providers).
 
