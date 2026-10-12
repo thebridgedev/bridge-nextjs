@@ -8,16 +8,16 @@ Next.js has a server layer the other frontends do not, so the first question is 
 
 | Your app signs in with | Guarded by | What `withBridgeAuth` does |
 |---|---|---|
-| **Hosted login** (default) — Bridge owns the login UI, the session is a cookie | `withBridgeAuth` in `middleware.ts`, before the page loads | Enforces every route that needs a session, and verifies the `bridge_access_token` cookie: PS256 signature against the Bridge JWKS, issuer `<apiBaseUrl>/auth`, audience containing your `appId`, expiry. Missing, forged, foreign or expired counts as signed out. If the check itself fails, the request is denied. |
-| **SDK auth** — the drop-in `<LoginForm />`, tokens live in the browser | `<ProtectedRoute>` in each protected page, **and your API** | Steps aside. It cannot see a browser-held session, and redirecting would loop a signed-in user, so a request without a Bridge session cookie is let through. One dev-only warning says so. |
+| **Hosted login** — only when the developer explicitly asks for it. Bridge owns the login UI, the session is a cookie | `withBridgeAuth` in `middleware.ts`, before the page loads | Enforces every route that needs a session, and verifies the `bridge_access_token` cookie: PS256 signature against the Bridge JWKS, issuer `<apiBaseUrl>/auth`, audience containing your `appId`, expiry. Missing, forged, foreign or expired counts as signed out. If the check itself fails, the request is denied. |
+| **SDK auth** (default) — sign-in inside the app, matching its design; tokens live in the browser | `<ProtectedRoute>` in each protected page, **and your API** | Steps aside. It cannot see a browser-held session, and redirecting would loop a signed-in user, so a request without a Bridge session cookie is let through. One dev-only warning says so. |
 
-**Setting `loginRoute` is the entire switch** — either the `loginRoute` option on `withBridgeAuth` or `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE`. Without it you get hosted; with it the middleware is explicitly **not** the guard.
+**Setting `loginRoute` is the entire switch** — either the `loginRoute` option on `withBridgeAuth` or `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE`. With it you get in-app sign-in and the middleware is explicitly **not** the guard; without it, hosted.
 
 > **A page you protect only in `middleware.ts` is not protected in SDK-auth mode.** The middleware lets it through by design, the page renders, and nothing looks wrong — until someone opens the URL signed out. Every SDK-auth page needs `<ProtectedRoute>`.
 
 **Neither route guard is authorization.** They decide what the browser is shown; every API route must still verify the user's token itself.
 
-If the user has not said which mode they want, ask.
+Do not ask the developer to choose: use SDK auth unless they explicitly asked for hosted sign-in, or the app is already on hosted sign-in and they have not asked to change it. Say which in one line, and follow `sdk-auth-prompt.md` (`get_integration_guide` topic `auth`, or `bridge guide nextjs sdk-auth`) for the auth pages and their styling. The steps below that apply only to hosted login say so.
 
 ## Prerequisites
 
@@ -220,7 +220,7 @@ export async function fetchUserData() {
 
 1. Run `npm run dev`.
 2. Open `http://localhost:3000`.
-3. Click "Sign in" — you should be redirected to bridge hosted auth.
+3. Click "Sign in" — you should land on the app's own `/auth/login`, styled like the app (on hosted login: Bridge's hosted page).
 4. Complete login — you should land back on `/` with `isAuthenticated === true`.
 5. Click "Sign out" — `isAuthenticated` should flip back to `false`.
 

@@ -6,14 +6,14 @@ You are integrating in-app authentication UI (no redirect to bridge hosted auth)
 
 | You want | Mode | What you build | Config |
 |---|---|---|---|
-| Bridge owns the login UI | **Hosted** (default) | Nothing — no login page | No `loginRoute` |
-| Login inside your app, your styling | **SDK auth** | Your own routes rendering `<LoginForm />`, `<SignupForm />` … | `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login` |
+| Login inside your app, matching its design | **SDK auth** (default) — this guide | One catch-all `app/auth/[...bridge]/page.tsx` rendering `<BridgeAuthRoutes />` | `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE=/auth/login` |
+| Bridge owns the login UI | **Hosted** — only when the developer explicitly asks for it | Nothing — no login page | No `loginRoute` |
 
 **One config value is the whole switch.** Setting `NEXT_PUBLIC_BRIDGE_LOGIN_ROUTE` (or the `loginRoute` option on `withBridgeAuth`) turns hosted mode off. If you are being redirected to a route you never built, that is why.
 
 > **Choosing SDK auth moves the route guard, and this is the easiest thing to get wrong in this package.** SDK-auth tokens live in the browser, where `withBridgeAuth` cannot see them, so the middleware steps aside for those requests (one dev-only warning) and **`<ProtectedRoute>` plus your own API become the guard**. A page protected only in `middleware.ts` is not protected in this mode.
 
-If the user has not said which they want, ask. A wrong guess here means rewriting the auth pages.
+Do not ask the developer to choose: this guide is the approach unless they asked for hosted. Tell them in one line that sign-in will be in-app, styled to match their app.
 
 The rest of this guide covers **SDK auth**.
 
@@ -72,9 +72,36 @@ It serves `/auth/login`, `/auth/signup`, `/auth/oauth-callback`, `/auth/set-pass
 
 After sign-in the user returns to the `?redirectUri=` deep link, else `/`.
 
-### Only if the developer asks to customise
+## Match the app's design — always
 
-- Restyle: `--bridge-*` CSS variables.
+The sign-in pages render inside the app, so they must look like the rest of it. Bridge's built-in look (indigo buttons, grey borders) is a fallback for an app with no design, never the finished result. Do this without asking:
+
+1. **Read the app's design.** The global stylesheet (`app/globals.css`, imported by `app/layout.tsx`) and its CSS variables, `tailwind.config.*` or the Tailwind `@theme` block, a component library's theme (shadcn/ui, MUI, Chakra, Mantine, …), the font the app loads, and one existing primary button and text input.
+2. **Set the `--bridge-*` tokens from it** in that global stylesheet, pointing at the app's own variables rather than copying values, so dark mode and later theme changes carry over:
+
+   ```css
+   :root {
+     --bridge-primary: var(--color-primary);          /* the app's primary button background */
+     --bridge-primary-hover: var(--color-primary-hover);
+     --bridge-primary-fg: var(--color-primary-foreground);
+     --bridge-border: var(--color-border);
+     --bridge-input-focus: var(--color-ring);
+     --bridge-border-radius: var(--radius);
+     --bridge-foreground: var(--color-foreground);
+     --bridge-muted: var(--color-muted-foreground);
+     --bridge-bg: var(--color-background);
+     --bridge-muted-bg: var(--color-muted);
+   }
+   ```
+
+   The names on the right are examples: use the variables the app actually defines, or its literal values when it has none. Map its error and success colours to the `--bridge-alert-*` tokens. The components inherit the page font; set nothing for it unless the app puts its font on something other than `body`. The full token list: `bridge guide mechanisms`.
+3. **Give the pages the app's frame** when the app's own pages sit in a card, a panel or a split layout: pass `frame={(page, children) => …}` to `<BridgeAuthRoutes>` (the page file then needs `'use client'`), built from the app's own classes or components, so sign-in is not the one page that looks different.
+
+Ask the developer for colours only when the project has no styles of its own.
+
+### Customising further — only if the developer asks
+
+- Restyle: `--bridge-*` CSS variables, as above.
 - Frame and heading: `frame={(page, children) => …}` and `heading={(page) => …}` on `<BridgeAuthRoutes>` — functions, so the page file gets `'use client'`.
 - Take over ONE page: create its own file; Next.js prefers it over the catch-all. Next.js 15 passes `params` as a Promise:
 
@@ -138,13 +165,15 @@ export default function WorkspacesPage() {
 - [ ] `app/auth/[...bridge]/page.tsx` renders `<BridgeAuthRoutes />`, and no per-page auth files exist unless the developer asked to take one over.
 - [ ] `/auth/set-password/<any>` renders the set-password form (not a 404).
 - [ ] Bridge app has `tenantSelfSignup: true` and the right auth methods enabled.
+- [ ] `app/globals.css` sets the `--bridge-*` tokens from the app's own design; `frame` used when the app frames its pages.
 
 ## Verify
 
-1. `npm run dev` and navigate to `/auth/signup`.
-2. Submit the form — should show "Check your email".
-3. Click the link in email — should authenticate and redirect.
-4. Try `/auth/forgot-password` — should send a reset link.
-5. Try `/auth/login` with MFA enabled — `<MfaChallenge />` should appear automatically after entering credentials.
+1. `npm run dev` and open `/auth/login`. Next to one of the app's own pages, `/auth/login` matches it: buttons, inputs, font, corners and frame — in dark mode too if the app has one. No Bridge indigo is left.
+2. Navigate to `/auth/signup`.
+3. Submit the form — should show "Check your email".
+4. Click the link in email — should authenticate and redirect.
+5. Try `/auth/forgot-password` — should send a reset link.
+6. Try `/auth/login` with MFA enabled — `<MfaChallenge />` should appear automatically after entering credentials.
 
 If a method doesn't appear, check that it's enabled on the Bridge app config.
