@@ -9,6 +9,7 @@ import { authErrorMessage } from './shared/auth-error';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
+import { PasswordToggleIcon } from './shared/icons';
 
 interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onError'> {
   /** When provided, switches to "set new password" mode. */
@@ -154,7 +155,7 @@ export function ForgotPassword({
                     showPasswords ? t('action.hidePasswords') : t('action.showPasswords')
                   }
                 >
-                  {showPasswords ? '🙈' : '👁'}
+                  <PasswordToggleIcon visible={showPasswords} />
                 </button>
               </div>
             </div>
