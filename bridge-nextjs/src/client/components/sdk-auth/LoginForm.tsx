@@ -10,6 +10,7 @@ import {
 } from '../../../core/bridge-instance';
 import { getTranslator } from '../../../i18n';
 import { authErrorMessage, isOriginNotAllowed } from './shared/auth-error';
+import { MagicLinkIcon, PasswordToggleIcon } from './shared/icons';
 import { AuthFormWrapper } from './shared/AuthFormWrapper';
 import { Alert } from './shared/Alert';
 import { Spinner } from './shared/Spinner';
@@ -349,7 +350,7 @@ export function LoginForm({
               tabIndex={-1}
               aria-label={showPassword ? t('action.hidePassword') : t('action.showPassword')}
             >
-              {showPassword ? '🙈' : '👁'}
+              <PasswordToggleIcon visible={showPassword} />
             </button>
           </div>
         </div>
@@ -415,7 +416,10 @@ export function LoginForm({
             className="bridge-btn bridge-btn-secondary bridge-sso-btn"
             data-bridge-magic-link
           >
-            <span className="bridge-sso-btn-inner">{t('login.magicLink')}</span>
+            <span className="bridge-sso-btn-inner">
+              <MagicLinkIcon />
+              <span>{t('login.magicLink')}</span>
+            </span>
           </a>
         </div>
       )}
@@ -449,7 +453,7 @@ export function LoginForm({
         effectiveShowSignupLink && (
           <div className="bridge-form-footer">
             {t('login.signupPrompt')}{' '}
-            <a href={signupHref ?? '/auth/signup'}>{t('login.signupLink')}</a>
+            <a href={signupHref ?? '/auth/signup'} className="bridge-link">{t('login.signupLink')}</a>
           </div>
         )
       )}

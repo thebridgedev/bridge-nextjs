@@ -8,6 +8,7 @@ import { getTranslator } from '../../../i18n';
 import { authErrorMessage, isOriginNotAllowed } from './shared/auth-error';
 import { Spinner } from './shared/Spinner';
 import { passkeysSupported, startPasskeyAuthentication } from './shared/webauthn';
+import { PasskeyIcon } from './shared/icons';
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onError'> {
   onLogin?: () => void;
@@ -77,8 +78,10 @@ export function PasskeyLogin({
       disabled={loading}
       {...rest}
     >
-      {loading ? <Spinner size={16} /> : null}
-      <span>{label ?? t('passkey.loginButton')}</span>
+      <span className="bridge-sso-btn-inner">
+        {loading ? <Spinner size={16} /> : <PasskeyIcon />}
+        <span>{label ?? t('passkey.loginButton')}</span>
+      </span>
     </button>
   );
 }
