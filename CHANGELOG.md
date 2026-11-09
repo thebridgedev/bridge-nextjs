@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.2] - 2026-11-09
+
+### Fixed
+
+- **A plan limit closes as soon as it is reached.** After `bridge.usage.report()` uses up a hard limit, `<QuotaGate>` and `useQuota()` show it within a couple of seconds, without a reload. Before, the SDK queued one `bridge.flag_evaluations` count per flag on every render, ahead of the app's own report, so a busy page could hold that report back for many seconds and a Free workspace could go past its limit. The SDK now adds those counts up and sends them about once a second, with the same total. (TBP-942)
+
 ## [0.8.1] - 2026-11-04
 
 ### Fixed

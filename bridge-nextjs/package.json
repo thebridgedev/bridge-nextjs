@@ -1,6 +1,6 @@
 {
   "name": "@nebulr-group/bridge-nextjs",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "The Bridge for Next.js: sign-in, workspaces and roles, feature flags, Stripe subscriptions and plan limits for the App Router.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
