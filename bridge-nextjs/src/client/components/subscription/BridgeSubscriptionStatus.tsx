@@ -17,19 +17,21 @@
  * No live push in v1 — fetches once on mount (the realtime wiring lands with the
  * provider's `attachToRealtimeClient`).
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useBridge } from '@nebulr-group/bridge-auth-core';
-import { getBridgeAuth } from '../../../core/bridge-instance';
-import { tokenStaleHandlerOf } from '../../../core/bridge-runtime';
+import { ensureBillingState, refreshBillingState } from '../../../core/billing-store';
 import { useBridgeSnapshot } from '../../hooks/use-bridge-readable';
 
 export interface BridgeSubscriptionStatusProps {
   /** Optional class applied to the root span. */
   className?: string;
+  /** TBP-948 (bridge-svelte TBP-762) — wait for a read made after mount before showing a plan. */
+  fresh?: boolean;
 }
 
 export function BridgeSubscriptionStatus({
   className = '',
+  fresh = false,
 }: BridgeSubscriptionStatusProps) {
   const subscription = useBridge().subscription;
 
@@ -38,26 +40,30 @@ export function BridgeSubscriptionStatus({
     () => subscription.snapshot(),
   );
 
+  // "Loading…" until this badge's own read has answered when it has nothing to
+  // show yet (never a "No subscription" flash), or always with `fresh`.
+  const [awaiting, setAwaiting] = useState(() => fresh || subscription.snapshot().state === null);
+
+  // TBP-948 (port of bridge-svelte TBP-762) — read what has not been read, or
+  // was read more than 30 s ago; a renewed sign-in, a live billing event and
+  // the tab regaining focus re-read it from there (core/billing-store.ts).
+  // Every read renews an out-of-date sign-in and retries once.
   useEffect(() => {
-    const ctx = getBridgeAuth().getApiContext();
-    if (!ctx.accessToken) {
-      subscription.setError('Not authenticated');
-      return;
-    }
-    void subscription.mount({
-      apiBaseUrl: ctx.apiBaseUrl,
-      accessToken: ctx.accessToken,
-      appId: ctx.appId,
-      // TBP-762 — a read right after a checkout renews the sign-in and retries.
-      onTokenStale: tokenStaleHandlerOf(),
+    let live = true;
+    const read = fresh ? refreshBillingState() : ensureBillingState();
+    void read.finally(() => {
+      if (live) setAwaiting(false);
     });
-    // subscription is the auth-core singleton — stable across renders.
+    return () => {
+      live = false;
+    };
+    // Once per mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <span className={`bridge-subscription-status ${className}`.trim()}>
-      {snapshot.loading ? (
+      {snapshot.loading || (awaiting && !snapshot.error) ? (
         <span className="bss-loading">Loading…</span>
       ) : snapshot.error ? (
         <span className="bss-error">Subscription unavailable</span>

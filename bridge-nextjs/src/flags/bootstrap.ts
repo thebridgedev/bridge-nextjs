@@ -127,6 +127,12 @@ export interface BridgeFlagsBundle {
   telemetry: TelemetryBatcher;
   authAttributeProvider: AuthAttributeProvider;
   billingAttributeProvider: BillingAttributeProvider;
+  /**
+   * TBP-948 (bridge-svelte TBP-810) — settles once the first read of the flag
+   * definitions has finished (loaded or failed). Never rejects.
+   * `<BridgeProvider>` holds the gates on it, capped, on a signed-in page.
+   */
+  definitionsLoaded: Promise<void>;
   /** Stop telemetry + unsubscribe from auth events. Idempotent. */
   stop: () => Promise<void>;
 }
@@ -307,7 +313,7 @@ export function createBridgeFlags(config: CreateBridgeFlagsConfig = {}): BridgeF
 
   // Initial hydrate fires here too — covers the case where realtime is disabled
   // and onOpen never fires.
-  void hydrateFlagsCache();
+  const definitionsLoaded = hydrateFlagsCache();
 
   if (config.registerGlobal !== false) {
     setBridgeFlagsInstance(bridge);
@@ -345,8 +351,37 @@ export function createBridgeFlags(config: CreateBridgeFlagsConfig = {}): BridgeF
     }
   });
 
+  // TBP-948 (port of bridge-svelte TBP-810 / bridge-react TBP-941) — the
+  // billing provider reads these stores at eval time, so a mounted
+  // `<FeatureFlag>` / `useFlag()` only sees a change if something re-evaluates
+  // after the store moved: the plan's features arriving after sign-in, a
+  // workspace switch, a checkout, a quota reaching its limit. Before, flags
+  // re-evaluated only on a token or flag-definition change. One re-eval per
+  // burst: plan, entitlements and quota updates land together.
+  let billingReevalQueued = false;
+  const onBillingStoreChange = (): void => {
+    if (billingReevalQueued) return;
+    billingReevalQueued = true;
+    queueMicrotask(() => {
+      billingReevalQueued = false;
+      notifyAllFlagsChanged();
+    });
+  };
+  const unsubscribeBilling: Array<() => void> = [];
+  try {
+    const billing = useBridge();
+    unsubscribeBilling.push(
+      billing.subscription.subscribe(onBillingStoreChange),
+      billing.quotas.subscribe(onBillingStoreChange),
+      billing.entitlementsStore.subscribe(onBillingStoreChange),
+    );
+  } catch {
+    // No billing bridge — nothing to follow.
+  }
+
   const stop = async (): Promise<void> => {
     unsubscribeAuth();
+    for (const off of unsubscribeBilling.splice(0)) off();
     unsubscribeOpen();
     evaluationCounter?.stop();
     await telemetry.stop();
@@ -358,6 +393,7 @@ export function createBridgeFlags(config: CreateBridgeFlagsConfig = {}): BridgeF
     telemetry,
     authAttributeProvider,
     billingAttributeProvider,
+    definitionsLoaded,
     stop,
   };
 }

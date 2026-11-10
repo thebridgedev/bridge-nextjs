@@ -29,6 +29,7 @@ import { LazySlice } from './lazy-slice';
 import type { BridgeAuth, Plan } from '@nebulr-group/bridge-auth-core';
 import { DevAttributeProvider } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from './bridge-instance';
+import { noteBrowserCount } from './double-count-warning';
 import { bridgeEvents, type BridgeEventsDispatcher } from './events';
 
 /** Svelte-store-compatible readable derived from a Zustand selector. */
@@ -140,9 +141,11 @@ const _devAttributes = new DevAttributeProvider();
 // render does not require an initialised BridgeAuth.
 const _usage: BridgeUsageSurface = {
   report(metric, value, idempotencyKey) {
+    noteBrowserCount(metric); // TBP-948 — dev warning when the backend counts it too
     getBridgeAuth().usage.report(metric, value, idempotencyKey);
   },
   async set(metric, value) {
+    noteBrowserCount(metric);
     await getBridgeAuth().usage.set(metric, value);
   },
   getQueueStatus() {

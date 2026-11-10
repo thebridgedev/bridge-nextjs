@@ -21,6 +21,8 @@ import { createBridgeConfig, type CreateBridgeConfigOptions } from '../../shared
 import { installQuotaRefusalObserver } from '../../core/bridge-fetch';
 import { appUsesBilling, isPaywallExempt, resolveBillingRoutes } from '../billing-routes';
 import { UpgradeDialogHost } from '../components/subscription/UpgradeDialogHost';
+import { holdGatesUntil, loadBeforeFirstRender, withinWait } from '../../core/startup-reads';
+import { startBillingRefresh } from '../../core/billing-store';
 
 export interface BridgeProviderProps {
   /** Your Bridge application ID. Wins over `config.appId` and `NEXT_PUBLIC_BRIDGE_APP_ID`. */
@@ -130,6 +132,27 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
       flagsBundleRef.current = createBridgeFlags();
     } catch (err) {
       logger.debug('[BridgeProvider] feature flags bootstrap skipped:', err);
+    }
+    // TBP-948 (port of bridge-svelte TBP-810 / bridge-react TBP-941) — a page
+    // that loads signed in reads the plan's features, the billing state and
+    // the flag definitions straight away, each capped at 1.5 s, and the gates
+    // (`<FeatureFlag>`, `useFlag().loading`) wait for them instead of judging
+    // an empty, fail-closed store: a paying customer saw "Upgrade to use
+    // this" on every reload. Children still render — the App Router hydrates
+    // the server's HTML, so the provider cannot hold the tree back as
+    // bridge-react does. The hold ends on the flags bundle that is current
+    // then: under StrictMode the simulated remount replaces this one.
+    try {
+      if (getBridgeAuth().getApiContext().accessToken) {
+        const startup = loadBeforeFirstRender(flagsBundleRef.current?.definitionsLoaded).then(() =>
+          withinWait(flagsBundleRef.current?.definitionsLoaded ?? Promise.resolve()),
+        );
+        void holdGatesUntil(startup, 2 * 1500);
+      } else {
+        void loadBeforeFirstRender(); // configures the entitlements store for a later sign-in
+      }
+    } catch (err) {
+      logger.debug('[BridgeProvider] startup reads skipped:', err);
     }
     logger.debug('[BridgeProvider] bootstrap complete', mergedConfig);
   }
@@ -318,6 +341,15 @@ export const BridgeProvider: FC<BridgeProviderProps> = ({ appId, config, childre
     // `routes` is derived from the same primitives listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, paywallRoute, paywallIsDefault, paymentErrorRoute, paywallAppId, router]);
+
+  // TBP-948 (port of bridge-svelte TBP-762) — the billing screens stay
+  // current: a renewed sign-in re-reads what they show, and so does the tab
+  // regaining focus after 30 s (a plan added in Bridge appears without a
+  // reload). Live billing events re-read through the runtime.
+  useEffect(() => {
+    if (!initedRef.current) return;
+    return startBillingRefresh();
+  }, []);
 
   // TBP-742 — level 0 of plan limits: a plain `fetch` to the page's origin,
   // Bridge's API or a `billing.apiOrigins` origin that answers

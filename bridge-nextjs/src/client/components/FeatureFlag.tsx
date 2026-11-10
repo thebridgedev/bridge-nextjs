@@ -70,6 +70,14 @@ export interface FeatureFlagProps<T = boolean> {
    * nothing, as before.
    */
   upgrade?: boolean;
+  /**
+   * TBP-948 (bridge-svelte TBP-810) — rendered while a signed-in page is still
+   * reading the plan's features and the flag definitions (each capped at
+   * 1.5 s), and in the server render. Nothing by default. Neither `children`
+   * nor `fallback` nor the upgrade button shows meanwhile, so a paying user
+   * never sees "Upgrade to use this" flash on a reload.
+   */
+  loading?: ReactNode;
 }
 
 function render<T>(child: FlagChild<T> | undefined, value: T): ReactNode {
@@ -117,8 +125,10 @@ export function FeatureFlag<T = boolean>({
   children,
   fallback,
   upgrade = false,
+  loading = null,
 }: FeatureFlagProps<T>) {
-  const { value, passed, reason, feature } = useFlag<T>(flagKey, defaultValue, context);
+  const { value, passed, reason, feature, loading: waiting } = useFlag<T>(flagKey, defaultValue, context);
+  if (waiting) return <>{loading}</>;
   if (passed) return <>{render(children, value)}</>;
   const openUpgrade = () => openFeatureUpgrade({ flag: flagKey, feature: feature ?? null });
   if (typeof fallback === 'function') {

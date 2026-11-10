@@ -29,7 +29,7 @@ import {
 } from '@nebulr-group/bridge-auth-core';
 import { getBridgeAuth } from '../../../core/bridge-instance';
 import { billingRoutes } from '../../billing-routes';
-import { tokenStaleHandlerOf } from '../../../core/bridge-runtime';
+import { ensureBillingState } from '../../../core/billing-store';
 import { useBridgeSnapshot } from '../../hooks/use-bridge-readable';
 
 type Chassis = 'bar' | 'rail' | 'card';
@@ -80,15 +80,9 @@ export function BridgeBillingNotice({
       subscription.setError('Not authenticated');
       return;
     }
-    if (!subscription.snapshot().state) {
-      void subscription.mount({
-        apiBaseUrl: ctx.apiBaseUrl,
-        accessToken: ctx.accessToken,
-        appId: ctx.appId,
-        // TBP-762 — a read right after a checkout renews the sign-in and retries.
-        onTokenStale: tokenStaleHandlerOf(),
-      });
-    }
+    // TBP-948 (bridge-svelte TBP-762) — read once, then the refresh rule
+    // (core/billing-store.ts) keeps it current. Renews a stale sign-in.
+    void ensureBillingState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

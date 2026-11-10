@@ -16,6 +16,7 @@
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 import type { EvalContext, FlagEvalResult } from '@nebulr-group/bridge-auth-core';
 import { evaluateFlag, subscribeToFlagChanges } from './registry';
+import { startupPending, subscribeStartup } from '../core/startup-reads';
 
 // ── Module-level reactive version bus ─────────────────────────────────────────
 //
@@ -95,6 +96,25 @@ export interface FlagState<T> {
   readonly reason?: FlagEvalResult<T>['reason'];
   /** TBP-756 — with `reason: 'plan'`, the plan feature the rule asks for. */
   readonly feature?: string;
+  /**
+   * TBP-948 (bridge-svelte TBP-810) — true while a signed-in page is still
+   * reading the plan's features, the billing state and the flag definitions
+   * (each capped at 1.5 s), and during the server render, which cannot know
+   * the session. Show neither the feature nor an upgrade prompt while it is
+   * true: `passed: false` then means "not known yet", not "not on this plan".
+   */
+  readonly loading: boolean;
+}
+
+/** The server render cannot know the session: the gates wait there. */
+const serverStartupPending = (): boolean => true;
+
+/**
+ * TBP-948 — true while the startup reads are in flight (and on the server).
+ * What `useFlag().loading` and `<FeatureFlag loading>` read.
+ */
+export function useStartupPending(): boolean {
+  return useSyncExternalStore(subscribeStartup, startupPending, serverStartupPending);
 }
 
 /**
@@ -140,7 +160,8 @@ export function useFlag<T>(
   }, [key, defaultValue, contextKey]);
 
   const result = useSyncExternalStore(subscribeVersion, getSnapshot, getSnapshot);
-  return { value: result.value, passed: result.passed, reason: result.reason, feature: result.feature };
+  const loading = useStartupPending();
+  return { value: result.value, passed: result.passed, reason: result.reason, feature: result.feature, loading };
 }
 
 function safeStringify(v: unknown): string {

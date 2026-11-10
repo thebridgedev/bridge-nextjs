@@ -25,7 +25,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Plan, PriceOfferSdk } from '@nebulr-group/bridge-auth-core';
-import { loadSubscription, useBridgeStore } from '../../../core/bridge-instance';
+import { ensureSubscription, useBridgeStore } from '../../../core/bridge-instance';
 import { PlanSelector } from './PlanSelector';
 
 export interface BridgePaywallProps {
@@ -54,11 +54,9 @@ export function BridgePaywall({
   const [origin, setOrigin] = useState('');
   useEffect(() => setOrigin(window.location.origin), []);
 
+  // TBP-948 — read once, then the refresh rule (core/billing-store.ts).
   useEffect(() => {
-    if (!status && !loading) {
-      void loadSubscription();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void ensureSubscription();
   }, []);
 
   // Show paywall only once the subscription status is known and the tenant has
