@@ -56,15 +56,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
+/* The create-next-app reset, inside a cascade layer. Bridge's styles live in
+   the `bridge` layer, which ranks after `base`, so this reset no longer strips
+   the padding off Bridge's buttons or recolours its link buttons. Unlayered,
+   it would win over every Bridge rule (TBP-946). */
+@layer base {
+  * {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 /* Token Status Styles */

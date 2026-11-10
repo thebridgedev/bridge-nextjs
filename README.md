@@ -64,7 +64,7 @@ export default function AuthPage() {
 ```
 
 ```tsx
-// app/subscription/[[...bridge]]/page.tsx — /subscription, /plan (the paywall), /success, /error
+// app/subscription/[[...bridge]]/page.tsx: /subscription (a checkout lands here, with a banner), /plan (the paywall), /error
 import { BridgeBillingRoutes } from '@nebulr-group/bridge-nextjs/client';
 export default function SubscriptionPage() {
   return <BridgeBillingRoutes />;
@@ -115,7 +115,7 @@ For feature flag examples and implementation details, see:
 
 ## Payments & Subscriptions
 
-`app/subscription/[[...bridge]]/page.tsx` serves the subscription page, the paywall and the checkout return pages. See [Add billing to your app](learning/billing/setup/add-billing-to-your-app.md) and [Usage limits](learning/billing/limits/usage-limits.md).
+`app/subscription/[[...bridge]]/page.tsx` serves the subscription page, the paywall and the checkout return pages. A completed checkout comes back to `/subscription` with a confirmation banner; `billing.successRoute` sends it anywhere else. See [Add billing to your app](learning/billing/setup/add-billing-to-your-app.md) and [Usage limits](learning/billing/limits/usage-limits.md).
 
 ## Demo Application
 

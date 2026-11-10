@@ -92,10 +92,20 @@ export interface BridgeConfig extends BridgeAuthConfig {
     /**
      * The subscription page — the default destination of the Upgrade/Manage
      * CTA in `<BridgeQuotaBanner>`, `<BridgeBillingNotice>`, `<QuotaGate>` and
-     * the upgrade dialog. A completed checkout lands on `<manageRoute>/success`.
+     * the upgrade dialog, and where a completed checkout lands unless
+     * `successRoute` says otherwise.
      * @default '/subscription'
      */
     manageRoute?: string;
+    /**
+     * Where a completed checkout, or a Free plan pick, lands: any page of your
+     * app, e.g. `'/dashboard'`. The subscription page shows a confirmation
+     * banner; anywhere else, render `<BridgeCheckoutNotice />` for the same
+     * banner, or read `useCheckoutResult()` for your own message. The old
+     * confirmation page is `'/subscription/success'`.
+     * @default the subscription page (`manageRoute`)
+     */
+    successRoute?: string;
     /**
      * The dialog `<BridgeProvider>` opens when your backend refuses a request
      * because a plan limit is reached — a `402` whose JSON body has

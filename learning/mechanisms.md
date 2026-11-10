@@ -41,7 +41,7 @@ export default function AuthPage() {
 }
 ```
 
-With plans, one more file serves the subscription page, the paywall and both checkout return pages. The double brackets make the catch-all optional, so the bare `/subscription` matches too:
+With plans, one more file serves the subscription page, the paywall and the checkout error page. The double brackets make the catch-all optional, so the bare `/subscription` matches too:
 
 ```tsx
 // app/subscription/[[...bridge]]/page.tsx
@@ -126,7 +126,7 @@ The same ladder holds for the sign-in pages (`<BridgeAuthRoutes>`) and the subsc
 | Rung | What you do | What you own |
 |---|---|---|
 | **0 — nothing** | Bridge's pages render inside your own `app/layout.tsx` | Your navigation, header and shell already surround them |
-| **1 — tokens** | Set `--bridge-*` CSS variables in your CSS | Colours, radius, spacing |
+| **1 — tokens** | Set `--bridge-*` CSS variables in your CSS, and plain CSS for anything else | Colours, radius, spacing, weights, shadows |
 | **2 — frame and heading** | Pass the `frame(page, children)` and `heading(page)` render-props (functions, so the page file is `'use client'`) | Everything around the form on every page, and each page's heading |
 | **3 — take over one page** | Create that page's own file, e.g. `app/auth/login/page.tsx` | That one page; Next.js prefers it over `[...bridge]`, every other page keeps working |
 | **4 — headless** | Build your own UI on `getBridgeAuth()` | Everything |
@@ -148,12 +148,12 @@ export default function AuthPage() {
 
 `heading` replaces only each page's main step; sub-steps such as "Reset your password" keep their own, so two headings never stack. A page you take over (rung 3) that has a token in its address reads it from `params`, which Next.js 15 passes as a Promise: `const { token } = use(params)`.
 
-**The token contract (rung 1)** is the one bridge-svelte documents: `--bridge-primary`, `--bridge-primary-hover`, `--bridge-primary-fg`, `--bridge-bg`, `--bridge-foreground`, `--bridge-muted`, `--bridge-muted-bg`, `--bridge-border`, `--bridge-border-radius`, `--bridge-overlay`, the `--bridge-alert-{error,success,info,warning}-{bg,fg,border}` families, and the layout tokens `--bridge-auth-page-padding`, `--bridge-billing-page-width`, `--bridge-billing-page-padding`, `--bridge-paywall-bg`, `--bridge-paywall-panel-bg`. The defaults are declared on `:where(:root)`, which has zero specificity, so your `:root` wins whichever stylesheet loads first. See [theming](/theming/).
+**The token contract (rung 1)** is the one bridge-svelte documents: `--bridge-primary`, `--bridge-primary-hover`, `--bridge-primary-fg`, `--bridge-bg`, `--bridge-foreground`, `--bridge-muted`, `--bridge-muted-bg`, `--bridge-border`, `--bridge-border-radius`, `--bridge-card-bg`, `--bridge-card-shadow`, `--bridge-button-shadow`, `--bridge-overlay`, the `--bridge-alert-{error,success,info,warning}-{bg,fg,border}` families, the type tokens `--bridge-font-size`, `--bridge-font-weight-heading`, `--bridge-font-weight-button`, `--bridge-font-weight-label`, and the layout tokens `--bridge-auth-page-padding`, `--bridge-billing-page-width`, `--bridge-billing-page-padding`, `--bridge-paywall-bg`, `--bridge-paywall-panel-bg`. Set only what your app does not already give: Bridge inherits your font and text colour, and every Bridge text size follows your `<body>` text size. All Bridge styles sit in a CSS cascade layer named `bridge`, so your `:root` wins whichever stylesheet loads first, and any plain CSS you write outside a layer overrides Bridge's classes and data attributes with no `!important`. That includes a global reset such as create-next-app's `* { padding: 0; margin: 0 }`: put it in `@layer base { ... }` so it ranks below Bridge. See [theming](/theming/).
 
 ## 5. Pages Bridge serves, and the one it only offers
 
 - **Sign-in:** `app/auth/[...bridge]/page.tsx` serves login, signup, the OAuth callback, set password (where signup verification and password-reset emails land), forgot password, magic link, passkey setup and workspace selection. Which methods appear comes from the app's settings at runtime. `loginRoute: '/auth/login'` is the switch to in-app sign-in; without it each page points at the hosted login. A hosted-login app whose `withBridgeAuth` middleware guards pages keeps `app/auth/oauth-callback/route.ts` (`createBridgeCallbackRoute`), which Next.js prefers over the catch-all and which stores the session in a cookie the middleware reads.
-- **Subscription:** `app/subscription/[[...bridge]]/page.tsx` serves `/subscription`, the paywall `/subscription/plan`, and the checkout return pages `/subscription/success` and `/subscription/error`. Bridge's redirects and upgrade links point there by default.
+- **Subscription:** `app/subscription/[[...bridge]]/page.tsx` serves `/subscription`, the paywall `/subscription/plan`, and `/subscription/error`, where a failed checkout lands. A completed checkout or a Free pick lands back on `/subscription` with a one-time banner naming the plan; `billing: { successRoute: '/dashboard' }` lands it anywhere else (put `<BridgeCheckoutNotice />` there for the same banner). The old confirmation page `/subscription/success` still works for an app that points at it. Bridge's redirects and upgrade links point at these pages by default.
 - **The paywall** redirects a signed-in workspace with no plan to `/subscription/plan` — only when the app has plans and its `paymentsAutoRedirect` setting is on (the default). `billing: { paywallRoute: false }` turns it off.
 - **A `/welcome` onboarding page is offered, never created unasked.** Only if the developer says yes, add a page rendering `<BridgePaywallPage />` and `billing: { paywallRoute: '/welcome' }`.
 - Any other address under a catch-all gets the app's own not-found page.

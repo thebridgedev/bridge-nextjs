@@ -67,7 +67,7 @@ export default function PlansPage() {
 <BridgeProvider config={{ billing: { paywallRoute: '/plans' } }}>{children}</BridgeProvider>
 ```
 
-A completed checkout lands on `/subscription/success`; a cancelled one comes back to `/plans`.
+A completed checkout lands on `/subscription` with a confirmation banner; a cancelled one comes back to `/plans`.
 
 `<BridgeProvider>` handles the gate for you: it checks the subscription status, and if the authenticated workspace still needs to pick a plan it issues a redirect to `paywallRoute`. It only redirects when all of the following hold, so there's no redirect loop and no gate on exempt workspaces:
 

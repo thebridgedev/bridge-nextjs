@@ -232,6 +232,13 @@ test.describe('Welcome Paywall — first-time user flow', () => {
       const postCheckoutUrl = page.url();
       const postCheckoutPath = new URL(postCheckoutUrl).pathname;
 
+      // TBP-946 — the checkout lands on the subscription page with a one-time
+      // banner, not on a separate "You're all set" page.
+      expect(postCheckoutPath).toBe('/subscription');
+      await expect(page.locator('[data-bridge-checkout-notice][data-kind="checkout"]')).toBeVisible({
+        timeout: LONG_TIMEOUT,
+      });
+
       // ---- 7. We must NOT have been bounced back to /welcome — the whole point
       //         of the paywall fix is that a paid user lands in the app.
       expect(postCheckoutPath).not.toBe('/welcome');

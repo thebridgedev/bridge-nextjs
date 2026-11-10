@@ -108,7 +108,8 @@ If you leave `loginRoute` unset, Bridge uses hosted auth instead: unauthenticate
 | `signupRoute` | `string` | `'/auth/signup'` | Route where your signup page lives; `LoginForm`'s signup link points here unless its `signupHref` prop overrides it |
 | `billing.paywallRoute` | `string \| false` | `'/subscription/plan'` | Where a signed-in workspace (a *tenant* in the API) with no plan is redirected. The default applies only to an app that has plans; `false` turns the redirect off |
 | `billing.paymentErrorRoute` | `string` | `'/subscription/error'` | Where a failed Stripe checkout confirmation lands |
-| `billing.manageRoute` | `string` | `'/subscription'` | The subscription page: where Upgrade/Manage buttons and the upgrade dialog link. A completed checkout lands on `<manageRoute>/success` |
+| `billing.manageRoute` | `string` | `'/subscription'` | The subscription page: where Upgrade/Manage buttons and the upgrade dialog link |
+| `billing.successRoute` | `string` | `billing.manageRoute` | Where a completed checkout or a Free plan pick lands. The subscription page shows a confirmation banner; on any other page, render `<BridgeCheckoutNotice />` for it |
 | `billing.upgradeDialog` | `boolean \| Component` | `true` | The dialog opened when your backend answers `402 QUOTA_EXCEEDED` or `402 FEATURE_NOT_IN_PLAN`. `false` turns it off (render your own from `useUpgradeRequest()`); a component replaces it |
 | `billing.apiOrigins` | `string[]` | (none) | Your backend's origins when it is not on the page's origin, so a plain `fetch` refusal is recognised too (`bridgeFetch` needs no listing) |
 | `storage` | `TokenStorage` | `localStorage` (browser) / memory (SSR) | Token storage adapter; implement `get`/`set`/`remove` to bring your own |

@@ -17,8 +17,8 @@
  * is only for an app that wants its own. Mounted anywhere the paywall redirect
  * does not point, it says so in the dev console.
  *
- * A completed checkout lands on `<billing.manageRoute>/success`; a cancelled
- * one comes back here.
+ * A completed checkout lands on `billing.successRoute` (the subscription page,
+ * with a confirmation banner, by default); a cancelled one comes back here.
  */
 import { usePathname } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
@@ -33,11 +33,11 @@ export interface BridgePaywallPageProps {
   heading?: string;
   /** Content between the heading and the plans — a welcome line, a checklist. */
   children?: ReactNode;
-  /** Where a completed checkout lands. @default `<billing.manageRoute>/success` */
+  /** Where a completed checkout lands. @default `billing.successRoute`, else the subscription page */
   successUrl?: string;
   /** Where a cancelled checkout lands. @default this page */
   cancelUrl?: string;
-  /** Called after a free-plan or direct plan change (not the Stripe redirect path). */
+  /** Called after a free-plan or direct plan change (not the Stripe redirect path). Takes over what happens next. */
   onSelect?: (detail: { plan: Plan; price: PriceOfferSdk }) => void;
 }
 

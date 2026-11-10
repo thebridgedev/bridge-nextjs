@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.0] - 2026-11-10
+
+### Changed
+
+- **After checkout, people land back in the app.** A completed checkout or a Free plan pick now returns to the subscription page with a "You're on Pro now" banner, with no separate confirmation step. Set `billing.successRoute` to land on any page of your app, and put `<BridgeCheckoutNotice />` there for the same banner, or read `useCheckoutResult()` for a message of your own. The old confirmation page at `/subscription/success` still works for apps that point to it. Before, a Free pick left the person on the plan picker. (TBP-946)
+- **A subscription page that fits your app.** Plan cards and the current-plan panel have their own surface built from your `--bridge-*` tokens, so they look right on any app background. Prices are shown large and formatted for their currency, buttons say "Choose", "Upgrade to" or "Switch to", the current plan is marked in your primary colour, each plan lists its features, plans are sorted cheapest first with a Monthly/Yearly switch when both are offered, and the current plan's renewal date and card are shown. Plan buttons no longer read "Select free plan" or "29 USD / month", so tests that match that text need updating. (TBP-946)
+- **Bridge pages follow your app's text.** Every text size on the sign-in and subscription pages now scales from your page's body text size, alongside the font family and text colour they already inherited. At the usual 16px nothing changes; set `--bridge-font-size` to size Bridge text differently. (TBP-946)
+- **Your CSS always wins.** Bridge's styles now live in a CSS cascade layer named `bridge`, so any normal CSS you write against a Bridge class or data attribute overrides it, whatever the load order or specificity, with no `!important`. CSS inside one of your own layers declared before `bridge`, including Tailwind utility classes on Bridge's elements, still ranks below it. Tailwind v4's reset can no longer strip Bridge's buttons. (TBP-946)
+- **Check your global reset when you upgrade.** Because unlayered CSS now wins, a reset such as create-next-app's `* { padding: 0; margin: 0 }` and `a { color: inherit }`, or Tailwind v3's preflight, also wins over Bridge's buttons and inputs. Put such a reset inside `@layer base { ... }` and Bridge looks as before. (TBP-946)
+- **Billing banners and the plan badge take your colours.** `<BridgeBillingNotice>`, `<BridgeQuotaBanner>`, the billing lockscreen and `<BridgeSubscriptionStatus>` now use the `--bridge-alert-*` and other tokens, as in the other Bridge packages, instead of fixed colours. (TBP-946)
+
+### Added
+
+- **Weight and shadow settings.** `--bridge-font-weight-heading`, `--bridge-font-weight-button`, `--bridge-font-weight-label` and `--bridge-button-shadow` let an app with heavy type or hard drop shadows carry that look onto the Bridge pages. `--bridge-card-bg` and `--bridge-card-shadow` tune the plan cards. Every default is the previous look. (TBP-946)
+- **"Change plan?" before an instant switch.** A workspace that already pays now confirms a plan change in a dialog before it takes effect, and sees "You're now on Team" once it has. Before, one click switched the plan straight away. (TBP-946)
+- **A retry when the plans don't load.** An empty plan list shows "The plans could not be loaded." with a Try again button, instead of "No plans available". (TBP-946)
+- **`<PlanSelector>` options.** `heading` puts a title beside the Monthly/Yearly switch, `defaultInterval` picks the interval shown first, and `planCard` also receives the selected `interval`. (TBP-946)
+
 ## [0.8.2] - 2026-11-09
 
 ### Fixed

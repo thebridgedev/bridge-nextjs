@@ -23,6 +23,7 @@ import {
 } from '@nebulr-group/bridge-auth-core';
 import { create } from 'zustand';
 import { logger } from '../shared/logger';
+import { markCheckoutComplete } from '../client/checkout-result';
 import type { BridgeConfig } from '../shared/types/config';
 
 // ── Singleton ──────────────────────────────────────────────────────────────────
@@ -270,7 +271,17 @@ export function beginCheckoutReturn(sessionId: string | null): Promise<Subscript
   if (_checkoutReturn || !sessionId) return _checkoutReturn;
   const auth = getBridgeAuth();
   if (!auth.isAuthenticated()) return null;
-  _checkoutReturn = auth.getSubscriptionStatus().catch(() => null);
+  _checkoutReturn = auth
+    .getSubscriptionStatus()
+    .then((status) => {
+      // TBP-946 (port of bridge-svelte TBP-813) — the page the checkout landed
+      // on (the subscription page by default) says it went through, with
+      // <BridgeCheckoutNotice>; there is no separate confirmation page. A
+      // failed payment goes to `billing.paymentErrorRoute` instead.
+      if (status && status.paymentFailed !== true) markCheckoutComplete({ kind: 'checkout' });
+      return status;
+    })
+    .catch(() => null);
   return _checkoutReturn;
 }
 

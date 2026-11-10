@@ -98,8 +98,8 @@ test.describe('Subscription Plans', () => {
     const planSelector = page.locator('[data-bridge-plan-selector]');
     await expect(planSelector).not.toHaveAttribute('data-loading', 'true', { timeout: LONG_TIMEOUT });
 
-    // Click "Select free plan" button
-    const selectBtn = page.locator('[data-bridge-plan-card] button:has-text("Select free plan")').first();
+    // TBP-946 — with no current plan the button reads "Choose Free".
+    const selectBtn = page.locator('[data-bridge-plan-card] button:has-text("Choose Free")').first();
     await expect(selectBtn).toBeVisible({ timeout: MED_TIMEOUT });
     await selectBtn.click();
 

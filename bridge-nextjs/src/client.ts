@@ -195,7 +195,8 @@ export { PlanSelector } from './client/components/subscription/PlanSelector';
 
 // ── Subscription pages + plan limits (TBP-742, ported from bridge-svelte) ─────
 // One file serves /subscription, /subscription/plan, /subscription/success and
-// /subscription/error: `app/subscription/[[...bridge]]/page.tsx`.
+// /subscription/error: `app/subscription/[[...bridge]]/page.tsx`. A completed
+// checkout lands on /subscription with a banner (TBP-946).
 export {
   BridgeBillingRoutes,
   type BridgeBillingRoutesProps,
@@ -208,6 +209,22 @@ export {
   BillingPortalButton,
   type BillingPortalButtonProps,
 } from './client/components/subscription/BillingPortalButton';
+// TBP-946 (port of bridge-svelte TBP-813) — a completed checkout lands on
+// `billing.successRoute` (the subscription page by default); this banner, or
+// `useCheckoutResult()`, says so.
+export {
+  BridgeCheckoutNotice,
+  type BridgeCheckoutNoticeProps,
+  type BridgeCheckoutNoticeDetail,
+} from './client/components/subscription/BridgeCheckoutNotice';
+export {
+  checkoutResult,
+  takeCheckoutResult,
+  clearCheckoutResult,
+  type BridgeCheckoutResult,
+  type BridgeCheckoutResultStore,
+} from './client/checkout-result';
+export { useCheckoutResult } from './client/hooks/use-checkout-result';
 export {
   BRIDGE_BILLING_PAGES,
   BRIDGE_BILLING_DEFAULTS,
