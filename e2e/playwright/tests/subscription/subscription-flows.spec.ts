@@ -50,12 +50,21 @@ test.describe('Subscription Flows', () => {
         timeout: LONG_TIMEOUT,
       });
 
-      // Find the free plan card and click "Select free plan"
-      const selectBtn = page.locator(
-        `[data-bridge-plan-card] button:has-text("Select free plan")`,
-      ).first();
+      // Find the free plan card and pick it. TBP-946: the button names the plan
+      // ("Choose Free E2E", or "Switch to Free E2E" when a plan is already set).
+      const selectBtn = page
+        .locator('[data-bridge-plan-card]')
+        .filter({ hasText: 'Free E2E' })
+        .locator('button.bridge-plan-select-btn', { hasText: /^(Choose|Switch to|Upgrade to) Free E2E/ })
+        .first();
       await expect(selectBtn).toBeVisible({ timeout: MED_TIMEOUT });
       await selectBtn.click();
+
+      // TBP-946 — a Free pick lands on the subscription page with a one-time banner.
+      const banner = page.locator('[data-bridge-checkout-notice]');
+      await expect(banner).toBeVisible({ timeout: LONG_TIMEOUT });
+      await expect(banner).toContainText("You're on Free E2E now");
+      await expect(page).toHaveURL(/\/subscription$/);
 
       // Wait for the plan selector to reload
       await expect(planSelector).not.toHaveAttribute('data-loading', 'true', {
