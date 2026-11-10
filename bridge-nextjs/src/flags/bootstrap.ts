@@ -34,6 +34,7 @@ import {
 } from '@nebulr-group/bridge-auth-core';
 
 import { setBridgeFlagsInstance, notifyFlagChanged, notifyAllFlagsChanged } from './registry';
+import { coalesceUsageReports, type CoalescedUsageReporter } from './evaluation-count';
 import { getBridgeAuth, useBridgeStore } from '../core/bridge-instance';
 import { _getDevAttributeProvider } from '../core/bridge';
 import { getBridgeRealtime, onBridgeRealtimeOpen, tokenStaleHandlerOf } from '../core/bridge-runtime';
@@ -192,9 +193,16 @@ export function createBridgeFlags(config: CreateBridgeFlagsConfig = {}): BridgeF
 
   // Billing 2.0 US-11 — self-report `bridge.flag_evaluations` to the usage
   // pipeline. Best-effort: in harnesses without BridgeAuth, skip.
+  //
+  // TBP-942 — summed per second before it is queued: React evaluates a flag on
+  // every render that reads it, and one queued event per evaluation crowded
+  // the app's own `bridge.usage.report()` out of the shared usage queue, so a
+  // `<QuotaGate>` closed only after a reload. Same total, far fewer events.
+  let evaluationCounter: CoalescedUsageReporter | undefined;
   try {
     const auth = getBridgeAuth();
-    bridge.setUsageReporter(auth.usage);
+    evaluationCounter = coalesceUsageReports(auth.usage);
+    bridge.setUsageReporter(evaluationCounter);
   } catch {
     // No BridgeAuth instance yet — flags can still operate without usage reporting.
   }
@@ -340,6 +348,7 @@ export function createBridgeFlags(config: CreateBridgeFlagsConfig = {}): BridgeF
   const stop = async (): Promise<void> => {
     unsubscribeAuth();
     unsubscribeOpen();
+    evaluationCounter?.stop();
     await telemetry.stop();
   };
 
