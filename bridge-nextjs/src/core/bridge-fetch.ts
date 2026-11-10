@@ -4,6 +4,7 @@
  */
 import { getBridgeAuth, getBridgeConfig } from './bridge-instance';
 import { observeQuotaRefusal, watchesQuotaOrigin } from './quota-refusal';
+import { noteBackendResponse } from './double-count-warning';
 
 function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -48,6 +49,7 @@ function absoluteUrl(url: string): string {
 export async function bridgeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const response = await fetchWithToken(input, init);
   void observeQuotaRefusal(response, absoluteUrl(requestUrl(input)));
+  noteBackendResponse(response); // TBP-948 — dev-only double-count check
   return response;
 }
 
@@ -102,6 +104,11 @@ export function installQuotaRefusalObserver(): () => void {
   const original = win.fetch;
   const observed = async function bridgeObservedFetch(input: RequestInfo | URL, init?: RequestInit) {
     const response = await original.call(win, input, init);
+    try {
+      noteBackendResponse(response); // TBP-948 — dev-only double-count check (reads one header)
+    } catch {
+      /* never let the observer break a fetch */
+    }
     if (response.status === 402) {
       try {
         const url = requestUrl(input);
