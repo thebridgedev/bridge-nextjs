@@ -14,7 +14,7 @@ End-user documentation for `@nebulr-group/bridge-nextjs`. These docs assume the 
 - [Quickstart (hosted auth)](./quickstart/hosted-quickstart.md): the fastest way to add authentication.
 - [SDK Auth quickstart](./sdk-auth/sdk-quickstart.md): in-app auth UI, no redirect to Bridge hosted auth.
 - [Live updates and the `bridge` object](./live-updates/live-updates.md): the unified `bridge` object, live channel events, and app-wide flag attributes.
-- [Theming](./theming/theming.md): overriding default styles.
+- [Theming](./theming/theming.md): CSS variable theming, matching your app's type and shadows, overriding with plain CSS, and headless usage.
 - [Branding](./branding/branding.md): per-workspace white-labeling with the live branding snapshot.
 
 ## Need help?

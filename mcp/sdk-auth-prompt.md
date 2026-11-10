@@ -89,7 +89,11 @@ The sign-in pages render inside the app, so they must look like the rest of it. 
    }
    ```
 
-   The names on the right are examples: use the variables the app actually defines, or its literal values when it has none. Map its error and success colours to the `--bridge-alert-*` tokens. The components inherit the page font; set nothing for it unless the app puts its font on something other than `body`. The full token list: `bridge guide mechanisms`.
+   The names on the right are examples: use the variables the app actually defines, or its literal values when it has none. Map its error and success colours to the `--bridge-alert-*` tokens. If the app has a type style of its own (heavy headings, bold buttons, hard offset shadows), map that too: `--bridge-font-weight-heading`, `--bridge-font-weight-button`, `--bridge-font-weight-label`, `--bridge-button-shadow` and `--bridge-card-shadow`. Don't set what the app already gives: the components inherit the font and text colour, and every Bridge text size follows the app's `<body>` text size. Set a font only if the app puts it on something other than `body`. The full token list: `bridge guide mechanisms`.
+
+   For anything the tokens don't cover (a hover effect, a border width), write plain CSS against Bridge's classes and `[data-bridge-*]` attributes in the app's stylesheet, outside any `@layer`. Bridge's styles sit in a cascade layer named `bridge`, so that CSS wins with no `!important`. Tailwind utility classes on Bridge's elements lose where Bridge sets the same property; use plain CSS there.
+
+   **Check the app's global reset.** Unlayered CSS beats every Bridge rule, so a reset like create-next-app's `* { padding: 0; margin: 0 }` and `a { color: inherit }` strips the padding off Bridge's buttons and recolours its link buttons. Wrap such a reset in `@layer base { … }`, which ranks below Bridge. Tailwind v4 already layers its reset; Tailwind v3 does not, so on v3 turn `preflight` off and keep the reset rules you need inside `@layer base`.
 3. **Give the pages the app's frame** when the app's own pages sit in a card, a panel or a split layout: pass `frame={(page, children) => …}` to `<BridgeAuthRoutes>` (the page file then needs `'use client'`), built from the app's own classes or components, so sign-in is not the one page that looks different.
 
 Ask the developer for colours only when the project has no styles of its own.
@@ -160,7 +164,7 @@ export default function WorkspacesPage() {
 - [ ] `app/auth/[...bridge]/page.tsx` renders `<BridgeAuthRoutes />`, and no per-page auth files exist unless the developer asked to take one over.
 - [ ] `/auth/set-password/<any>` renders the set-password form (not a 404).
 - [ ] Bridge app has `tenantSelfSignup: true` and the right auth methods enabled.
-- [ ] `app/globals.css` sets the `--bridge-*` tokens from the app's own design; `frame` used when the app frames its pages.
+- [ ] `app/globals.css` sets the `--bridge-*` tokens from the app's own design (weights and shadows too, if the app has its own); nothing set for font, text size or text colour that the app already gives; plain CSS for anything else; any global reset sits in `@layer base`; `frame` used when the app frames its pages.
 
 ## Verify
 

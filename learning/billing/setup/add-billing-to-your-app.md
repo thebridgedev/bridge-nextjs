@@ -41,7 +41,7 @@ export function PlanLine() {
 
 ## One file serves the subscription pages
 
-Create one page and Bridge serves the subscription page, the paywall and both checkout return pages from it:
+Create one page and Bridge serves the subscription page, the paywall and the checkout error page from it:
 
 ```tsx
 // app/subscription/[[...bridge]]/page.tsx
@@ -56,12 +56,12 @@ The double brackets make the catch-all optional, so the bare `/subscription` mat
 
 | Address | Page |
 |---|---|
-| `/subscription` | the current plan, the plan picker and "Manage billing" |
+| `/subscription` | the current plan with its renewal date and card, the plan picker and "Manage billing". A completed checkout lands here, with a confirmation banner |
 | `/subscription/plan` | the paywall: where a signed-in workspace with no plan is sent |
-| `/subscription/success` | where a completed checkout lands |
+| `/subscription/success` | a separate confirmation page, for apps that set `billing.successRoute` to it |
 | `/subscription/error` | where a failed checkout confirmation lands |
 
-Those are the defaults of `billing.manageRoute`, `billing.paywallRoute` and `billing.paymentErrorRoute`, so every Upgrade button, redirect and checkout return points at a page that exists. Nothing to configure.
+Those are the defaults of `billing.manageRoute`, `billing.successRoute`, `billing.paywallRoute` and `billing.paymentErrorRoute`, so every Upgrade button, redirect and checkout return points at a page that exists. Nothing to configure.
 
 - **The paywall redirect** sends a signed-in workspace with no plan (called a *tenant* in the API) to `/subscription/plan`, only when the app has plans and its `paymentsAutoRedirect` setting is on (the default). `billing: { paywallRoute: false }` turns it off, for an app that gates with the `<BridgePaywall>` overlay instead.
 - **Your own onboarding page**, e.g. `/welcome`: render `<BridgePaywallPage />` there and point `billing.paywallRoute` at it:
@@ -79,6 +79,42 @@ export default function Welcome() {
 ```
 
 - **Customising:** `--bridge-*` CSS tokens restyle the pages; `frame(page, children)` and `heading(page)` render-props on `<BridgeBillingRoutes>` replace the frame and each heading (pass them from a `'use client'` page file, since they are functions); to own one page outright, create it (`app/subscription/plan/page.tsx`) and Next.js prefers it over the catch-all.
+
+### Where a checkout lands
+
+After a paid checkout, or a Free plan pick, the user comes back to the
+subscription page, which shows a "You're on Pro now" banner. There is no
+separate confirmation step. To send them somewhere else, set
+`billing.successRoute`:
+
+```tsx
+// app/layout.tsx
+<BridgeProvider config={{ billing: { successRoute: '/dashboard' } }}>{children}</BridgeProvider>
+```
+
+To show the same banner there, put `<BridgeCheckoutNotice />` on that page or
+in your layout. It renders nothing until a checkout has just completed, shows
+once, and is gone after a reload. For a message of your own, read
+`useCheckoutResult()` instead:
+
+```tsx
+'use client';
+import { clearCheckoutResult, useCheckoutResult } from '@nebulr-group/bridge-nextjs/client';
+
+export function ThanksForUpgrading() {
+  const result = useCheckoutResult();
+  if (!result) return null;
+  return (
+    <p>
+      Thanks for upgrading! <button onClick={clearCheckoutResult}>OK</button>
+    </p>
+  );
+}
+```
+
+`result.kind` is `'checkout'` after a paid checkout and `'plan'` after a Free
+pick. The old confirmation page is still served: `successRoute:
+'/subscription/success'` brings it back.
 
 ## Adding billing to your UI
 

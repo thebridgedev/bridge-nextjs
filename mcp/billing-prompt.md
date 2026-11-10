@@ -10,7 +10,8 @@ Plans, prices, quotas and Stripe are configured in the Bridge admin, not in code
 
 | You need | Mount | Notes |
 |---|---|---|
-| The subscription page, the paywall, and the checkout return pages | `app/subscription/[[...bridge]]/page.tsx` rendering `<BridgeBillingRoutes />` | ONE file. Serves `/subscription`, `/subscription/plan`, `/subscription/success`, `/subscription/error` — the defaults every redirect and Upgrade button point at |
+| The subscription page, the paywall, and the checkout return pages | `app/subscription/[[...bridge]]/page.tsx` rendering `<BridgeBillingRoutes />` | ONE file. Serves `/subscription`, `/subscription/plan`, `/subscription/success`, `/subscription/error`, the defaults every redirect and Upgrade button point at. A completed checkout or Free pick lands on `/subscription` with a confirmation banner |
+| Land somewhere else after checkout (`/dashboard`) | `billing: { successRoute: '/dashboard' }` + `<BridgeCheckoutNotice />` on that page or in the layout | Only if the developer asks. The banner shows once, right after a checkout; `useCheckoutResult()` for custom copy. Never build a confirmation page by hand |
 | A signed-in tenant with no plan must pick one | Nothing more | The paywall redirect to `/subscription/plan` is on by default for an app with plans |
 | An onboarding page at another address (`/welcome`) | `<BridgePaywallPage />` there + `billing: { paywallRoute: '/welcome' }` | Only if the developer asks for one — never create it unasked |
 | Current plan + status badge anywhere | `<BridgeSubscriptionStatus />` | No props required |
@@ -51,6 +52,8 @@ export default function SubscriptionPage() {
 ```
 
 The double brackets make the catch-all optional so the bare `/subscription` matches. Do not also create `app/subscription/page.tsx` (Next.js refuses both). Do not create success/cancel/payment-error pages: the catch-all serves them.
+
+**Where a checkout lands.** Stripe returns to `billing.successRoute`, which defaults to the subscription page; `<BridgeProvider>` confirms the checkout on that page load, and the page shows a "You're on Pro now" banner (`<BridgeCheckoutNotice>`). A Free pick lands the same way. If the developer wants users back in the app after paying, set `billing: { successRoute: '/dashboard' }` (their page) and render `<BridgeCheckoutNotice />` on that page or in the layout; it shows once, only right after a checkout. For custom copy, read `useCheckoutResult()` and call `clearCheckoutResult()` once shown. A failed payment lands on `/subscription/error`. The old confirmation page `/subscription/success` is still served for an app that points `successRoute` at it.
 
 ## Step 2 — Billing notice banner
 
@@ -106,8 +109,8 @@ Auth-core methods used internally by `<PlanSelector>`: `selectFreePlan(planKey)`
 
 1. Sign in.
 2. Navigate to `/subscription` — plan cards render with correct prices.
-3. Select a free plan — subscription updates immediately, no redirect.
-4. Select a paid plan — Stripe Checkout launches; complete payment — returned to `/subscription/success`, status reflects the new plan.
+3. Select a free plan: you are back on `/subscription` with a "You're on … now" banner and the new plan marked as yours.
+4. Select a paid plan: Stripe Checkout launches. Complete the payment: you are back on `/subscription` with the new plan showing and a "You're on … now" banner.
 5. Cancel payment — returned to `/subscription`.
 6. Paywall: sign in as a new tenant with no plan — any page redirects to `/subscription/plan` until a plan is chosen.
 7. Run `npm run build` — no TypeScript or import errors.
