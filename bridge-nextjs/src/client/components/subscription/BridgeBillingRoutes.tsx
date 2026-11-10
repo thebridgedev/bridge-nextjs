@@ -36,7 +36,7 @@
 import { useBridge, withReturnTo } from '@nebulr-group/bridge-auth-core';
 import { notFound, useParams, usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { getBridgeConfig, loadSubscription, useBridgeStore } from '../../../core/bridge-instance';
+import { ensureSubscription, getBridgeConfig, loadSubscription, useBridgeStore } from '../../../core/bridge-instance';
 import { BRIDGE_AUTH_ROUTE_PARAM, bridgeAuthBase } from '../../auth-routes';
 import { billingRoutes, parseBridgeBillingRoute, type BridgeBillingPage } from '../../billing-routes';
 import { checkoutResult, clearCheckoutResult } from '../../checkout-result';
@@ -92,7 +92,6 @@ export function BridgeBillingRoutes({
     () => billingState.snapshot(),
   );
   const meta = subscriptionMeta(billingSnapshot?.state);
-  const hasStatus = useBridgeStore((s) => s.subscription.status !== null);
   const authenticated = useBridgeStore((s) => !!s.tokens?.accessToken);
   const router = useRouter();
   const loginRoute = (() => {
@@ -128,7 +127,7 @@ export function BridgeBillingRoutes({
   // whatever the store holds predates that. Other pages read once.
   useEffect(() => {
     if (!page || signedOut) return;
-    if (page === 'success' || !hasStatus) void loadSubscription();
+    void (page === 'success' ? loadSubscription() : ensureSubscription());
     // Keyed on the page: moving between these pages reuses this component.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, signedOut]);

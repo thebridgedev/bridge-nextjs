@@ -1,8 +1,15 @@
 /**
+ * @jest-environment jsdom
+ *
  * TBP-756 — `<FeatureFlag>`'s fallback learns WHY the feature is off, so an app
  * can offer an upgrade for `reason: 'plan'` and nothing for a permission.
+ *
+ * Rendered in the browser: since TBP-948 the server render shows the `loading`
+ * slot (it cannot know the session), see startup-gates.test.tsx.
  */
-import { renderToStaticMarkup } from 'react-dom/server';
+import * as React from 'react';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import type { FlagEvalResult } from '@nebulr-group/bridge-auth-core';
 
 let mockResult: FlagEvalResult<boolean> = { passed: false, value: false };
@@ -14,6 +21,16 @@ jest.mock('../../flags/registry', () => ({
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { FeatureFlag } = require('./FeatureFlag');
+
+/** The markup a browser render of `element` produces. */
+function renderToStaticMarkup(element: React.ReactElement): string {
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  flushSync(() => root.render(element));
+  const html = container.innerHTML;
+  root.unmount();
+  return html;
+}
 
 const render = () =>
   renderToStaticMarkup(

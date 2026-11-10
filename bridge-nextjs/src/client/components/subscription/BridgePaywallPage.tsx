@@ -23,7 +23,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import type { Plan, PriceOfferSdk } from '@nebulr-group/bridge-auth-core';
-import { loadSubscription, useBridgeStore } from '../../../core/bridge-instance';
+import { ensureSubscription } from '../../../core/bridge-instance';
 import { logger } from '../../../shared/logger';
 import { billingRoutes } from '../../billing-routes';
 import { PlanSelector } from './PlanSelector';
@@ -49,10 +49,9 @@ export function BridgePaywallPage({
   onSelect,
 }: BridgePaywallPageProps) {
   const here = usePathname() ?? '';
-  const hasStatus = useBridgeStore((s) => s.subscription.status !== null);
 
   useEffect(() => {
-    if (!hasStatus) void loadSubscription();
+    void ensureSubscription(); // TBP-948 — then the refresh rule keeps it current
     const routes = billingRoutes();
     if (process.env.NODE_ENV !== 'production' && here && routes.paywallRoute !== here) {
       logger.warn(

@@ -39,7 +39,13 @@ const { BridgeCheckoutNotice } = require('./BridgeCheckoutNotice');
 const { PlanSelector } = require('./PlanSelector');
 const { BridgeProvider } = require('../../providers/bridge-provider');
 const { checkoutResult, clearCheckoutResult, markCheckoutComplete } = require('../../checkout-result');
-const { _resetBridgeInstance, getBridgeAuth, initBridge, useBridgeStore } = require('../../../core/bridge-instance');
+const {
+  __seedSubscriptionForTests,
+  _resetBridgeInstance,
+  getBridgeAuth,
+  initBridge,
+  useBridgeStore,
+} = require('../../../core/bridge-instance');
 const { __resetBridgeRuntime } = require('../../../core/bridge-runtime');
 /* eslint-enable @typescript-eslint/no-var-requires */
 
@@ -147,10 +153,10 @@ async function settle(ms = 20): Promise<void> {
 /** Signed in, with a subscription and plans already in the store. */
 function signedIn(status: Record<string, unknown> | null, billing?: Record<string, unknown>): void {
   initBridge({ appId: 'app-1', apiBaseUrl: 'http://127.0.0.1:1', loginRoute: '/auth/login', billing });
-  useBridgeStore.setState({
-    tokens: { accessToken: 'at' } as never,
-    subscription: { status: status as never, plans: PLANS as never, loading: false, error: null },
-  });
+  useBridgeStore.setState({ tokens: { accessToken: 'at' } as never });
+  // As if a read had just answered (TBP-948: a screen re-reads on mount only
+  // when nothing was read in the last 30 s).
+  __seedSubscriptionForTests({ status: status as never, plans: PLANS as never, loading: false, error: null });
 }
 
 function card(name: string): HTMLElement {
@@ -307,10 +313,8 @@ describe('<PlanSelector> closes the TBP-762 / TBP-33 gaps with bridge-svelte —
 
   it('an empty plan list offers a retry instead of "No plans available"', async () => {
     initBridge({ appId: 'app-1', apiBaseUrl: 'http://127.0.0.1:1' });
-    useBridgeStore.setState({
-      tokens: { accessToken: 'at' } as never,
-      subscription: { status: { shouldSelectPlan: true } as never, plans: [] as never, loading: false, error: null },
-    });
+    useBridgeStore.setState({ tokens: { accessToken: 'at' } as never });
+    __seedSubscriptionForTests({ status: { shouldSelectPlan: true } as never, plans: [] as never, loading: false, error: null });
     const auth = getBridgeAuth();
     jest.spyOn(auth, 'getSubscriptionStatus').mockResolvedValue({ shouldSelectPlan: true } as never);
     const getPlans = jest.spyOn(auth, 'getPlans').mockResolvedValue(PLANS as never);

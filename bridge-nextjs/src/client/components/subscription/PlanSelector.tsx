@@ -1,15 +1,16 @@
 'use client';
 
-import { HttpError, useBridge, type Plan, type PriceOfferSdk } from '@nebulr-group/bridge-auth-core';
+import { HttpError, type Plan, type PriceOfferSdk } from '@nebulr-group/bridge-auth-core';
 import { useRouter } from 'next/navigation';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ensureSubscription,
   getBridgeAuth,
   loadSubscription,
   useBridgeStore,
 } from '../../../core/bridge-instance';
-import { tokenStaleHandlerOf } from '../../../core/bridge-runtime';
+import { refreshBilling } from '../../../core/billing-store';
 import { billingRoutes } from '../../billing-routes';
 import { markCheckoutComplete } from '../../checkout-result';
 import { Alert } from '../sdk-auth/shared/Alert';
@@ -95,21 +96,12 @@ function planFeatures(plan: Plan): ReadonlyArray<{ key: string; name: string }> 
   return (plan as Plan & { features?: ReadonlyArray<{ key: string; name: string }> }).features ?? [];
 }
 
-/** Re-read the plan list and current plan, and the billing state behind the status line. */
+/**
+ * Re-read the plan list and current plan, the billing state behind the status
+ * line and the plan's features (TBP-948: one rule, `core/billing-store.ts`).
+ */
 async function refreshAfterPick(): Promise<void> {
-  await loadSubscription();
-  try {
-    const ctx = getBridgeAuth().getApiContext();
-    if (!ctx.accessToken) return;
-    await useBridge().subscription.mount({
-      apiBaseUrl: ctx.apiBaseUrl,
-      accessToken: ctx.accessToken,
-      appId: ctx.appId,
-      onTokenStale: tokenStaleHandlerOf(),
-    });
-  } catch {
-    /* the landing page re-reads */
-  }
+  await refreshBilling();
 }
 
 export function PlanSelector({
@@ -202,11 +194,10 @@ export function PlanSelector({
   // not reshuffle when the interval changes. Plans with no price sort last.
   const sortedPlans = useMemo(() => [...(plans ?? [])].sort((a, b) => minAmount(a) - minAmount(b)), [plans]);
 
+  // TBP-948 (bridge-svelte TBP-762) — read what has not been read, or was read
+  // more than 30 s ago; the refresh rule keeps it current from there.
   useEffect(() => {
-    if (!status && !loading) {
-      void loadSubscription();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void ensureSubscription();
   }, []);
 
   /** In-app paths go through the router; anything else is a full navigation. */

@@ -56,6 +56,8 @@ import {
 import { bridgeEvents } from './events';
 import { _setRealtimeStatus, _setRealtimeStatusDetail } from './realtime-status';
 import { logger } from '../shared/logger';
+import { holdGatesUntil, reloadSessionBilling } from './startup-reads';
+import { billingEventReceived } from './billing-store';
 import {
   clearPendingAuthorizationChange,
   invalidateRouteGuardCache,
@@ -614,22 +616,23 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
         _planPushSeq += 1; // newer than any in-flight reconnect catch-up (TBP-660)
         try { applySubscriptionPlanChanged(m); } catch { /* store updates shouldn't throw, defensive */ }
         authorizationChanged('subscription.plan_changed');
+        billingChanged(m.kind);
         bridgeEvents._dispatch(m);
       },
-      'payment.failed': (m) => bridgeEvents._dispatch(m),
-      'payment.succeeded': (m) => bridgeEvents._dispatch(m),
-      'subscription.created': (m) => bridgeEvents._dispatch(m),
-      'subscription.updated': (m) => bridgeEvents._dispatch(m),
-      'subscription.canceled': (m) => bridgeEvents._dispatch(m),
-      'subscription.reactivated': (m) => bridgeEvents._dispatch(m),
-      'subscription.trial_started': (m) => bridgeEvents._dispatch(m),
+      'payment.failed': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'payment.succeeded': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'subscription.created': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'subscription.updated': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'subscription.canceled': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'subscription.reactivated': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'subscription.trial_started': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
       'subscription.trial_ending_soon': (m) => bridgeEvents._dispatch(m),
-      'subscription.trial_converted': (m) => bridgeEvents._dispatch(m),
-      'subscription.trial_expired': (m) => bridgeEvents._dispatch(m),
+      'subscription.trial_converted': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'subscription.trial_expired': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
       'dunning.entered': (m) => bridgeEvents._dispatch(m),
       'dunning.retry_scheduled': (m) => bridgeEvents._dispatch(m),
-      'dunning.recovered': (m) => bridgeEvents._dispatch(m),
-      'dunning.exhausted': (m) => bridgeEvents._dispatch(m),
+      'dunning.recovered': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
+      'dunning.exhausted': (m) => { billingChanged(m.kind); bridgeEvents._dispatch(m); },
       'quota.updated': (m) => bridgeEvents._dispatch(m),
       'entitlements.changed': (m) => {
         // Only the payload-carrying variant has a map; the signal-only one is a no-op here.
@@ -700,6 +703,18 @@ export function startBridgeRuntime(options: StartBridgeRuntimeOptions = {}): voi
       });
     } catch {
       // No BridgeAuth / billing bridge yet — quota hydration falls back to live pushes.
+    }
+
+    // TBP-948 (port of bridge-svelte TBP-810 / bridge-react TBP-941) — a
+    // different session (sign-in, workspace switch) or a token that carries a
+    // different plan: read what it is entitled to now. A renewal that only
+    // moved iat/exp (the scheduled refresh, the post-connect reconcile) reads
+    // nothing. A NEW session holds the gates on "loading" while it reads
+    // (capped), so signing in to a paying workspace never flashes "Upgrade to
+    // use this" either.
+    if (!seed && accessToken && prevAuthToken !== accessToken && !sameAuthorization(prevAuthToken, accessToken)) {
+      const reload = reloadSessionBilling();
+      if (!sameSession(prevAuthToken, accessToken)) void holdGatesUntil(reload);
     }
 
     if (!accessToken) {
@@ -866,6 +881,19 @@ export function __resetBridgeRuntime(): void {
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * TBP-948 (port of bridge-svelte TBP-762) — a live billing event re-reads the
+ * plan list, the current plan and the billing state (core/billing-store.ts
+ * owns the rule). Never throws.
+ */
+function billingChanged(kind: string): void {
+  try {
+    billingEventReceived(kind);
+  } catch {
+    /* billing store unavailable (tests, SSR) — the live patch still applied */
+  }
+}
 
 function resetReconcile(): void {
   _reconciling = 0;
