@@ -95,24 +95,24 @@ export function ManagePlanLink() {
 }
 ```
 
-**Read an entitlement** to gate a feature on what the plan grants. In components, subscribe to the reactive snapshot store (via `useBridgeReadable`) so the gate re-evaluates when entitlements change:
+**Gate a feature the plan sells with a flag.** List the feature on the plans that sell it (`bridge plan feature add pro ai_completions`) and rule a flag `bridge:billing.entitlement.ai_completions eq true`; the page asks the flag, and it re-evaluates live when the plan changes:
 
 ```tsx
 'use client';
-import { bridge, useBridgeReadable } from '@nebulr-group/bridge-nextjs/client';
+import { FeatureFlag } from '@nebulr-group/bridge-nextjs/client';
 
 export function AiSection() {
-  const entitlements = useBridgeReadable(bridge.tenant.entitlements.snapshot);
-
-  return entitlements?.ai_completions ? <AiPanel /> : null;
+  return (
+    <FeatureFlag flagKey="use_ai" defaultValue={false} upgrade>
+      <AiPanel />
+    </FeatureFlag>
+  );
 }
 ```
 
-For imperative checks outside components (event handlers, loaders), `can()` is the synchronous read. It is fail-closed (`false` until the snapshot lands) and **not reactive**, so don't render from it directly in JSX; the component would never re-render when entitlements change:
+See [Lock features to a plan](/billing/limits/lock-features/) for the whole pattern. **Read quota numbers** with [`useQuota(metric)`](/billing/limits/usage-limits/).
 
-```ts
-if (bridge.tenant.entitlements.can('ai_completions')) { /* ... */ }
-```
+**The billing screens stay current on their own.** The plan list, the current plan and the status badge are re-read when the sign-in is renewed, when a live billing event arrives (a plan change, a subscription or payment event), and when the tab regains focus more than 30 seconds after the last read, so a plan created or changed in Bridge appears without a reload.
 
 **For UI, prefer a drop-in component** over wiring your own; each reads the same live state:
 

@@ -2,6 +2,16 @@
 
 You are adding **Feature Flags** to a Next.js 15+ App Router application that uses The Bridge. The goal is to ship code behind a switch you control from the Bridge dashboard — no redeploy needed. Next.js can read flags on the **client** (realtime) and on the **server** (per request) — both are covered below.
 
+## The one rule for app code
+
+**Every gate in app code is a flag.** A link, a page, a button, an endpoint: if some people get it and others do not, the code asks a flag, and the flag's rule says why: a privilege (`privileges contains "USER_WRITE"`), a plan feature (`bridge:billing.entitlement.analytics eq true`) or a rollout. App code never reads a role, a privilege list, the plan or a plan feature to decide what someone may see or do.
+
+Two things are not gates and are not flags: **numbers** are plan limits (`<QuotaGate>` in the browser, `@RequireQuota` on the backend), and **permission on one specific record** stays in app code ("only the author edits their post").
+
+Before calling the work done, run `npx @nebulr-group/bridge-cli check gates` in the project. It lists every direct role, privilege, plan or plan-feature check with the flag to use instead. Fix each one.
+
+In Next.js: a piece of UI is `<FeatureFlag flagKey="…">` in a client component (`<ServerFeatureFlag flagName="…">` in a server component); a page is a `featureFlag` rule on `withBridgeAuth` in `middleware.ts` (`{ match: '/admin', featureFlag: 'admin-area' }`), or, when sign-in happens in the browser (SDK auth), `<FeatureFlag>` around the page's content; a nav link is the same `<FeatureFlag>` around the link.
+
 ## Decide first — where is the flag read, and what does it gate?
 
 Next.js reads flags in two places with different guarantees, and picking the wrong one fails silently: the read returns its default and looks like a flag that is simply off.
@@ -115,7 +125,9 @@ export default function FlagsDemo() {
 | `defaultValue` | `T` | yes | Value returned until the cache hydrates or if the flag doesn't exist |
 | `context` | `Partial<EvalContext>` | no | Per-call eval context — see *Eval context* below |
 | `children` | `ReactNode \| (value: T) => ReactNode` | no | Rendered when the flag is on (`passed: true`). As a render-prop it receives the typed flag value |
-| `fallback` | `ReactNode \| (value: T) => ReactNode` | no | Rendered when the flag is off (`passed: false`). Same render-prop form |
+| `fallback` | `ReactNode \| (value: T, off: { reason, feature, openUpgrade }) => ReactNode` | no | Rendered when the flag is off (`passed: false`). As a render-prop it also learns why: `reason` is `'plan'` (an upgrade alone would turn it on), `'permission'`, `'off'`, `'rule'` or `'rollout'`; `openUpgrade()` opens the upgrade dialog from a click |
+| `upgrade` | `boolean` | no | With no `fallback`: an "Upgrade to use this" button in its place when the plan is why it is off |
+| `loading` | `ReactNode` | no | Rendered while a signed-in page is still reading the plan's features and the flag definitions (each read capped at 1.5 s), and in the server render. Nothing by default. Neither `children` nor `fallback` shows meanwhile, so a paying user never sees an upgrade prompt flash |
 
 Use the same `<FeatureFlag>` anywhere in a client component to gate any content behind a flag.
 
@@ -134,7 +146,7 @@ A rule is **branches + otherwiseValue + rolloutPct**, first match wins:
 ```jsonc
 {
   "branches": [
-    { "conditions": [ { "attribute": "tenant.plan", "operator": "in", "values": ["pro", "enterprise"] } ],
+    { "conditions": [ { "attribute": "bridge:billing.entitlement.export", "operator": "eq", "values": [true] } ],
       "returnValue": true }
   ],
   "otherwiseValue": false,
@@ -144,26 +156,66 @@ A rule is **branches + otherwiseValue + rolloutPct**, first match wins:
 
 - Conditions inside one branch are AND-ed; add more branches for OR / different return values.
 - Operators: `eq` `neq` `contains` `not_contains` `in` `not_in` `gt` `lt` `between` `regex` `exists` `not_exists` (numeric and date operators only apply to those attribute types).
-- `attribute` is a dotted path into the eval context (next step). With Bridge Auth, `user.id` `user.role` `user.email` `tenant.id` `tenant.plan` are populated for you.
+- `attribute` is a dotted path into the eval context (next step). With Bridge Auth and billing, `user.id`, `user.email`, `tenant.id`, `privileges`, `user.role` and `bridge:billing.entitlement.<feature>` are populated for you.
+- **A feature a plan sells**: list it on the plan (`bridge plan feature add pro export`, MCP `add_plan_feature`) and rule the flag `bridge:billing.entitlement.export eq true`, as above. The rule never names plans, so changing what a plan sells is one edit on the plan.
+- **Who someone is**: prefer a privilege rule, `{ "attribute": "privileges", "operator": "contains", "values": ["USER_WRITE"] }`, over a role rule. Read the app's real roles and privileges first (`list_roles` / `bridge role list`) — what a role can do is only "in the default setup". `contains` on `privileges` is exact membership: `USER_WRITE` does not match `USER_WRITE_ALL`. A role rule (`user.role eq "ADMIN"`) is for when the developer means the role itself.
 - **`rolloutPct` below 100 requires an identity** on the eval context — bucketing is `hash(flagKey + identity) mod 100`. With no identity the SDK refuses to bucket and returns the safe value rather than randomizing per call.
 
-Configure it either in the dashboard under **Feature Control**, or from the CLI — prefer the CLI when you are an agent, since it is scriptable and verifiable:
+### Where to configure it
+
+Configure it on whichever surface you have — the Bridge **MCP tools** or the **`bridge` CLI**. Same operation either way:
+
+| | Create the flag with a rule |
+|---|---|
+| **MCP** | `create_feature_flag` — `key`, `valueType`, `state: "on-with-rule"`, `rule` (a structured object, not a JSON string) |
+| **CLI** | `bridge flag create --key … --value-type … --state on-with-rule --rule '<json>'` |
+
+Use whichever is already set up. **If the user asks for a specific surface, use that one** — both reach the same API. If neither is available, offer to install one; only fall back to the dashboard (**Feature Control**) if they decline.
+
+CLI:
 
 ```bash
 bridge flag create --key enterprise-export --value-type boolean --state on-with-rule \
-  --rule '{"branches":[{"conditions":[{"attribute":"tenant.plan","operator":"in","values":["pro","enterprise"]}],"returnValue":true}],"otherwiseValue":false,"rolloutPct":100}'
-
-# prove the rule does what you meant, without touching the app:
-bridge flag eval enterprise-export --identity user-123 --attribute tenant.plan=pro   # → true
-bridge flag eval enterprise-export --identity user-123 --attribute tenant.plan=free  # → false
+  --rule '{"branches":[{"conditions":[{"attribute":"bridge:billing.entitlement.export","operator":"eq","values":[true]}],"returnValue":true}],"otherwiseValue":false,"rolloutPct":100}'
 ```
 
-`bridge flag list` / `get <key>` inspect the current state. To flip a flag without touching its rule, `bridge flag update` addresses it **by id, not by key** — read the id first:
+MCP — `create_feature_flag`, same rule as structured arguments:
+
+```jsonc
+{
+  "key": "enterprise-export",
+  "valueType": "boolean",
+  "state": "on-with-rule",
+  "rule": {
+    "branches": [
+      { "conditions": [ { "attribute": "bridge:billing.entitlement.export", "operator": "eq", "values": [true] } ],
+        "returnValue": true }
+    ],
+    "otherwiseValue": false,
+    "rolloutPct": 100
+  }
+}
+```
+
+### Inspect and flip
+
+| | Read current state | Flip on/off without touching the rule |
+|---|---|---|
+| **MCP** | `list_feature_flags` | `toggle_feature_flag` — `key`, `enabled` |
+| **CLI** | `bridge flag list` / `bridge flag get <key>` | `bridge flag toggle --key <key> --enabled true` |
+
+Both take the **key**. Use `update_feature_flag` (MCP, which takes the `id` from `list_feature_flags`) or `bridge flag update --key <key>` only when changing the rule, values or value type.
+
+### Dry-running a rule — CLI only
+
+`bridge flag eval` evaluates a rule against a synthetic identity and attributes, with the app out of the way:
 
 ```bash
-bridge flag get <key>                      # id is in the output
-bridge flag update --id <id> --state on    # or --state off | on-with-rule
+bridge flag eval enterprise-export --identity user-123 --attribute bridge:billing.entitlement.export=true   # → true
+bridge flag eval enterprise-export --identity user-123 --attribute bridge:billing.entitlement.export=false  # → false
 ```
+
+**There is no MCP equivalent today.** Over MCP the nearest check is reading the stored rule back with `list_feature_flags` and confirming the branches, operators and attribute paths are what you intended — that verifies the rule was *saved* correctly, not what it *evaluates to*. When you need the actual verdict, use the CLI.
 
 ## Step 4 — Feed the rule its inputs (eval context)
 
@@ -179,9 +231,9 @@ Rules can only target what the app sends. Flags don't require auth — without i
 Per call, on the component (or as the third argument to `useFlag`):
 
 ```tsx
-<FeatureFlag flagKey="enterprise-export" defaultValue={false}
-  context={{ identity: user.id, attributes: { 'tenant.plan': plan } }}>
-  <ExportButton />
+<FeatureFlag flagKey="new-editor" defaultValue={false}
+  context={{ identity: user.id, attributes: { region } }}>
+  <NewEditor />
 </FeatureFlag>
 ```
 
@@ -191,12 +243,12 @@ Or publish attributes once, app-wide, on the `bridge` surface (client entry — 
 'use client';
 import { bridge } from '@nebulr-group/bridge-nextjs/client';
 
-bridge.attributes.set('tenant.plan', plan);            // static value
+bridge.attributes.set('region', region);              // static value
 bridge.attributes.bind('seats', () => currentSeats);   // live — re-read on every eval
 bridge.attributes.bindMany(() => ({ region, betaOptIn }));
 ```
 
-Per-call context wins on key collision. **With Bridge Auth**, the signed-in user's role and plan flow in automatically (`user.role`, `tenant.plan`) — no wiring needed; see `bridge guide nextjs sdk-auth`.
+Per-call context wins on key collision. **With Bridge Auth**, the signed-in user's privileges, role and the plan's features flow in automatically (`privileges`, `user.role`, `bridge:billing.entitlement.*`) — no wiring needed, and never pass them yourself; see `bridge guide fit-together`.
 
 ## Step 5 — Server-side flags
 
@@ -278,7 +330,7 @@ const limit = await FeatureFlagServer.getInstance().flagServer<number>('upload-l
 'use client';
 import { useFlag } from '@nebulr-group/bridge-nextjs/client';
 
-const { value: limit } = useFlag('upload-limit', 5);   // { value, passed }, re-renders on change
+const { value: limit } = useFlag('upload-limit', 5);   // { value, passed, reason, loading }, re-renders on change
 ```
 
 `useFlag(key, defaultValue, context?)` is the whole hook. For non-React code there is `flagStore(key, defaultValue, context?)` with a `subscribe(run)` method. For anything this prompt doesn't cover — route guards, standalone `createBridgeFlags()` instances, caching details — read `learning/feature-flags/feature-flags.md` rather than guessing an API.
@@ -289,16 +341,16 @@ const { value: limit } = useFlag('upload-limit', 5);   // { value, passed }, re-
 - **You wrote `key=` instead of `flagKey=`.** React swallows `key`; the component never receives it and every read returns the default. (The server component uses `flagName`.)
 - **`<BridgeProvider>` missing or `appId` unset.** The flag layer bootstraps on the provider's first client render; without it every read returns the default. Check `NEXT_PUBLIC_BRIDGE_APP_ID` in `.env.local` and restart the dev server.
 - **A flag registers only once it has been evaluated** — load a page that actually reads the key, on the *client*.
-- **Rule never matches?** Run `bridge flag eval <key> --identity … --attribute k=v` to see the verdict without the app in the way, then confirm the app sends those same attributes.
+- **Rule never matches?** Read the stored rule back — `list_feature_flags` over MCP, `bridge flag get <key>` on the CLI — and confirm the app sends exactly those attribute paths. To see the verdict without the app in the way, `bridge flag eval <key> --identity … --attribute k=v` (CLI only — no MCP equivalent).
 - **Server render doesn't change after a toggle.** The 30s pull cache, not a bug. Also make sure the route is dynamic — a statically rendered / cached route bakes in the old verdict.
 - **Server eval always returns the default for a rule-targeted flag.** No `bridge_access_token` cookie on the request, so there is no identity. See Step 5.
-- **Realtime.** Client-side live toggles ride the realtime channel; if a proxy blocks WebSockets the value still resolves on next load, just not instantly.
-- **First-render flicker is expected** — flags hydrate async. Set `defaultValue` to the safe-off state.
+- **Realtime.** Client-side live toggles ride the realtime channel; if a proxy blocks WebSockets the value still resolves on next load, just not instantly. In a development build, `<BridgeProvider>` shows a "Live updates off — why?" badge in the corner when the channel is refused, connected but receiving nothing, or has been retrying for over 30 s; it names the reason and whose side it is. Read the same thing in code from `useRealtimeStatusDetail()` (`state`, `reason`, `side`, `retrying`, `docsUrl`). See `learning/live-updates/live-updates.md`.
+- **The gate shows nothing for a moment on load.** On a signed-in page `<FeatureFlag>` waits for the plan's features and the flag definitions (each read capped at 1.5 s) instead of judging an empty store, and renders its `loading` prop meanwhile; the server render shows `loading` too, since it cannot know the session. `useFlag()` reports the same as `loading: true` — while it is, `passed: false` means "not known yet". Set `defaultValue` to the safe-off state. Do not hand-roll a readiness probe.
 
 ## Verify
 
 1. Navigate to `/flags-demo` in the browser. The grey striped box should appear — Bridge auto-creates `demo-flag` as off.
-2. Go to **Feature Control** in the Bridge dashboard and toggle `demo-flag` on (or take the id from `bridge flag get demo-flag` and run `bridge flag update --id <id> --state on`).
+2. Switch `demo-flag` on — `toggle_feature_flag` with the key over MCP, or `bridge flag toggle --key demo-flag --enabled true`. With neither, flip it under **Feature Control** in the Bridge dashboard.
 3. The box turns green **without a page refresh** — realtime updates are on by default.
 4. Toggle it off again to confirm it reverts.
 5. (Server) Wrap something in `<ServerFeatureFlag flagName="demo-flag">…</ServerFeatureFlag>` on a server component, toggle the flag, and reload after ~30s — the server-rendered output follows the flag.

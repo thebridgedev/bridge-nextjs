@@ -13,18 +13,25 @@ Once `<BridgeProvider>` connects, your app is subscribed to a live channel (a pe
 
 ```tsx
 'use client';
-import { useBridge, useBridgeReadable } from '@nebulr-group/bridge-nextjs/client';
+import { FeatureFlag, useBridge, useBridgeReadable } from '@nebulr-group/bridge-nextjs/client';
 
 export function AdminArea() {
   const bridge = useBridge();
   const user = useBridgeReadable(bridge.user);
 
-  if (user?.role === 'ADMIN') return <AdminPanel />;
-  return <p>You don't have access to this area.</p>;
+  return (
+    <>
+      <p>Signed in as {user?.role}</p>
+      {/* Flag rule: privileges contains "USER_MANAGE" */}
+      <FeatureFlag flagKey="admin_panel" defaultValue={false} fallback={<p>You don't have access to this area.</p>}>
+        <AdminPanel />
+      </FeatureFlag>
+    </>
+  );
 }
 ```
 
-If an admin changes this user's role from `MEMBER` to `ADMIN` in Control Center (your admin dashboard at app.thebridge.dev), `user.role` updates on its own and `<AdminPanel />` appears without a refresh, because the component is driven by the reactive `bridge.user` readable rather than a value read once on mount. Structure your gated UI this way (branch on the live readable, not a snapshot you captured earlier) and it stays correct automatically.
+If an admin changes this user's role from `MEMBER` to `ADMIN` in Control Center (your admin dashboard at app.thebridge.dev), `user.role` updates on its own and, when the new role grants `USER_MANAGE`, `<AdminPanel />` appears without a refresh, because the component is driven by the reactive `bridge.user` readable and the flag re-evaluates on the new session rather than on a value read once on mount. Structure your gated UI this way (ask a flag, never compare the role in your code) and it stays correct automatically.
 
 ## Reacting to the exact moment something changes
 

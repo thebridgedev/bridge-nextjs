@@ -2,6 +2,16 @@
 
 You are integrating **`@nebulr-group/bridge-nextjs`** (the Next.js plugin of the Bridge SDK platform) into a Next.js 15+ App Router project. Sign-in happens inside the app: the login, signup and password pages render in the app's own layout, and the plugin serves every one of them from one file. Follow these steps in order. Do not skip steps. For the sign-in pages in detail, matching them to the app's design and customising them, read `sdk-auth-prompt.md` (`get_integration_guide` topic `auth`, or `bridge guide nextjs sdk-auth`).
 
+## The one rule for app code
+
+**Every gate in app code is a flag.** A link, a page, a button, an endpoint: if some people get it and others do not, the code asks a flag, and the flag's rule says why: a privilege (`privileges contains "USER_WRITE"`), a plan feature (`bridge:billing.entitlement.analytics eq true`) or a rollout. App code never reads a role, a privilege list, the plan or a plan feature to decide what someone may see or do.
+
+Two things are not gates and are not flags: **numbers** are plan limits (`<QuotaGate>` in the browser, `@RequireQuota` on the backend), and **permission on one specific record** stays in app code ("only the author edits their post").
+
+Before calling the work done, run `npx @nebulr-group/bridge-cli check gates` in the project. It lists every direct role, privilege, plan or plan-feature check with the flag to use instead. Fix each one.
+
+In Next.js: a piece of UI is `<FeatureFlag flagKey="…">` in a client component (`<ServerFeatureFlag flagName="…">` in a server component); a page is a `featureFlag` rule on `withBridgeAuth` in `middleware.ts` (`{ match: '/admin', featureFlag: 'admin-area' }`), or, when sign-in happens in the browser (SDK auth), `<FeatureFlag>` around the page's content; a nav link is the same `<FeatureFlag>` around the link.
+
 ## How routes are guarded
 
 Next.js has a server layer the other frontends do not, so be clear about which layer decides who gets in. It is the mistake with the largest blast radius in this package.
@@ -203,6 +213,7 @@ export async function fetchUserData() {
 - [ ] Every protected page wrapped in `<ProtectedRoute redirectTo="/auth/login">`; none relies on `middleware.ts` alone.
 - [ ] Every API route verifies the user's token itself.
 - [ ] A "Sign in" link to `/auth/login` and a "Sign out" button calling `useAuth().logout()` wired in the UI.
+- [ ] No role, privilege or plan check in app code: every gate is a flag, and `npx @nebulr-group/bridge-cli check gates` reports nothing.
 
 ## Verify the integration
 
@@ -269,15 +280,17 @@ export function Greeting() {
 
 - **Reconnect** re-emits the snapshot; lazy slices that were loaded keep their values and update via channel deltas (no automatic refetch).
 
-### Reading entitlements
+### Gating on what the plan sells
 
-```ts
-if (bridge.tenant.entitlements.can('ai_completions')) {
-  // render the feature
-}
+Gate a feature a plan sells with a flag ruled `bridge:billing.entitlement.<key> eq true`, never a check of the plan or its entitlements in the page:
+
+```tsx
+<FeatureFlag flagKey="ai_completions" defaultValue={false} upgrade>
+  <AiPanel />
+</FeatureFlag>
 ```
 
-`can()` is synchronous and reflects the latest snapshot or `entitlements.changed` push.
+`bridge.tenant.entitlements` holds the plan's features for display and for the rare page where the developer explicitly asks for no flag; see the billing prompt.
 
 ### Live events & connection status
 
