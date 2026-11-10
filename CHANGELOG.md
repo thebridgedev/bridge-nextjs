@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.1] - 2026-11-10
+
+### Fixed
+
+- **Paid features no longer flash "Upgrade to use this" for paying customers.** On a page that loads signed in, the plugin now reads the workspace's plan features, billing state and flag definitions straight away, and `<FeatureFlag>` waits for them (each read is capped at 1.5 seconds) before deciding. Signing in, switching workspace or a plan change reads them again. Flags now also re-check when the plan, its features or a quota changes, so an upgrade unlocks a feature on the page without a reload. While a gate is waiting it shows its new `loading` prop (nothing by default), and the server render shows `loading` as well, because the server cannot know who is signed in. If a page relied on a flag's fallback being in the server HTML, it now appears just after the page loads. `useFlag()` reports the same wait as `loading: true`. (TBP-948, Svelte TBP-810)
+- **Billing screens stay up to date.** The plan picker, the paywall and the plan badge now re-read the plans and the current plan when the sign-in is renewed, when a live billing event arrives, and when the tab regains focus more than 30 seconds after the last read. A plan created or changed in Bridge appears without a reload. A re-read keeps the current answer on screen, and the badge says "Loading…" rather than "No subscription" before its first read. (TBP-948, Svelte TBP-762)
+
+### Added
+
+- **A development warning for usage counted twice.** If your backend counts a metric (bridge-nestjs marks the response with `X-Bridge-Usage-Counted`) and the page also reports it with `bridge.usage`, the browser console says so once, naming the metric. Nothing is checked or printed in production. (TBP-948, Svelte TBP-697)
+- **Guides match Svelte's.** The billing, feature-flag, integration and new branding guides open with the "every gate is a flag" rule and the `npx @nebulr-group/bridge-cli check gates` step. The feature-flag guide names the MCP tools next to the CLI commands, the team guide and learning docs cover seat limits (`seatsMetric`), and the live-updates doc explains why live updates can be off and links the troubleshooting page. A new test fails when a guide names an export, component, prop or config option the package does not have. (TBP-948: TBP-705, TBP-576, TBP-573, TBP-763, TBP-642, TBP-675)
+
 ## [0.9.0] - 2026-11-10
 
 ### Changed
