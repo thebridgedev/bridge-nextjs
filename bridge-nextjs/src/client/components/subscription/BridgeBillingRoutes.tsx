@@ -13,9 +13,10 @@
  * The double brackets make the catch-all optional, so the bare /subscription
  * matches too (Next.js's `[...x]` needs at least one segment; SvelteKit's does
  * not). Serves, relative to wherever the catch-all lives:
- *   /subscription          the current plan, the plan picker and "Manage billing"
+ *   /subscription          the current plan, the plan picker and "Manage billing";
+ *                          a completed checkout lands here, with a banner
  *   /subscription/plan     the paywall: where a plan-less workspace is sent
- *   /subscription/success  where a completed checkout lands
+ *   /subscription/success  the old confirmation page, for `billing.successRoute`
  *   /subscription/error    where a failed checkout confirmation lands
  * An unknown segment calls `notFound()`.
  *
@@ -26,16 +27,25 @@
  * `heading(page)` (functions — the page file is then a Client Component); take
  * over one page by creating it (`app/subscription/plan/page.tsx`); headless:
  * `PlanSelector`, `BridgeSubscriptionStatus`, `BillingPortalButton`.
+ *
+ * TBP-946 (port of bridge-svelte TBP-813) — a paid checkout and a Free pick
+ * land on `billing.successRoute`, by default this catch-all's own subscription
+ * page, which shows `<BridgeCheckoutNotice>`. Set `billing.successRoute` to
+ * land anywhere else.
  */
-import { withReturnTo } from '@nebulr-group/bridge-auth-core';
+import { useBridge, withReturnTo } from '@nebulr-group/bridge-auth-core';
 import { notFound, useParams, usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { getBridgeConfig, loadSubscription, useBridgeStore } from '../../../core/bridge-instance';
 import { BRIDGE_AUTH_ROUTE_PARAM, bridgeAuthBase } from '../../auth-routes';
-import { parseBridgeBillingRoute, type BridgeBillingPage } from '../../billing-routes';
+import { billingRoutes, parseBridgeBillingRoute, type BridgeBillingPage } from '../../billing-routes';
+import { checkoutResult, clearCheckoutResult } from '../../checkout-result';
+import { useBridgeSnapshot } from '../../hooks/use-bridge-readable';
 import { BillingPortalButton } from './BillingPortalButton';
+import { BridgeCheckoutNotice } from './BridgeCheckoutNotice';
 import { BridgeSubscriptionStatus } from './BridgeSubscriptionStatus';
 import { PlanSelector } from './PlanSelector';
+import { subscriptionMeta } from './plan-format';
 
 export interface BridgeBillingRoutesProps {
   /** Everything around the content, on every page. Replaces the default centred column. */
@@ -44,6 +54,11 @@ export interface BridgeBillingRoutesProps {
   heading?: (page: BridgeBillingPage) => ReactNode;
   /** Where "Continue" on the success page goes. @default '/' */
   redirectTo?: string;
+  /**
+   * The "you're on Pro now" banner on the subscription page after a checkout
+   * or a Free pick. `false` hides it. @default true
+   */
+  checkoutNotice?: boolean;
 }
 
 const DEFAULT_HEADINGS: Record<BridgeBillingPage, string> = {
@@ -53,7 +68,12 @@ const DEFAULT_HEADINGS: Record<BridgeBillingPage, string> = {
   error: "We couldn't confirm your payment",
 };
 
-export function BridgeBillingRoutes({ frame, heading, redirectTo = '/' }: BridgeBillingRoutesProps) {
+export function BridgeBillingRoutes({
+  frame,
+  heading,
+  redirectTo = '/',
+  checkoutNotice = true,
+}: BridgeBillingRoutesProps) {
   const params = useParams();
   const pathname = usePathname() ?? '';
   const rest = (params as Record<string, string | string[] | undefined> | null)?.[BRIDGE_AUTH_ROUTE_PARAM];
@@ -61,6 +81,17 @@ export function BridgeBillingRoutes({ frame, heading, redirectTo = '/' }: Bridge
   const base = bridgeAuthBase(pathname, rest) || '/';
   const at = (sub: string) => (base === '/' ? `/${sub}` : `${base}/${sub}`);
   const page = route?.page;
+  // TBP-946 — a checkout lands on `billing.successRoute`; by default on this
+  // catch-all's own subscription page, wherever it lives.
+  const routes = billingRoutes();
+  const successTarget = routes.successIsDefault ? base : routes.successRoute;
+  // The current plan's renewal date and card, for the line under its name.
+  const billingState = useBridge().subscription;
+  const billingSnapshot = useBridgeSnapshot(
+    (onChange) => billingState.subscribe(() => onChange()),
+    () => billingState.snapshot(),
+  );
+  const meta = subscriptionMeta(billingSnapshot?.state);
   const hasStatus = useBridgeStore((s) => s.subscription.status !== null);
   const authenticated = useBridgeStore((s) => !!s.tokens?.accessToken);
   const router = useRouter();
@@ -102,6 +133,16 @@ export function BridgeBillingRoutes({ frame, heading, redirectTo = '/' }: Bridge
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, signedOut]);
 
+  // The old confirmation page says it all: no banner on the next page too.
+  // Subscribed while it is shown, since the checkout confirmation that sets the
+  // signal can finish after this page mounts.
+  useEffect(() => {
+    if (page !== 'success') return;
+    return checkoutResult.subscribe((value) => {
+      if (value) queueMicrotask(clearCheckoutResult);
+    });
+  }, [page]);
+
   if (!route) notFound();
   if (mustSignIn) return null;
   const current = route.page;
@@ -110,19 +151,27 @@ export function BridgeBillingRoutes({ frame, heading, redirectTo = '/' }: Bridge
   if (current === 'manage') {
     body = (
       <>
-        <div className="bridge-billing-current">
-          <span className="bridge-billing-label">Current plan</span>
-          <BridgeSubscriptionStatus />
+        <p className="bridge-billing-text">Your plan, what it includes, and billing.</p>
+        <div className="bridge-billing-summary" data-bridge-billing-summary="">
+          <div className="bridge-billing-summary-plan">
+            <span className="bridge-billing-label">Current plan</span>
+            <BridgeSubscriptionStatus className="bridge-billing-summary-status" />
+            {meta ? (
+              <span className="bridge-billing-summary-meta" data-bridge-billing-meta="">
+                {meta}
+              </span>
+            ) : null}
+          </div>
           <BillingPortalButton />
         </div>
-        <PlanSelector successUrl={at('success')} cancelUrl={base} />
+        <PlanSelector heading="Change plan" successUrl={successTarget} cancelUrl={base} />
       </>
     );
   } else if (current === 'plan') {
     body = (
       <>
         <p className="bridge-billing-text">Pick a plan to start using the app.</p>
-        <PlanSelector successUrl={at('success')} cancelUrl={at('plan')} />
+        <PlanSelector successUrl={successTarget} cancelUrl={at('plan')} />
       </>
     );
   } else if (current === 'success') {
@@ -154,6 +203,7 @@ export function BridgeBillingRoutes({ frame, heading, redirectTo = '/' }: Bridge
 
   const content = (
     <>
+      {current === 'manage' && checkoutNotice ? <BridgeCheckoutNotice /> : null}
       {heading ? heading(current) : <h1 className="bridge-billing-heading">{DEFAULT_HEADINGS[current]}</h1>}
       {body}
     </>
